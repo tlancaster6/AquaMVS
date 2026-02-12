@@ -3,6 +3,8 @@
 from dataclasses import dataclass
 from pathlib import Path
 
+import cv2
+import numpy as np
 import torch
 from aquacal.io.serialization import load_calibration as aquacal_load_calibration
 
@@ -31,6 +33,21 @@ class CameraData:
     image_size: tuple[int, int]  # (width, height)
     is_fisheye: bool
     is_auxiliary: bool
+
+
+@dataclass
+class UndistortionData:
+    """Precomputed undistortion remap tables and updated intrinsic matrix.
+
+    Attributes:
+        K_new: Updated intrinsic matrix for the undistorted image, shape (3, 3), float32.
+        map_x: X-coordinate remap table, numpy float32 array, shape (H, W).
+        map_y: Y-coordinate remap table, numpy float32 array, shape (H, W).
+    """
+
+    K_new: torch.Tensor  # shape (3, 3), float32
+    map_x: np.ndarray  # shape (H, W), float32
+    map_y: np.ndarray  # shape (H, W), float32
 
 
 @dataclass
@@ -149,3 +166,68 @@ def load_calibration_data(calibration_path: str | Path) -> CalibrationData:
         n_air=n_air,
         n_water=n_water,
     )
+
+
+def compute_undistortion_maps(camera: CameraData) -> UndistortionData:
+    """Compute undistortion remap tables and updated intrinsic matrix.
+
+    Dispatches between standard pinhole and fisheye OpenCV paths based on
+    the camera's lens model.
+
+    Args:
+        camera: Per-camera calibration data from load_calibration_data().
+
+    Returns:
+        Precomputed undistortion data for use with undistort_image().
+    """
+    # Convert tensors to numpy for OpenCV
+    K_np = camera.K.cpu().numpy().astype(np.float64)
+    dist_coeffs_np = camera.dist_coeffs.cpu().numpy().astype(np.float64)
+    image_size = camera.image_size  # (width, height)
+
+    if camera.is_fisheye:
+        # Fisheye path
+        # Reshape distortion coefficients to (4, 1) for fisheye functions
+        D = dist_coeffs_np.reshape(4, 1)
+
+        # Estimate new camera matrix for undistorted image
+        K_new_np = cv2.fisheye.estimateNewCameraMatrixForUndistortRectify(
+            K_np, D, image_size, np.eye(3)
+        )
+
+        # Generate remap tables
+        map_x, map_y = cv2.fisheye.initUndistortRectifyMap(
+            K_np, D, np.eye(3), K_new_np, image_size, cv2.CV_32FC1
+        )
+    else:
+        # Pinhole path
+        # Get optimal new camera matrix (alpha=0 crops to valid pixels only)
+        K_new_np, roi = cv2.getOptimalNewCameraMatrix(
+            K_np, dist_coeffs_np, image_size, alpha=0, newImgSize=image_size
+        )
+
+        # Generate remap tables
+        map_x, map_y = cv2.initUndistortRectifyMap(
+            K_np, dist_coeffs_np, None, K_new_np, image_size, cv2.CV_32FC1
+        )
+
+    # Convert K_new back to PyTorch tensor
+    K_new = torch.from_numpy(K_new_np).to(torch.float32)
+
+    return UndistortionData(K_new=K_new, map_x=map_x, map_y=map_y)
+
+
+def undistort_image(
+    image: np.ndarray,
+    undistortion: UndistortionData,
+) -> np.ndarray:
+    """Apply precomputed undistortion to an image.
+
+    Args:
+        image: Input image, shape (H, W, 3), uint8.
+        undistortion: Precomputed undistortion data.
+
+    Returns:
+        Undistorted image, same shape and dtype as input.
+    """
+    return cv2.remap(image, undistortion.map_x, undistortion.map_y, cv2.INTER_LINEAR)

@@ -1,6 +1,13 @@
 """Multi-view stereo reconstruction of underwater surfaces with refractive modeling."""
 
-from .calibration import CalibrationData, CameraData, load_calibration_data
+from .calibration import (
+    CalibrationData,
+    CameraData,
+    UndistortionData,
+    compute_undistortion_maps,
+    load_calibration_data,
+    undistort_image,
+)
 from .config import (
     DenseStereoConfig,
     DeviceConfig,
@@ -29,5 +36,8 @@ __all__ = [
     "DeviceConfig",
     "CalibrationData",
     "CameraData",
+    "UndistortionData",
     "load_calibration_data",
+    "compute_undistortion_maps",
+    "undistort_image",
 ]

@@ -4,6 +4,7 @@ import tempfile
 from pathlib import Path
 from unittest.mock import patch
 
+import cv2
 import numpy as np
 import pytest
 import torch
@@ -15,7 +16,14 @@ from aquacal.config.schema import (
     InterfaceParams,
 )
 
-from aquamvs.calibration import CalibrationData, CameraData, load_calibration_data
+from aquamvs.calibration import (
+    CalibrationData,
+    CameraData,
+    UndistortionData,
+    compute_undistortion_maps,
+    load_calibration_data,
+    undistort_image,
+)
 
 
 def create_synthetic_calibration(
@@ -536,3 +544,272 @@ class TestLoadCalibrationData:
                 calib.interface_normal,
                 torch.tensor([0.0, 0.0, -1.0], dtype=torch.float32),
             )
+
+
+class TestUndistortionData:
+    """Tests for UndistortionData dataclass."""
+
+    def test_creation(self):
+        """Test UndistortionData creation."""
+        K_new = torch.eye(3, dtype=torch.float32)
+        map_x = np.zeros((480, 640), dtype=np.float32)
+        map_y = np.zeros((480, 640), dtype=np.float32)
+
+        undist = UndistortionData(K_new=K_new, map_x=map_x, map_y=map_y)
+
+        assert undist.K_new.shape == (3, 3)
+        assert undist.K_new.dtype == torch.float32
+        assert undist.map_x.shape == (480, 640)
+        assert undist.map_x.dtype == np.float32
+        assert undist.map_y.shape == (480, 640)
+        assert undist.map_y.dtype == np.float32
+
+
+class TestComputeUndistortionMaps:
+    """Tests for compute_undistortion_maps function."""
+
+    def test_pinhole_zero_distortion(self):
+        """Test pinhole undistortion with zero distortion."""
+        # With zero distortion, K_new should be approximately equal to K
+        K = torch.tensor(
+            [[500.0, 0.0, 320.0], [0.0, 500.0, 240.0], [0.0, 0.0, 1.0]],
+            dtype=torch.float32,
+        )
+        dist_coeffs = torch.zeros(5, dtype=torch.float64)
+
+        cam = CameraData(
+            name="test_cam",
+            K=K,
+            dist_coeffs=dist_coeffs,
+            R=torch.eye(3, dtype=torch.float32),
+            t=torch.zeros(3, dtype=torch.float32),
+            image_size=(640, 480),
+            is_fisheye=False,
+            is_auxiliary=False,
+        )
+
+        undist = compute_undistortion_maps(cam)
+
+        # Check shapes
+        assert undist.K_new.shape == (3, 3)
+        assert undist.K_new.dtype == torch.float32
+        assert undist.map_x.shape == (480, 640)  # (H, W)
+        assert undist.map_y.shape == (480, 640)
+        assert undist.map_x.dtype == np.float32
+        assert undist.map_y.dtype == np.float32
+
+        # With zero distortion, K_new should be close to K
+        # (may differ slightly due to alpha=0 cropping)
+        assert torch.allclose(undist.K_new, K, atol=1.0)
+
+    def test_pinhole_with_distortion(self):
+        """Test pinhole undistortion with non-zero distortion."""
+        K = torch.tensor(
+            [[500.0, 0.0, 320.0], [0.0, 500.0, 240.0], [0.0, 0.0, 1.0]],
+            dtype=torch.float32,
+        )
+        dist_coeffs = torch.tensor([0.1, -0.2, 0.001, 0.002, 0.05], dtype=torch.float64)
+
+        cam = CameraData(
+            name="test_cam",
+            K=K,
+            dist_coeffs=dist_coeffs,
+            R=torch.eye(3, dtype=torch.float32),
+            t=torch.zeros(3, dtype=torch.float32),
+            image_size=(640, 480),
+            is_fisheye=False,
+            is_auxiliary=False,
+        )
+
+        undist = compute_undistortion_maps(cam)
+
+        # Check shapes
+        assert undist.K_new.shape == (3, 3)
+        assert undist.map_x.shape == (480, 640)
+        assert undist.map_y.shape == (480, 640)
+
+        # K_new should be valid (positive focal lengths)
+        assert undist.K_new[0, 0] > 0  # fx
+        assert undist.K_new[1, 1] > 0  # fy
+
+    def test_fisheye_undistortion_maps(self):
+        """Test fisheye undistortion map generation."""
+        K = torch.tensor(
+            [[400.0, 0.0, 320.0], [0.0, 400.0, 240.0], [0.0, 0.0, 1.0]],
+            dtype=torch.float32,
+        )
+        dist_coeffs = torch.tensor([0.15, -0.25, 0.03, 0.04], dtype=torch.float64)
+
+        cam = CameraData(
+            name="fisheye_cam",
+            K=K,
+            dist_coeffs=dist_coeffs,
+            R=torch.eye(3, dtype=torch.float32),
+            t=torch.zeros(3, dtype=torch.float32),
+            image_size=(640, 480),
+            is_fisheye=True,
+            is_auxiliary=True,
+        )
+
+        undist = compute_undistortion_maps(cam)
+
+        # Check shapes
+        assert undist.K_new.shape == (3, 3)
+        assert undist.K_new.dtype == torch.float32
+        assert undist.map_x.shape == (480, 640)
+        assert undist.map_y.shape == (480, 640)
+        assert undist.map_x.dtype == np.float32
+        assert undist.map_y.dtype == np.float32
+
+        # K_new should be valid
+        assert undist.K_new[0, 0] > 0  # fx
+        assert undist.K_new[1, 1] > 0  # fy
+
+    def test_dispatch_correctness(self):
+        """Test that is_fisheye flag dispatches to correct path."""
+        # Create two cameras with same K and distortion but different lens models
+        K = torch.tensor(
+            [[500.0, 0.0, 320.0], [0.0, 500.0, 240.0], [0.0, 0.0, 1.0]],
+            dtype=torch.float32,
+        )
+
+        # Pinhole camera with 5 distortion coefficients
+        pinhole_cam = CameraData(
+            name="pinhole",
+            K=K,
+            dist_coeffs=torch.tensor(
+                [0.1, -0.2, 0.001, 0.002, 0.05], dtype=torch.float64
+            ),
+            R=torch.eye(3, dtype=torch.float32),
+            t=torch.zeros(3, dtype=torch.float32),
+            image_size=(640, 480),
+            is_fisheye=False,
+            is_auxiliary=False,
+        )
+
+        # Fisheye camera with 4 distortion coefficients
+        fisheye_cam = CameraData(
+            name="fisheye",
+            K=K,
+            dist_coeffs=torch.tensor([0.1, -0.2, 0.001, 0.002], dtype=torch.float64),
+            R=torch.eye(3, dtype=torch.float32),
+            t=torch.zeros(3, dtype=torch.float32),
+            image_size=(640, 480),
+            is_fisheye=True,
+            is_auxiliary=True,
+        )
+
+        pinhole_undist = compute_undistortion_maps(pinhole_cam)
+        fisheye_undist = compute_undistortion_maps(fisheye_cam)
+
+        # Both should produce valid results
+        assert pinhole_undist.K_new.shape == (3, 3)
+        assert fisheye_undist.K_new.shape == (3, 3)
+
+        # Results should differ (different undistortion models)
+        assert not torch.allclose(pinhole_undist.K_new, fisheye_undist.K_new)
+
+
+class TestUndistortImage:
+    """Tests for undistort_image function."""
+
+    def test_identity_undistortion(self):
+        """Test that zero distortion produces nearly identical output."""
+        # Create a simple test image
+        image = np.random.randint(0, 255, (480, 640, 3), dtype=np.uint8)
+
+        # Camera with zero distortion
+        K = torch.tensor(
+            [[500.0, 0.0, 320.0], [0.0, 500.0, 240.0], [0.0, 0.0, 1.0]],
+            dtype=torch.float32,
+        )
+        dist_coeffs = torch.zeros(5, dtype=torch.float64)
+
+        cam = CameraData(
+            name="test_cam",
+            K=K,
+            dist_coeffs=dist_coeffs,
+            R=torch.eye(3, dtype=torch.float32),
+            t=torch.zeros(3, dtype=torch.float32),
+            image_size=(640, 480),
+            is_fisheye=False,
+            is_auxiliary=False,
+        )
+
+        undist = compute_undistortion_maps(cam)
+        undistorted = undistort_image(image, undist)
+
+        # Check shape and dtype preservation
+        assert undistorted.shape == image.shape
+        assert undistorted.dtype == image.dtype
+
+        # With zero distortion, output should be very close to input
+        # (small differences due to interpolation)
+        diff = np.abs(undistorted.astype(np.float32) - image.astype(np.float32))
+        assert np.mean(diff) < 5.0  # Small average difference
+
+    def test_shape_preservation(self):
+        """Test that undistort_image preserves shape and dtype."""
+        image_shapes = [(480, 640, 3), (720, 1280, 3), (1080, 1920, 3)]
+
+        for height, width, channels in image_shapes:
+            image = np.random.randint(0, 255, (height, width, channels), dtype=np.uint8)
+
+            K = torch.tensor(
+                [[500.0, 0.0, width / 2], [0.0, 500.0, height / 2], [0.0, 0.0, 1.0]],
+                dtype=torch.float32,
+            )
+            dist_coeffs = torch.tensor(
+                [0.1, -0.05, 0.001, 0.002, 0.01], dtype=torch.float64
+            )
+
+            cam = CameraData(
+                name="test_cam",
+                K=K,
+                dist_coeffs=dist_coeffs,
+                R=torch.eye(3, dtype=torch.float32),
+                t=torch.zeros(3, dtype=torch.float32),
+                image_size=(width, height),
+                is_fisheye=False,
+                is_auxiliary=False,
+            )
+
+            undist = compute_undistortion_maps(cam)
+            undistorted = undistort_image(image, undist)
+
+            assert undistorted.shape == image.shape
+            assert undistorted.dtype == image.dtype
+
+    def test_undistortion_modifies_image(self):
+        """Test that non-zero distortion actually modifies the image."""
+        # Create a synthetic pattern image
+        image = np.zeros((480, 640, 3), dtype=np.uint8)
+        # Add a checkerboard pattern
+        for i in range(0, 480, 40):
+            for j in range(0, 640, 40):
+                if (i // 40 + j // 40) % 2 == 0:
+                    image[i : i + 40, j : j + 40] = 255
+
+        # Camera with significant distortion
+        K = torch.tensor(
+            [[500.0, 0.0, 320.0], [0.0, 500.0, 240.0], [0.0, 0.0, 1.0]],
+            dtype=torch.float32,
+        )
+        dist_coeffs = torch.tensor([0.3, -0.5, 0.002, 0.001, 0.1], dtype=torch.float64)
+
+        cam = CameraData(
+            name="test_cam",
+            K=K,
+            dist_coeffs=dist_coeffs,
+            R=torch.eye(3, dtype=torch.float32),
+            t=torch.zeros(3, dtype=torch.float32),
+            image_size=(640, 480),
+            is_fisheye=False,
+            is_auxiliary=False,
+        )
+
+        undist = compute_undistortion_maps(cam)
+        undistorted = undistort_image(image, undist)
+
+        # Image should be modified (not identical)
+        assert not np.array_equal(undistorted, image)
