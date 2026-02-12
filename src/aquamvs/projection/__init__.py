@@ -1,3 +1,5 @@
 """Projection models for refractive multi-view geometry."""
 
-__all__ = []
+from .protocol import ProjectionModel
+
+__all__ = ["ProjectionModel"]
