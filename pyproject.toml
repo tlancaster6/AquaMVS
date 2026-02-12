@@ -1,0 +1,61 @@
+[build-system]
+requires = ["setuptools>=61.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "aquamvs"
+version = "0.1.0"
+description = "Multi-view stereo reconstruction of underwater surfaces with refractive modeling"
+readme = "README.md"
+requires-python = ">=3.10"
+license = {text = "MIT"}
+authors = [
+    {name = "Tucker Lancaster"}
+]
+keywords = ["multi-view-stereo", "underwater", "refraction", "computer-vision", "depth-estimation"]
+
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Science/Research",
+    "Topic :: Scientific/Engineering :: Image Recognition",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+]
+
+# Note: aquacal is a local editable dependency and must be installed separately:
+#   pip install -e ../AquaCal
+dependencies = [
+    "torch",
+    "kornia",
+    "open3d",
+    "opencv-python>=4.6",
+    "numpy",
+    "scipy",
+    "pyyaml",
+    "lightglue @ git+https://github.com/cvg/LightGlue.git",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest",
+    "pytest-cov",
+    "black",
+    "mypy",
+]
+
+[project.urls]
+Repository = "https://github.com/tlancaster6/AquaMVS"
+
+[project.scripts]
+aquamvs = "aquamvs.cli:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+markers = [
+    "slow: marks tests as slow (deselect with '-m \"not slow\"')",
+]
