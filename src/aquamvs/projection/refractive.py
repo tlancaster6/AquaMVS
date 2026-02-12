@@ -119,16 +119,93 @@ class RefractiveProjectionModel:
     def project(self, points: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor]:
         """Project 3D world points to 2D pixel coordinates.
 
-        This method will be implemented in P.8.
+        Uses Newton-Raphson iteration to find the water surface intersection
+        point that satisfies Snell's law, then projects through the pinhole
+        camera model.
 
         Args:
             points: 3D points in world frame, shape (N, 3), float32.
+                Points should be underwater (Z > water_z).
 
         Returns:
             pixels: 2D pixel coordinates (u, v), shape (N, 2), float32.
-            valid: Boolean validity mask, shape (N,).
-
-        Raises:
-            NotImplementedError: This method is not yet implemented.
+                Invalid pixels are NaN.
+            valid: Boolean validity mask, shape (N,). False for points above
+                water surface (Z <= water_z) or when interface point is behind
+                camera.
         """
-        raise NotImplementedError("Forward projection is implemented in P.8")
+        N = points.shape[0]
+        device = points.device
+        dtype = points.dtype
+
+        Q = points  # (N, 3)
+        C = self.C  # (3,)
+
+        # Vertical distances
+        h_c = self.water_z - C[2]  # scalar
+        h_q = Q[:, 2] - self.water_z  # (N,)
+
+        # Horizontal displacement and distance
+        dx = Q[:, 0] - C[0]  # (N,)
+        dy = Q[:, 1] - C[1]  # (N,)
+        r_q = torch.sqrt(
+            dx * dx + dy * dy + 1e-12
+        )  # (N,) -- epsilon avoids div-by-zero grad
+
+        # Direction unit vector in XY plane (camera toward point)
+        dir_x = dx / r_q  # (N,)
+        dir_y = dy / r_q  # (N,)
+
+        # Initial guess: pinhole (straight-line) intersection
+        r_p = r_q * h_c / (h_c + h_q + 1e-12)  # (N,)
+
+        # Newton-Raphson iterations (fixed count for differentiability)
+        for _ in range(10):
+            d_air_sq = r_p * r_p + h_c * h_c
+            d_air = torch.sqrt(d_air_sq)
+
+            r_diff = r_q - r_p
+            d_water_sq = r_diff * r_diff + h_q * h_q
+            d_water = torch.sqrt(d_water_sq)
+
+            sin_air = r_p / d_air
+            sin_water = r_diff / d_water
+
+            f = self.n_air * sin_air - self.n_water * sin_water
+
+            f_prime = self.n_air * h_c * h_c / (
+                d_air_sq * d_air
+            ) + self.n_water * h_q * h_q / (d_water_sq * d_water)
+
+            r_p = r_p - f / (f_prime + 1e-12)
+
+            # Clamp to valid range [0, r_q] -- use torch.clamp, not in-place
+            r_p = torch.clamp(r_p, min=0.0)
+            r_p = torch.minimum(r_p, r_q)
+
+        # Compute interface point P
+        px = C[0] + r_p * dir_x  # (N,)
+        py = C[1] + r_p * dir_y  # (N,)
+        pz = torch.full_like(px, self.water_z)  # (N,)
+        P = torch.stack([px, py, pz], dim=-1)  # (N, 3)
+
+        # Project P through pinhole model: p_cam = R @ P_world + t
+        p_cam = (self.R @ P.T).T + self.t.unsqueeze(0)  # (N, 3)
+
+        # Perspective division + intrinsics
+        p_norm = p_cam[:, :2] / p_cam[:, 2:3]  # (N, 2)
+        pixels = (self.K[:2, :2] @ p_norm.T).T + self.K[:2, 2].unsqueeze(0)  # (N, 2)
+
+        # Validity mask
+        valid = (h_q > 0) & (
+            p_cam[:, 2] > 0
+        )  # point below water & interface in front of camera
+
+        # Set invalid pixels to NaN
+        pixels = torch.where(
+            valid.unsqueeze(-1),
+            pixels,
+            torch.tensor(float("nan"), device=device, dtype=dtype),
+        )
+
+        return pixels, valid
