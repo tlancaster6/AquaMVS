@@ -20,6 +20,14 @@ from .config import (
     PipelineConfig,
     SurfaceConfig,
 )
+from .triangulation import (
+    compute_depth_ranges,
+    load_sparse_cloud,
+    save_sparse_cloud,
+    triangulate_all_pairs,
+    triangulate_pair,
+    triangulate_rays,
+)
 
 __version__ = "0.1.0"
 
@@ -40,4 +48,10 @@ __all__ = [
     "load_calibration_data",
     "compute_undistortion_maps",
     "undistort_image",
+    "triangulate_rays",
+    "triangulate_pair",
+    "triangulate_all_pairs",
+    "compute_depth_ranges",
+    "save_sparse_cloud",
+    "load_sparse_cloud",
 ]
