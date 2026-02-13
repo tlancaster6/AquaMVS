@@ -1,11 +1,14 @@
-"""Tests for CLI init command."""
+"""Tests for CLI init and run commands."""
 
 import json
+import logging
 from pathlib import Path
+from unittest.mock import MagicMock, patch
 
 import pytest
+import yaml
 
-from aquamvs.cli import init_config
+from aquamvs.cli import init_config, main, run_command
 from aquamvs.config import PipelineConfig
 
 
@@ -326,3 +329,204 @@ def test_init_missing_cameras_key(tmp_path: Path):
         )
 
     assert exc_info.value.code == 1
+
+
+# ============================================================================
+# Tests for `run` command
+# ============================================================================
+
+
+def test_run_missing_config(tmp_path: Path):
+    """Test run command exits with error when config file doesn't exist."""
+    config_path = tmp_path / "nonexistent.yaml"
+
+    with pytest.raises(SystemExit) as exc_info:
+        run_command(config_path)
+
+    assert exc_info.value.code == 1
+
+
+def test_run_valid_config_mocked_pipeline(tmp_path: Path):
+    """Test run command with valid config calls run_pipeline."""
+    # Create a minimal valid config YAML
+    config_path = tmp_path / "config.yaml"
+    config_data = {
+        "calibration_path": str(tmp_path / "calibration.json"),
+        "output_dir": str(tmp_path / "output"),
+        "camera_video_map": {
+            "cam1": str(tmp_path / "cam1.mp4"),
+        },
+    }
+    with open(config_path, "w") as f:
+        yaml.dump(config_data, f)
+
+    # Mock run_pipeline
+    with patch("aquamvs.pipeline.run_pipeline") as mock_run_pipeline:
+        run_command(config_path)
+
+        # Verify run_pipeline was called once with a PipelineConfig instance
+        assert mock_run_pipeline.call_count == 1
+        args, _ = mock_run_pipeline.call_args
+        assert isinstance(args[0], PipelineConfig)
+        assert args[0].calibration_path == config_data["calibration_path"]
+        assert args[0].output_dir == config_data["output_dir"]
+
+
+def test_run_device_override(tmp_path: Path):
+    """Test run command --device override."""
+    # Create a config with device: cpu
+    config_path = tmp_path / "config.yaml"
+    config_data = {
+        "calibration_path": str(tmp_path / "calibration.json"),
+        "output_dir": str(tmp_path / "output"),
+        "camera_video_map": {
+            "cam1": str(tmp_path / "cam1.mp4"),
+        },
+        "device": {
+            "device": "cpu",
+        },
+    }
+    with open(config_path, "w") as f:
+        yaml.dump(config_data, f)
+
+    # Call with device override
+    with patch("aquamvs.pipeline.run_pipeline") as mock_run_pipeline:
+        run_command(config_path, device="cuda")
+
+        # Verify the config passed to run_pipeline has device == "cuda"
+        assert mock_run_pipeline.call_count == 1
+        args, _ = mock_run_pipeline.call_args
+        assert args[0].device.device == "cuda"
+
+
+def test_run_verbose_flag(tmp_path: Path, caplog):
+    """Test run command --verbose sets logging to DEBUG."""
+    # Create a minimal valid config
+    config_path = tmp_path / "config.yaml"
+    config_data = {
+        "calibration_path": str(tmp_path / "calibration.json"),
+        "output_dir": str(tmp_path / "output"),
+        "camera_video_map": {
+            "cam1": str(tmp_path / "cam1.mp4"),
+        },
+    }
+    with open(config_path, "w") as f:
+        yaml.dump(config_data, f)
+
+    # Mock run_pipeline
+    with patch("aquamvs.pipeline.run_pipeline"):
+        # Clear any previous logging config
+        logging.root.handlers = []
+
+        run_command(config_path, verbose=True)
+
+        # Verify root logger is set to DEBUG
+        assert logging.getLogger().level == logging.DEBUG
+
+
+def test_run_verbose_false_sets_info(tmp_path: Path):
+    """Test run command without --verbose sets logging to INFO."""
+    # Create a minimal valid config
+    config_path = tmp_path / "config.yaml"
+    config_data = {
+        "calibration_path": str(tmp_path / "calibration.json"),
+        "output_dir": str(tmp_path / "output"),
+        "camera_video_map": {
+            "cam1": str(tmp_path / "cam1.mp4"),
+        },
+    }
+    with open(config_path, "w") as f:
+        yaml.dump(config_data, f)
+
+    # Mock run_pipeline
+    with patch("aquamvs.pipeline.run_pipeline"):
+        # Clear any previous logging config
+        logging.root.handlers = []
+
+        run_command(config_path, verbose=False)
+
+        # Verify root logger is set to INFO
+        assert logging.getLogger().level == logging.INFO
+
+
+def test_run_invalid_config_validation_error(tmp_path: Path):
+    """Test run command with invalid config exits with error."""
+    # Create a config with an invalid cost function
+    config_path = tmp_path / "config.yaml"
+    config_data = {
+        "calibration_path": str(tmp_path / "calibration.json"),
+        "output_dir": str(tmp_path / "output"),
+        "camera_video_map": {
+            "cam1": str(tmp_path / "cam1.mp4"),
+        },
+        "dense_stereo": {
+            "cost_function": "invalid_function",
+        },
+    }
+    with open(config_path, "w") as f:
+        yaml.dump(config_data, f)
+
+    # Should exit with error
+    with pytest.raises(SystemExit) as exc_info:
+        run_command(config_path)
+
+    assert exc_info.value.code == 1
+
+
+def test_run_malformed_yaml(tmp_path: Path):
+    """Test run command with malformed YAML exits with error."""
+    # Create a malformed YAML file
+    config_path = tmp_path / "config.yaml"
+    with open(config_path, "w") as f:
+        f.write("{invalid: yaml: content:")
+
+    # Should exit with error
+    with pytest.raises(SystemExit) as exc_info:
+        run_command(config_path)
+
+    assert exc_info.value.code == 1
+
+
+def test_main_run_argument_parsing(tmp_path: Path):
+    """Test main() correctly parses run subcommand arguments."""
+    # Create a minimal valid config
+    config_path = tmp_path / "config.yaml"
+    config_data = {
+        "calibration_path": str(tmp_path / "calibration.json"),
+        "output_dir": str(tmp_path / "output"),
+        "camera_video_map": {
+            "cam1": str(tmp_path / "cam1.mp4"),
+        },
+    }
+    with open(config_path, "w") as f:
+        yaml.dump(config_data, f)
+
+    # Test basic run command
+    with patch("sys.argv", ["aquamvs", "run", str(config_path)]):
+        with patch("aquamvs.cli.run_command") as mock_run_command:
+            main()
+            mock_run_command.assert_called_once_with(
+                config_path=config_path,
+                verbose=False,
+                device=None,
+            )
+
+    # Test run with --verbose
+    with patch("sys.argv", ["aquamvs", "run", "-v", str(config_path)]):
+        with patch("aquamvs.cli.run_command") as mock_run_command:
+            main()
+            mock_run_command.assert_called_once_with(
+                config_path=config_path,
+                verbose=True,
+                device=None,
+            )
+
+    # Test run with --device
+    with patch("sys.argv", ["aquamvs", "run", "--device", "cuda", str(config_path)]):
+        with patch("aquamvs.cli.run_command") as mock_run_command:
+            main()
+            mock_run_command.assert_called_once_with(
+                config_path=config_path,
+                verbose=False,
+                device="cuda",
+            )

@@ -43,6 +43,18 @@ from .triangulation import (
     triangulate_pair,
     triangulate_rays,
 )
+from .evaluation import (
+    cloud_to_cloud_distance,
+    height_map_difference,
+    icp_align,
+    reprojection_error,
+)
+from .pipeline import (
+    PipelineContext,
+    process_frame,
+    run_pipeline,
+    setup_pipeline,
+)
 
 __version__ = "0.1.0"
 
@@ -80,4 +92,12 @@ __all__ = [
     "reconstruct_surface",
     "save_mesh",
     "load_mesh",
+    "icp_align",
+    "cloud_to_cloud_distance",
+    "height_map_difference",
+    "reprojection_error",
+    "PipelineContext",
+    "setup_pipeline",
+    "process_frame",
+    "run_pipeline",
 ]

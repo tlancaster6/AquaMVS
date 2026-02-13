@@ -2,6 +2,7 @@
 
 import argparse
 import json
+import logging
 import re
 import sys
 from pathlib import Path
@@ -167,6 +168,49 @@ def init_config(
     return config
 
 
+def run_command(config_path: Path, verbose: bool = False, device: str | None = None) -> None:
+    """Execute the reconstruction pipeline from a config file.
+
+    Args:
+        config_path: Path to the pipeline config YAML file.
+        verbose: If True, set logging to DEBUG level.
+        device: Optional device override (replaces config.device.device).
+    """
+    # 1. Configure logging
+    log_level = logging.DEBUG if verbose else logging.INFO
+    logging.basicConfig(
+        level=log_level,
+        format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
+        datefmt="%H:%M:%S",
+    )
+
+    # 2. Load config
+    if not config_path.exists():
+        print(f"Error: Config file not found: {config_path}", file=sys.stderr)
+        sys.exit(1)
+
+    try:
+        config = PipelineConfig.from_yaml(config_path)
+    except Exception as e:
+        print(f"Error: Failed to load config: {e}", file=sys.stderr)
+        sys.exit(1)
+
+    # 3. Apply CLI overrides
+    if device is not None:
+        config.device.device = device
+
+    # 4. Validate
+    try:
+        config.validate()
+    except ValueError as e:
+        print(f"Error: Invalid configuration: {e}", file=sys.stderr)
+        sys.exit(1)
+
+    # 5. Run pipeline
+    from aquamvs.pipeline import run_pipeline
+    run_pipeline(config)
+
+
 def main() -> None:
     """Main entry point for the AquaMVS CLI."""
     parser = argparse.ArgumentParser(
@@ -211,10 +255,26 @@ def main() -> None:
         help="Path to output config YAML file (default: config.yaml)",
     )
 
-    # run subcommand (placeholder for P.22)
+    # run subcommand
     run_parser = subparsers.add_parser(
         "run",
         help="Run reconstruction pipeline",
+    )
+    run_parser.add_argument(
+        "config",
+        type=Path,
+        help="Path to pipeline config YAML file",
+    )
+    run_parser.add_argument(
+        "-v", "--verbose",
+        action="store_true",
+        help="Enable verbose (DEBUG) logging",
+    )
+    run_parser.add_argument(
+        "--device",
+        type=str,
+        default=None,
+        help="Override device (e.g., 'cpu' or 'cuda')",
     )
 
     args = parser.parse_args()
@@ -229,8 +289,11 @@ def main() -> None:
             config_path=args.config,
         )
     elif args.command == "run":
-        print("Error: 'run' command not yet implemented", file=sys.stderr)
-        sys.exit(1)
+        run_command(
+            config_path=args.config,
+            verbose=args.verbose,
+            device=args.device,
+        )
     else:
         parser.print_help()
         sys.exit(1)
