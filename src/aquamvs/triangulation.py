@@ -1,5 +1,6 @@
 """Sparse triangulation for matched features."""
 
+import math
 from pathlib import Path
 
 import torch
@@ -126,11 +127,14 @@ def triangulate_pair(
     model_ref: ProjectionModel,
     model_src: ProjectionModel,
     matches: dict[str, torch.Tensor],
+    min_angle: float = 2.0,
+    max_reproj_error: float = 3.0,
 ) -> dict[str, torch.Tensor]:
     """Triangulate 3D points from matched features between two cameras.
 
     For each pair of matched keypoints, casts rays through both projection
-    models and finds the point of closest approach.
+    models and finds the point of closest approach. Applies quality filtering
+    to reject unreliable triangulations.
 
     Args:
         model_ref: Projection model for the reference camera.
@@ -139,6 +143,11 @@ def triangulate_pair(
             "ref_keypoints": (M, 2) pixel coords in reference image.
             "src_keypoints": (M, 2) pixel coords in source image.
             "scores": (M,) match confidence scores.
+        min_angle: Minimum intersection angle in degrees. Rejects triangulations
+            from nearly-parallel rays. Default: 2.0 degrees.
+        max_reproj_error: Maximum reprojection error in pixels. Rejects points
+            that don't reproject within this distance of the original keypoints.
+            Default: 3.0 pixels.
 
     Returns:
         Dict with keys:
@@ -176,6 +185,40 @@ def triangulate_pair(
     points_3d, valid = _triangulate_two_rays_batch(
         origins_ref, dirs_ref, origins_src, dirs_src
     )
+
+    # --- Quality filter 1: Positive ray depth ---
+    # Point must be in front of both ray origins (positive depth along ray)
+    diff_ref = points_3d - origins_ref  # (M, 3)
+    diff_src = points_3d - origins_src  # (M, 3)
+    depth_ref = (diff_ref * dirs_ref).sum(dim=-1)  # (M,)
+    depth_src = (diff_src * dirs_src).sum(dim=-1)  # (M,)
+    valid = valid & (depth_ref > 0) & (depth_src > 0)
+
+    # --- Quality filter 2: Minimum intersection angle ---
+    # Reject nearly-parallel rays where triangulation is unreliable
+    cos_angle = (dirs_ref * dirs_src).sum(dim=-1).abs()  # (M,)
+    min_cos = math.cos(math.radians(min_angle))
+    # cos_angle < min_cos means angle > min_angle (sufficient convergence)
+    # Note: cos is monotonically decreasing, so larger angle = smaller cos
+    valid = valid & (cos_angle < min_cos)
+
+    # --- Quality filter 3: Reprojection error ---
+    # Project triangulated points back into both cameras
+    reproj_ref, reproj_valid_ref = model_ref.project(points_3d)
+    reproj_src, reproj_valid_src = model_src.project(points_3d)
+
+    err_ref = (reproj_ref - ref_keypoints).norm(dim=-1)  # (M,)
+    err_src = (reproj_src - src_keypoints).norm(dim=-1)  # (M,)
+
+    # Only apply reproj check where projection succeeded
+    reproj_ok = (
+        reproj_valid_ref
+        & reproj_valid_src
+        & (err_ref < max_reproj_error)
+        & (err_src < max_reproj_error)
+    )
+    # Points that fail projection are also invalid
+    valid = valid & reproj_ok
 
     return {
         "points_3d": points_3d,
@@ -246,6 +289,43 @@ def triangulate_all_pairs(
     }
 
 
+def filter_sparse_cloud(
+    sparse_cloud: dict[str, torch.Tensor],
+    water_z: float,
+    max_depth: float = 2.0,
+) -> dict[str, torch.Tensor]:
+    """Filter triangulated points by physical plausibility.
+
+    Removes points that are above the water surface (physically impossible
+    for refracted rays) and extreme depth outliers.
+
+    Args:
+        sparse_cloud: Sparse cloud from triangulate_all_pairs().
+            Must contain "points_3d" (N, 3) and "scores" (N,).
+        water_z: Z-coordinate of water surface in world frame.
+            Points must have Z > water_z (below surface in Z-down frame).
+        max_depth: Maximum depth below water surface in meters.
+            Points with Z > water_z + max_depth are rejected as outliers.
+
+    Returns:
+        Filtered sparse cloud dict with same keys but fewer points.
+        Returns empty tensors if all points are filtered out.
+    """
+    points_3d = sparse_cloud["points_3d"]
+    scores = sparse_cloud["scores"]
+
+    if points_3d.shape[0] == 0:
+        return sparse_cloud
+
+    z = points_3d[:, 2]
+    keep = (z > water_z) & (z < water_z + max_depth)
+
+    return {
+        "points_3d": points_3d[keep],
+        "scores": scores[keep],
+    }
+
+
 def compute_depth_ranges(
     projection_models: dict[str, ProjectionModel],
     sparse_cloud: dict[str, torch.Tensor],
@@ -305,9 +385,9 @@ def compute_depth_ranges(
         diff = valid_points - origins  # (K, 3)
         depths = (diff * directions).sum(dim=-1)  # (K,)
 
-        # Compute range with margin
-        d_min = float(depths.min().item()) - margin
-        d_max = float(depths.max().item()) + margin
+        # Compute range with margin (using percentiles for robustness)
+        d_min = float(depths.quantile(0.02).item()) - margin
+        d_max = float(depths.quantile(0.98).item()) + margin
 
         # Clamp d_min to be >= 0 (ray depth cannot be negative)
         d_min = max(0.0, d_min)

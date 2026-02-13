@@ -131,28 +131,37 @@ def match_all_pairs(
     Returns:
         Dict mapping (ref_camera, src_camera) tuple to matches dict.
         Pairs with zero matches after filtering are included with empty tensors.
+        Each unordered pair {A, B} appears exactly once with canonical key (min(A,B), max(A,B)).
     """
     # Create matcher once for all pairs
     matcher = create_matcher(device)
 
-    # Match all pairs
+    # Match all pairs, avoiding duplicates from bidirectional pair lists
     all_matches = {}
-    for ref_cam, src_cams in pairs.items():
-        feats_ref = all_features[ref_cam]
+    seen_pairs: set[tuple[str, str]] = set()
 
+    for ref_cam, src_cams in pairs.items():
         for src_cam in src_cams:
-            feats_src = all_features[src_cam]
+            # Canonicalize pair order to avoid duplicate matching
+            canonical = (min(ref_cam, src_cam), max(ref_cam, src_cam))
+            if canonical in seen_pairs:
+                continue
+            seen_pairs.add(canonical)
+
+            # Always match in canonical order (A < B)
+            feats_a = all_features[canonical[0]]
+            feats_b = all_features[canonical[1]]
 
             matches = match_pair(
-                feats_ref,
-                feats_src,
+                feats_a,
+                feats_b,
                 image_size,
                 config,
                 matcher=matcher,
                 device=device,
             )
 
-            all_matches[(ref_cam, src_cam)] = matches
+            all_matches[canonical] = matches
 
     return all_matches
 

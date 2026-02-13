@@ -1,6 +1,8 @@
 """Tests for pipeline orchestration."""
 
 import logging
+import sys
+from contextlib import contextmanager
 from pathlib import Path
 from unittest.mock import MagicMock, Mock, patch
 
@@ -17,12 +19,15 @@ from aquamvs.config import (
     FrameSamplingConfig,
     FusionConfig,
     MatchingConfig,
+    OutputConfig,
     PairSelectionConfig,
     PipelineConfig,
     SurfaceConfig,
+    VizConfig,
 )
 from aquamvs.pipeline import (
     PipelineContext,
+    _should_viz,
     process_frame,
     run_pipeline,
     setup_pipeline,
@@ -223,9 +228,12 @@ def test_process_frame_directory_structure(
                                     with patch(
                                         "aquamvs.pipeline.fuse_depth_maps"
                                     ) as mock_fuse:
-                                        mock_fuse.return_value = (
-                                            o3d.geometry.PointCloud()
+                                        # Return non-empty point cloud
+                                        pcd = o3d.geometry.PointCloud()
+                                        pcd.points = o3d.utility.Vector3dVector(
+                                            [[0, 0, 1], [0.1, 0, 1]]
                                         )
+                                        mock_fuse.return_value = pcd
 
                                         with patch(
                                             "aquamvs.pipeline.reconstruct_surface"
@@ -383,3 +391,716 @@ def test_pipeline_context_fields(pipeline_config, mock_calibration_data):
             assert "cam0" in ctx.ring_cameras
             assert "cam1" in ctx.ring_cameras
             assert "cam2" in ctx.auxiliary_cameras
+
+
+# ---------------------------------------------------------------------------
+# Helpers for process_frame tests with full mocking
+# ---------------------------------------------------------------------------
+
+
+@contextmanager
+def _mock_pipeline_stages():
+    """Context manager that patches all pipeline stage functions.
+
+    Yields a dict of mock objects keyed by short names.
+    """
+    with (
+        patch("aquamvs.pipeline.undistort_image") as m_undist,
+        patch("aquamvs.pipeline.extract_features_batch") as m_extract,
+        patch("aquamvs.pipeline.match_all_pairs") as m_match,
+        patch("aquamvs.pipeline.triangulate_all_pairs") as m_tri,
+        patch("aquamvs.pipeline.compute_depth_ranges") as m_ranges,
+        patch("aquamvs.pipeline.plane_sweep_stereo") as m_sweep,
+        patch("aquamvs.pipeline.extract_depth") as m_extr,
+        patch("aquamvs.pipeline.filter_all_depth_maps") as m_filter,
+        patch("aquamvs.pipeline.fuse_depth_maps") as m_fuse,
+        patch("aquamvs.pipeline.reconstruct_surface") as m_surf,
+        patch("aquamvs.pipeline.save_sparse_cloud") as m_save_sparse,
+        patch("aquamvs.pipeline.save_depth_map") as m_save_depth,
+        patch("aquamvs.pipeline.save_point_cloud") as m_save_pcd,
+        patch("aquamvs.pipeline.save_mesh") as m_save_mesh,
+    ):
+
+        m_undist.side_effect = lambda img, _: img  # Pass through
+        m_extract.return_value = {
+            "cam0": {
+                "keypoints": torch.zeros(10, 2),
+                "scores": torch.ones(10),
+                "descriptors": torch.zeros(10, 256),
+            },
+        }
+        m_match.return_value = {
+            ("cam0", "cam1"): {
+                "ref_keypoints": torch.zeros(5, 2),
+                "src_keypoints": torch.zeros(5, 2),
+                "scores": torch.ones(5),
+            },
+        }
+        m_tri.return_value = {
+            "points_3d": torch.zeros(0, 3),
+            "scores": torch.zeros(0),
+        }
+        m_ranges.return_value = {"cam0": (0.3, 0.9)}
+        m_sweep.return_value = {
+            "cost_volume": torch.zeros(1, 1, 1),
+            "depths": torch.tensor([0.5]),
+        }
+        m_extr.return_value = (
+            torch.full((480, 640), float("nan")),
+            torch.zeros(480, 640),
+        )
+        m_filter.return_value = {
+            "cam0": (
+                torch.full((480, 640), float("nan")),
+                torch.zeros(480, 640),
+                torch.zeros(480, 640, dtype=torch.int32),
+            )
+        }
+        # Return non-empty point cloud by default
+        pcd = o3d.geometry.PointCloud()
+        pcd.points = o3d.utility.Vector3dVector([[0, 0, 1], [0.1, 0, 1]])
+        m_fuse.return_value = pcd
+        m_surf.return_value = o3d.geometry.TriangleMesh()
+
+        yield {
+            "undistort": m_undist,
+            "extract": m_extract,
+            "match": m_match,
+            "triangulate": m_tri,
+            "depth_ranges": m_ranges,
+            "sweep": m_sweep,
+            "extract_depth": m_extr,
+            "filter": m_filter,
+            "fuse": m_fuse,
+            "surface": m_surf,
+            "save_sparse": m_save_sparse,
+            "save_depth": m_save_depth,
+            "save_pcd": m_save_pcd,
+            "save_mesh": m_save_mesh,
+        }
+
+
+def _make_ctx(config, calibration_data):
+    """Create a PipelineContext for testing with minimal mocks."""
+    mock_proj_model = Mock()
+    return PipelineContext(
+        config=config,
+        calibration=calibration_data,
+        undistortion_maps={
+            "cam0": UndistortionData(
+                K_new=torch.eye(3, dtype=torch.float32),
+                map_x=np.zeros((480, 640), dtype=np.float32),
+                map_y=np.zeros((480, 640), dtype=np.float32),
+            ),
+            "cam1": UndistortionData(
+                K_new=torch.eye(3, dtype=torch.float32),
+                map_x=np.zeros((480, 640), dtype=np.float32),
+                map_y=np.zeros((480, 640), dtype=np.float32),
+            ),
+        },
+        projection_models={
+            "cam0": mock_proj_model,
+            "cam1": mock_proj_model,
+            "cam2": mock_proj_model,
+        },
+        pairs={"cam0": ["cam1"]},
+        ring_cameras=["cam0", "cam1"],
+        auxiliary_cameras=["cam2"],
+        device="cpu",
+    )
+
+
+_RAW_IMAGES = {
+    "cam0": np.zeros((480, 640, 3), dtype=np.uint8),
+    "cam1": np.zeros((480, 640, 3), dtype=np.uint8),
+}
+
+
+# ---------------------------------------------------------------------------
+# _should_viz helper unit tests
+# ---------------------------------------------------------------------------
+
+
+class TestShouldViz:
+    """Unit tests for the _should_viz helper."""
+
+    def test_disabled_always_false(self, tmp_path):
+        """enabled=False returns False for any stage."""
+        config = PipelineConfig(
+            output_dir=str(tmp_path),
+            visualization=VizConfig(enabled=False),
+        )
+        assert _should_viz(config, "depth") is False
+        assert _should_viz(config, "features") is False
+        assert _should_viz(config, "scene") is False
+        assert _should_viz(config, "rig") is False
+        assert _should_viz(config, "summary") is False
+
+    def test_enabled_empty_stages_all_true(self, tmp_path):
+        """enabled=True with stages=[] returns True for all stages."""
+        config = PipelineConfig(
+            output_dir=str(tmp_path),
+            visualization=VizConfig(enabled=True, stages=[]),
+        )
+        assert _should_viz(config, "depth") is True
+        assert _should_viz(config, "features") is True
+        assert _should_viz(config, "scene") is True
+        assert _should_viz(config, "rig") is True
+        assert _should_viz(config, "summary") is True
+
+    def test_enabled_specific_stages(self, tmp_path):
+        """enabled=True with specific stages returns True only for those."""
+        config = PipelineConfig(
+            output_dir=str(tmp_path),
+            visualization=VizConfig(enabled=True, stages=["depth", "scene"]),
+        )
+        assert _should_viz(config, "depth") is True
+        assert _should_viz(config, "scene") is True
+        assert _should_viz(config, "features") is False
+        assert _should_viz(config, "rig") is False
+        assert _should_viz(config, "summary") is False
+
+
+# ---------------------------------------------------------------------------
+# Visualization integration tests
+# ---------------------------------------------------------------------------
+
+
+class TestVizIntegration:
+    """Tests for visualization wiring in process_frame."""
+
+    def test_viz_disabled_no_viz_dir(
+        self, pipeline_config, mock_calibration_data, tmp_path
+    ):
+        """When viz is disabled, no viz/ directory is created."""
+        # Default config has viz disabled
+        assert pipeline_config.visualization.enabled is False
+
+        ctx = _make_ctx(pipeline_config, mock_calibration_data)
+        with _mock_pipeline_stages():
+            process_frame(0, _RAW_IMAGES.copy(), ctx)
+
+        frame_dir = Path(pipeline_config.output_dir) / "frame_000000"
+        assert not (frame_dir / "viz").exists()
+
+    def test_viz_disabled_no_imports(
+        self, pipeline_config, mock_calibration_data, tmp_path
+    ):
+        """When viz is disabled, viz modules are not imported."""
+        assert pipeline_config.visualization.enabled is False
+
+        # Remove any cached viz module imports
+        viz_modules_before = {
+            k for k in sys.modules if k.startswith("aquamvs.visualization.")
+        }
+
+        ctx = _make_ctx(pipeline_config, mock_calibration_data)
+        with _mock_pipeline_stages():
+            process_frame(0, _RAW_IMAGES.copy(), ctx)
+
+        # Check that no new viz modules were imported
+        viz_modules_after = {
+            k for k in sys.modules if k.startswith("aquamvs.visualization.")
+        }
+        new_viz_imports = viz_modules_after - viz_modules_before
+        assert len(new_viz_imports) == 0, f"Unexpected viz imports: {new_viz_imports}"
+
+    def test_viz_enabled_all_stages(self, tmp_path, mock_calibration_data):
+        """When viz is enabled with stages=[], all viz functions are called."""
+        config = PipelineConfig(
+            calibration_path="dummy.json",
+            output_dir=str(tmp_path / "output"),
+            camera_video_map={"cam0": "v0.mp4", "cam1": "v1.mp4", "cam2": "v2.mp4"},
+            visualization=VizConfig(enabled=True, stages=[]),
+            device=DeviceConfig(device="cpu"),
+        )
+
+        ctx = _make_ctx(config, mock_calibration_data)
+
+        with _mock_pipeline_stages():
+            with (
+                patch(
+                    "aquamvs.visualization.features.render_all_features"
+                ) as m_feat_viz,
+                patch(
+                    "aquamvs.visualization.depth.render_all_depth_maps"
+                ) as m_depth_viz,
+                patch("aquamvs.visualization.scene.render_all_scenes") as m_scene_viz,
+                patch("aquamvs.visualization.rig.render_rig_diagram") as m_rig_viz,
+            ):
+                process_frame(0, _RAW_IMAGES.copy(), ctx)
+
+                assert m_feat_viz.called, "render_all_features should be called"
+                assert m_depth_viz.called, "render_all_depth_maps should be called"
+                assert m_scene_viz.called, "render_all_scenes should be called"
+                assert m_rig_viz.called, "render_rig_diagram should be called"
+
+        # viz directory should exist
+        frame_dir = Path(config.output_dir) / "frame_000000"
+        assert (frame_dir / "viz").exists()
+
+    def test_viz_enabled_specific_stages(self, tmp_path, mock_calibration_data):
+        """When viz is enabled with stages=["depth"], only depth viz runs."""
+        config = PipelineConfig(
+            calibration_path="dummy.json",
+            output_dir=str(tmp_path / "output"),
+            camera_video_map={"cam0": "v0.mp4", "cam1": "v1.mp4", "cam2": "v2.mp4"},
+            visualization=VizConfig(enabled=True, stages=["depth"]),
+            device=DeviceConfig(device="cpu"),
+        )
+
+        ctx = _make_ctx(config, mock_calibration_data)
+
+        with _mock_pipeline_stages():
+            with (
+                patch(
+                    "aquamvs.visualization.features.render_all_features"
+                ) as m_feat_viz,
+                patch(
+                    "aquamvs.visualization.depth.render_all_depth_maps"
+                ) as m_depth_viz,
+                patch("aquamvs.visualization.scene.render_all_scenes") as m_scene_viz,
+                patch("aquamvs.visualization.rig.render_rig_diagram") as m_rig_viz,
+            ):
+                process_frame(0, _RAW_IMAGES.copy(), ctx)
+
+                assert m_depth_viz.called, "render_all_depth_maps should be called"
+                assert not m_feat_viz.called, "render_all_features should NOT be called"
+                assert not m_scene_viz.called, "render_all_scenes should NOT be called"
+                assert not m_rig_viz.called, "render_rig_diagram should NOT be called"
+
+    def test_viz_error_does_not_crash_pipeline(
+        self, tmp_path, mock_calibration_data, caplog
+    ):
+        """Viz errors are caught and logged, pipeline completes."""
+        config = PipelineConfig(
+            calibration_path="dummy.json",
+            output_dir=str(tmp_path / "output"),
+            camera_video_map={"cam0": "v0.mp4", "cam1": "v1.mp4", "cam2": "v2.mp4"},
+            visualization=VizConfig(enabled=True, stages=["depth"]),
+            device=DeviceConfig(device="cpu"),
+        )
+
+        ctx = _make_ctx(config, mock_calibration_data)
+
+        with _mock_pipeline_stages():
+            with patch(
+                "aquamvs.visualization.depth.render_all_depth_maps",
+                side_effect=RuntimeError("Viz explosion"),
+            ):
+                with caplog.at_level(logging.INFO):
+                    # Should NOT raise
+                    process_frame(0, _RAW_IMAGES.copy(), ctx)
+
+        # Pipeline should have completed
+        assert "depth visualization failed" in caplog.text
+        # Frame should still be marked complete
+        assert "Frame 0: complete" in caplog.text
+
+
+# ---------------------------------------------------------------------------
+# OutputConfig tests
+# ---------------------------------------------------------------------------
+
+
+class TestOutputConfig:
+    """Tests for OutputConfig gating in process_frame."""
+
+    def test_save_features_enabled(self, tmp_path, mock_calibration_data):
+        """save_features=True causes features and matches to be saved."""
+        config = PipelineConfig(
+            calibration_path="dummy.json",
+            output_dir=str(tmp_path / "output"),
+            camera_video_map={"cam0": "v0.mp4", "cam1": "v1.mp4", "cam2": "v2.mp4"},
+            output=OutputConfig(save_features=True),
+            device=DeviceConfig(device="cpu"),
+        )
+
+        ctx = _make_ctx(config, mock_calibration_data)
+
+        with _mock_pipeline_stages():
+            with (
+                patch("aquamvs.features.save_features") as m_sf,
+                patch("aquamvs.features.save_matches") as m_sm,
+            ):
+                process_frame(0, _RAW_IMAGES.copy(), ctx)
+
+                assert m_sf.called, "save_features should be called"
+                assert m_sm.called, "save_matches should be called"
+
+    def test_save_features_disabled(self, tmp_path, mock_calibration_data):
+        """save_features=False (default) means no feature files saved."""
+        config = PipelineConfig(
+            calibration_path="dummy.json",
+            output_dir=str(tmp_path / "output"),
+            camera_video_map={"cam0": "v0.mp4", "cam1": "v1.mp4", "cam2": "v2.mp4"},
+            output=OutputConfig(save_features=False),
+            device=DeviceConfig(device="cpu"),
+        )
+
+        ctx = _make_ctx(config, mock_calibration_data)
+
+        with _mock_pipeline_stages():
+            process_frame(0, _RAW_IMAGES.copy(), ctx)
+
+        # No features/ directory should exist
+        frame_dir = Path(config.output_dir) / "frame_000000"
+        assert not (frame_dir / "features").exists()
+
+    def test_skip_depth_maps(self, tmp_path, mock_calibration_data):
+        """save_depth_maps=False means no depth_maps/ directory."""
+        config = PipelineConfig(
+            calibration_path="dummy.json",
+            output_dir=str(tmp_path / "output"),
+            camera_video_map={"cam0": "v0.mp4", "cam1": "v1.mp4", "cam2": "v2.mp4"},
+            output=OutputConfig(save_depth_maps=False),
+            device=DeviceConfig(device="cpu"),
+        )
+
+        ctx = _make_ctx(config, mock_calibration_data)
+
+        with _mock_pipeline_stages() as mocks:
+            process_frame(0, _RAW_IMAGES.copy(), ctx)
+            assert not mocks["save_depth"].called
+
+        frame_dir = Path(config.output_dir) / "frame_000000"
+        assert not (frame_dir / "depth_maps").exists()
+
+    def test_skip_point_cloud(self, tmp_path, mock_calibration_data):
+        """save_point_cloud=False means no point_cloud/ directory."""
+        config = PipelineConfig(
+            calibration_path="dummy.json",
+            output_dir=str(tmp_path / "output"),
+            camera_video_map={"cam0": "v0.mp4", "cam1": "v1.mp4", "cam2": "v2.mp4"},
+            output=OutputConfig(save_point_cloud=False),
+            device=DeviceConfig(device="cpu"),
+        )
+
+        ctx = _make_ctx(config, mock_calibration_data)
+
+        with _mock_pipeline_stages() as mocks:
+            process_frame(0, _RAW_IMAGES.copy(), ctx)
+            assert not mocks["save_pcd"].called
+
+        frame_dir = Path(config.output_dir) / "frame_000000"
+        assert not (frame_dir / "point_cloud").exists()
+
+    def test_skip_mesh(self, tmp_path, mock_calibration_data):
+        """save_mesh=False means no mesh/ directory."""
+        config = PipelineConfig(
+            calibration_path="dummy.json",
+            output_dir=str(tmp_path / "output"),
+            camera_video_map={"cam0": "v0.mp4", "cam1": "v1.mp4", "cam2": "v2.mp4"},
+            output=OutputConfig(save_mesh=False),
+            device=DeviceConfig(device="cpu"),
+        )
+
+        ctx = _make_ctx(config, mock_calibration_data)
+
+        with _mock_pipeline_stages() as mocks:
+            process_frame(0, _RAW_IMAGES.copy(), ctx)
+            assert not mocks["save_mesh"].called
+
+        frame_dir = Path(config.output_dir) / "frame_000000"
+        assert not (frame_dir / "mesh").exists()
+
+    def test_cleanup_intermediates(self, tmp_path, mock_calibration_data):
+        """keep_intermediates=False removes depth maps after fusion."""
+        config = PipelineConfig(
+            calibration_path="dummy.json",
+            output_dir=str(tmp_path / "output"),
+            camera_video_map={"cam0": "v0.mp4", "cam1": "v1.mp4", "cam2": "v2.mp4"},
+            output=OutputConfig(save_depth_maps=True, keep_intermediates=False),
+            device=DeviceConfig(device="cpu"),
+        )
+
+        ctx = _make_ctx(config, mock_calibration_data)
+
+        with _mock_pipeline_stages():
+            process_frame(0, _RAW_IMAGES.copy(), ctx)
+
+        frame_dir = Path(config.output_dir) / "frame_000000"
+        # Depth maps were saved but then cleaned up
+        assert not (frame_dir / "depth_maps").exists()
+
+    def test_sparse_cloud_always_saved(self, tmp_path, mock_calibration_data):
+        """Sparse cloud is always saved regardless of OutputConfig flags."""
+        config = PipelineConfig(
+            calibration_path="dummy.json",
+            output_dir=str(tmp_path / "output"),
+            camera_video_map={"cam0": "v0.mp4", "cam1": "v1.mp4", "cam2": "v2.mp4"},
+            output=OutputConfig(
+                save_features=False,
+                save_depth_maps=False,
+                save_point_cloud=False,
+                save_mesh=False,
+            ),
+            device=DeviceConfig(device="cpu"),
+        )
+
+        ctx = _make_ctx(config, mock_calibration_data)
+
+        with _mock_pipeline_stages() as mocks:
+            process_frame(0, _RAW_IMAGES.copy(), ctx)
+            assert mocks[
+                "save_sparse"
+            ].called, "save_sparse_cloud should always be called"
+
+
+# ---------------------------------------------------------------------------
+# Summary visualization test
+# ---------------------------------------------------------------------------
+
+
+class TestSummaryViz:
+    """Tests for summary visualization in run_pipeline."""
+
+    def test_summary_viz_in_run_pipeline(self, tmp_path):
+        """Summary viz is called when 'summary' stage is enabled."""
+        config = PipelineConfig(
+            calibration_path="dummy.json",
+            output_dir=str(tmp_path / "output"),
+            camera_video_map={"cam0": "v0.mp4"},
+            visualization=VizConfig(enabled=True, stages=["summary"]),
+            device=DeviceConfig(device="cpu"),
+        )
+
+        with patch("aquamvs.pipeline.setup_pipeline") as mock_setup:
+            mock_ctx = Mock()
+            mock_ctx.config = config
+            mock_setup.return_value = mock_ctx
+
+            with patch("aquamvs.pipeline.VideoSet") as mock_videoset:
+                mock_videos = MagicMock()
+                mock_videos.__enter__.return_value = mock_videos
+                mock_videos.iterate_frames.return_value = []  # No frames
+                mock_videoset.return_value = mock_videos
+
+                with patch("aquamvs.pipeline.process_frame"):
+                    with patch(
+                        "aquamvs.pipeline._collect_height_maps",
+                        return_value=[
+                            (0, np.zeros((10, 10)), np.arange(10), np.arange(10)),
+                        ],
+                    ) as m_collect:
+                        with patch(
+                            "aquamvs.visualization.summary.render_timeseries_gallery"
+                        ) as m_gallery:
+                            run_pipeline(config)
+
+                            assert m_collect.called
+                            assert m_gallery.called
+
+    def test_summary_viz_not_called_when_disabled(self, tmp_path):
+        """Summary viz is not called when viz is disabled."""
+        config = PipelineConfig(
+            calibration_path="dummy.json",
+            output_dir=str(tmp_path / "output"),
+            camera_video_map={"cam0": "v0.mp4"},
+            visualization=VizConfig(enabled=False),
+            device=DeviceConfig(device="cpu"),
+        )
+
+        with patch("aquamvs.pipeline.setup_pipeline") as mock_setup:
+            mock_ctx = Mock()
+            mock_ctx.config = config
+            mock_setup.return_value = mock_ctx
+
+            with patch("aquamvs.pipeline.VideoSet") as mock_videoset:
+                mock_videos = MagicMock()
+                mock_videos.__enter__.return_value = mock_videos
+                mock_videos.iterate_frames.return_value = []
+                mock_videoset.return_value = mock_videos
+
+                with patch("aquamvs.pipeline.process_frame"):
+                    with patch("aquamvs.pipeline._collect_height_maps") as m_collect:
+                        run_pipeline(config)
+                        assert not m_collect.called
+
+
+# ---------------------------------------------------------------------------
+# BF.3 tests: Empty cloud guards and sparse cloud filtering
+# ---------------------------------------------------------------------------
+
+
+class TestEmptyCloudHandling:
+    """Tests for empty point cloud guards (B.3)."""
+
+    def test_process_frame_empty_fusion_no_crash(
+        self, tmp_path, mock_calibration_data, caplog
+    ):
+        """Empty fused point cloud skips surface reconstruction without crash."""
+        config = PipelineConfig(
+            calibration_path="dummy.json",
+            output_dir=str(tmp_path / "output"),
+            camera_video_map={"cam0": "v0.mp4", "cam1": "v1.mp4", "cam2": "v2.mp4"},
+            device=DeviceConfig(device="cpu"),
+        )
+
+        ctx = _make_ctx(config, mock_calibration_data)
+
+        with _mock_pipeline_stages() as mocks:
+            # Override fusion to return an empty point cloud
+            empty_pcd = o3d.geometry.PointCloud()
+            mocks["fuse"].return_value = empty_pcd
+
+            with caplog.at_level(logging.WARNING):
+                # Should NOT raise
+                process_frame(0, _RAW_IMAGES.copy(), ctx)
+
+            # Verify warnings logged
+            assert "fused point cloud is empty" in caplog.text
+            # Surface reconstruction should not have been called
+            assert not mocks["surface"].called
+            # Mesh and point cloud should not have been saved
+            assert not mocks["save_mesh"].called
+            assert not mocks["save_pcd"].called
+
+        # Verify no mesh/ or point_cloud/ directories created
+        frame_dir = Path(config.output_dir) / "frame_000000"
+        assert not (frame_dir / "mesh").exists()
+        assert not (frame_dir / "point_cloud").exists()
+
+    def test_process_frame_nonempty_fusion_proceeds_normally(
+        self, tmp_path, mock_calibration_data
+    ):
+        """Non-empty fused point cloud proceeds to surface reconstruction."""
+        config = PipelineConfig(
+            calibration_path="dummy.json",
+            output_dir=str(tmp_path / "output"),
+            camera_video_map={"cam0": "v0.mp4", "cam1": "v1.mp4", "cam2": "v2.mp4"},
+            device=DeviceConfig(device="cpu"),
+        )
+
+        ctx = _make_ctx(config, mock_calibration_data)
+
+        with _mock_pipeline_stages() as mocks:
+            # Override fusion to return a non-empty point cloud
+            pcd = o3d.geometry.PointCloud()
+            pcd.points = o3d.utility.Vector3dVector([[0, 0, 1], [0.1, 0, 1]])
+            mocks["fuse"].return_value = pcd
+
+            process_frame(0, _RAW_IMAGES.copy(), ctx)
+
+            # Surface reconstruction should have been called
+            assert mocks["surface"].called
+            # Point cloud and mesh should have been saved
+            assert mocks["save_pcd"].called
+            assert mocks["save_mesh"].called
+
+
+class TestSparseCloudFiltering:
+    """Tests for sparse cloud filtering wiring (B.6)."""
+
+    def test_process_frame_calls_filter_sparse_cloud(
+        self, tmp_path, mock_calibration_data
+    ):
+        """filter_sparse_cloud is called with water_z from calibration."""
+        config = PipelineConfig(
+            calibration_path="dummy.json",
+            output_dir=str(tmp_path / "output"),
+            camera_video_map={"cam0": "v0.mp4", "cam1": "v1.mp4", "cam2": "v2.mp4"},
+            device=DeviceConfig(device="cpu"),
+        )
+
+        ctx = _make_ctx(config, mock_calibration_data)
+
+        with _mock_pipeline_stages():
+            with patch("aquamvs.pipeline.filter_sparse_cloud") as mock_filter:
+                # Mock filter to return the input unchanged
+                mock_filter.side_effect = lambda cloud, **kwargs: cloud
+
+                process_frame(0, _RAW_IMAGES.copy(), ctx)
+
+                # Verify filter was called
+                assert mock_filter.called
+                call_args = mock_filter.call_args
+                # Check water_z is passed from calibration
+                assert call_args[1]["water_z"] == mock_calibration_data.water_z
+
+    def test_process_frame_filter_reduces_points(
+        self, tmp_path, mock_calibration_data, caplog
+    ):
+        """Filtered sparse cloud with fewer points is passed to depth range estimation."""
+        config = PipelineConfig(
+            calibration_path="dummy.json",
+            output_dir=str(tmp_path / "output"),
+            camera_video_map={"cam0": "v0.mp4", "cam1": "v1.mp4", "cam2": "v2.mp4"},
+            device=DeviceConfig(device="cpu"),
+        )
+
+        ctx = _make_ctx(config, mock_calibration_data)
+
+        with _mock_pipeline_stages() as mocks:
+            # Override triangulate to return a cloud with 100 points
+            mocks["triangulate"].return_value = {
+                "points_3d": torch.zeros(100, 3),
+                "scores": torch.zeros(100),
+            }
+
+            with patch("aquamvs.pipeline.filter_sparse_cloud") as mock_filter:
+                # Mock filter to reduce points to 50
+                def filter_side_effect(cloud, **kwargs):
+                    return {
+                        "points_3d": cloud["points_3d"][:50],
+                        "scores": cloud["scores"][:50],
+                    }
+
+                mock_filter.side_effect = filter_side_effect
+
+                with caplog.at_level(logging.INFO):
+                    process_frame(0, _RAW_IMAGES.copy(), ctx)
+
+                # Verify filtering logged
+                assert "100 -> 50 points (50 removed)" in caplog.text
+
+                # Verify compute_depth_ranges received the filtered cloud
+                depth_range_call = mocks["depth_ranges"].call_args
+                filtered_cloud = depth_range_call[0][1]
+                assert filtered_cloud["points_3d"].shape[0] == 50
+
+    def test_process_frame_all_points_filtered(
+        self, tmp_path, mock_calibration_data, caplog
+    ):
+        """Pipeline completes when all sparse points are filtered out."""
+        config = PipelineConfig(
+            calibration_path="dummy.json",
+            output_dir=str(tmp_path / "output"),
+            camera_video_map={"cam0": "v0.mp4", "cam1": "v1.mp4", "cam2": "v2.mp4"},
+            device=DeviceConfig(device="cpu"),
+        )
+
+        ctx = _make_ctx(config, mock_calibration_data)
+
+        with _mock_pipeline_stages() as mocks:
+            # Override triangulate to return a cloud with some points
+            mocks["triangulate"].return_value = {
+                "points_3d": torch.zeros(100, 3),
+                "scores": torch.zeros(100),
+            }
+
+            with patch("aquamvs.pipeline.filter_sparse_cloud") as mock_filter:
+                # Mock filter to remove all points
+                def filter_side_effect(cloud, **kwargs):
+                    return {
+                        "points_3d": torch.zeros(0, 3),
+                        "scores": torch.zeros(0),
+                    }
+
+                mock_filter.side_effect = filter_side_effect
+
+                with caplog.at_level(logging.INFO):
+                    # Should NOT crash
+                    process_frame(0, _RAW_IMAGES.copy(), ctx)
+
+                # Verify filtering logged
+                assert "100 -> 0 points (100 removed)" in caplog.text
+
+                # Verify compute_depth_ranges was called (with empty cloud)
+                assert mocks["depth_ranges"].called
+                depth_range_call = mocks["depth_ranges"].call_args
+                filtered_cloud = depth_range_call[0][1]
+                assert filtered_cloud["points_3d"].shape[0] == 0
+
+                # Pipeline should complete
+                assert "Frame 0: complete" in caplog.text

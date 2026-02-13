@@ -45,6 +45,23 @@ class RefractiveProjectionModel:
         self.C = -R.T @ t  # camera center in world frame, shape (3,)
         self.n_ratio = n_air / n_water  # scalar float
 
+    def to(self, device: str | torch.device) -> "RefractiveProjectionModel":
+        """Move all internal tensors to the specified device.
+
+        Args:
+            device: Target device (e.g., "cpu", "cuda", "cuda:0").
+
+        Returns:
+            Self, for method chaining.
+        """
+        self.K = self.K.to(device)
+        self.K_inv = self.K_inv.to(device)
+        self.R = self.R.to(device)
+        self.t = self.t.to(device)
+        self.C = self.C.to(device)
+        self.normal = self.normal.to(device)
+        return self
+
     def cast_ray(self, pixels: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor]:
         """Cast rays from pixel coordinates into the scene.
 

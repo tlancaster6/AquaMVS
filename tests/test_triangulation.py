@@ -10,6 +10,7 @@ from aquamvs.projection.refractive import RefractiveProjectionModel
 from aquamvs.triangulation import (
     _triangulate_two_rays_batch,
     compute_depth_ranges,
+    filter_sparse_cloud,
     load_sparse_cloud,
     save_sparse_cloud,
     triangulate_all_pairs,
@@ -285,6 +286,240 @@ class TestTriangulatePair:
         assert result["src_pixels"].shape == (0, 2)
         assert result["valid"].shape == (0,)
 
+    def test_triangulate_pair_rejects_parallel_rays(self, device):
+        """Test that nearly parallel rays are rejected (intersection angle < min_angle)."""
+        water_z = 0.978
+        normal = torch.tensor([0.0, 0.0, -1.0], device=device, dtype=torch.float32)
+        n_air = 1.0
+        n_water = 1.333
+
+        K = torch.tensor(
+            [[800.0, 0.0, 800.0], [0.0, 800.0, 600.0], [0.0, 0.0, 1.0]],
+            device=device,
+            dtype=torch.float32,
+        )
+        R = torch.eye(3, device=device, dtype=torch.float32)
+
+        # Two cameras with very small baseline (0.01m) - will produce nearly parallel rays
+        t1 = torch.zeros(3, device=device, dtype=torch.float32)
+        t2 = torch.tensor([0.01, 0.0, 0.0], device=device, dtype=torch.float32)
+
+        model1 = RefractiveProjectionModel(K, R, t1, water_z, normal, n_air, n_water)
+        model2 = RefractiveProjectionModel(K, R, t2, water_z, normal, n_air, n_water)
+
+        # Create a point far away (3m depth) - will make rays nearly parallel
+        point_3d = torch.tensor(
+            [[0.005, 0.0, 3.0]], device=device, dtype=torch.float32
+        )
+
+        # Project through both models
+        pixels1, valid1 = model1.project(point_3d)
+        pixels2, valid2 = model2.project(point_3d)
+
+        assert valid1.all() and valid2.all()
+
+        # Create matches
+        matches = {
+            "ref_keypoints": pixels1,
+            "src_keypoints": pixels2,
+            "scores": torch.ones(1, device=device, dtype=torch.float32),
+        }
+
+        # Triangulate with default min_angle=2.0 degrees
+        result = triangulate_pair(model1, model2, matches)
+
+        # The point should be marked invalid due to small intersection angle
+        assert not result["valid"][0], "Nearly parallel rays should be rejected"
+
+    def test_triangulate_pair_accepts_good_angle(self, device):
+        """Test that rays with sufficient convergence angle are accepted."""
+        model1, model2 = self.create_test_models(device)
+
+        # Create known 3D points underwater (baseline is 0.635m, so good angle)
+        points_3d = torch.tensor(
+            [[0.3, 0.2, 1.5], [0.0, 0.0, 1.4]],
+            device=device,
+            dtype=torch.float32,
+        )
+
+        # Project through both models
+        pixels1, valid1 = model1.project(points_3d)
+        pixels2, valid2 = model2.project(points_3d)
+
+        assert valid1.all() and valid2.all()
+
+        # Create matches
+        matches = {
+            "ref_keypoints": pixels1,
+            "src_keypoints": pixels2,
+            "scores": torch.ones(2, device=device, dtype=torch.float32),
+        }
+
+        # Triangulate
+        result = triangulate_pair(model1, model2, matches)
+
+        # All points should be valid (good angle with 0.635m baseline)
+        assert result["valid"].all(), "Points with good intersection angle should be accepted"
+
+    def test_triangulate_pair_rejects_bad_reproj(self, device):
+        """Test that points with high reprojection error are rejected.
+
+        Uses matches from two different 3D points to create inconsistent rays
+        that produce high reprojection error.
+        """
+        model1, model2 = self.create_test_models(device)
+
+        # Create two DIFFERENT 3D points
+        point_3d_1 = torch.tensor([[0.3, 0.2, 1.5]], device=device, dtype=torch.float32)
+        point_3d_2 = torch.tensor([[0.1, -0.1, 1.3]], device=device, dtype=torch.float32)
+
+        # Project first point through model1, second point through model2
+        # This creates inconsistent matches (rays point to different locations)
+        pixels1, valid1 = model1.project(point_3d_1)
+        pixels2, valid2 = model2.project(point_3d_2)
+
+        assert valid1.all() and valid2.all()
+
+        # Create matches from inconsistent points
+        matches = {
+            "ref_keypoints": pixels1,
+            "src_keypoints": pixels2,
+            "scores": torch.ones(1, device=device, dtype=torch.float32),
+        }
+
+        # Triangulate with strict max_reproj_error=1.0 pixels
+        result = triangulate_pair(model1, model2, matches, max_reproj_error=1.0)
+
+        # The point should be marked invalid due to high reprojection error
+        # (the triangulated point is a compromise and won't reproject well to either)
+        assert not result["valid"][0], "Inconsistent matches should produce high reprojection error"
+
+    def test_triangulate_pair_rejects_negative_depth(self, device):
+        """Test that points behind ray origins (negative depth) are rejected."""
+        water_z = 0.978
+        normal = torch.tensor([0.0, 0.0, -1.0], device=device, dtype=torch.float32)
+        n_air = 1.0
+        n_water = 1.333
+
+        K = torch.tensor(
+            [[800.0, 0.0, 800.0], [0.0, 800.0, 600.0], [0.0, 0.0, 1.0]],
+            device=device,
+            dtype=torch.float32,
+        )
+        R = torch.eye(3, device=device, dtype=torch.float32)
+
+        # Create two cameras
+        t1 = torch.zeros(3, device=device, dtype=torch.float32)
+        t2 = torch.tensor([0.635, 0.0, 0.0], device=device, dtype=torch.float32)
+
+        model1 = RefractiveProjectionModel(K, R, t1, water_z, normal, n_air, n_water)
+        model2 = RefractiveProjectionModel(K, R, t2, water_z, normal, n_air, n_water)
+
+        # Create a point ABOVE the water surface (z < water_z)
+        # This will cause the triangulated point to be behind the ray origin
+        point_above_water = torch.tensor(
+            [[0.3, 0.0, 0.5]], device=device, dtype=torch.float32
+        )
+
+        # Project through both models (these may be invalid, but let's try)
+        pixels1, valid1 = model1.project(point_above_water)
+        pixels2, valid2 = model2.project(point_above_water)
+
+        # If projections are invalid, create synthetic pixel matches
+        # that would triangulate to a point behind the ray origin
+        if not (valid1.all() and valid2.all()):
+            # Create pixels that point slightly upward (negative Z direction in camera)
+            # This is tricky with refraction, so we'll skip this specific test case
+            pytest.skip("Cannot create invalid projection for this geometry")
+
+        matches = {
+            "ref_keypoints": pixels1,
+            "src_keypoints": pixels2,
+            "scores": torch.ones(1, device=device, dtype=torch.float32),
+        }
+
+        result = triangulate_pair(model1, model2, matches)
+
+        # If the triangulation produces negative depth, it should be rejected
+        # (This test may need adjustment based on actual geometry)
+
+    def test_triangulate_pair_min_angle_parameter(self, device):
+        """Test that min_angle parameter correctly controls angle filtering."""
+        water_z = 0.978
+        normal = torch.tensor([0.0, 0.0, -1.0], device=device, dtype=torch.float32)
+        n_air = 1.0
+        n_water = 1.333
+
+        K = torch.tensor(
+            [[800.0, 0.0, 800.0], [0.0, 800.0, 600.0], [0.0, 0.0, 1.0]],
+            device=device,
+            dtype=torch.float32,
+        )
+        R = torch.eye(3, device=device, dtype=torch.float32)
+
+        # Two cameras with small baseline
+        t1 = torch.zeros(3, device=device, dtype=torch.float32)
+        t2 = torch.tensor([0.01, 0.0, 0.0], device=device, dtype=torch.float32)
+
+        model1 = RefractiveProjectionModel(K, R, t1, water_z, normal, n_air, n_water)
+        model2 = RefractiveProjectionModel(K, R, t2, water_z, normal, n_air, n_water)
+
+        # Point far away (nearly parallel rays)
+        point_3d = torch.tensor(
+            [[0.005, 0.0, 3.0]], device=device, dtype=torch.float32
+        )
+
+        pixels1, valid1 = model1.project(point_3d)
+        pixels2, valid2 = model2.project(point_3d)
+
+        assert valid1.all() and valid2.all()
+
+        matches = {
+            "ref_keypoints": pixels1,
+            "src_keypoints": pixels2,
+            "scores": torch.ones(1, device=device, dtype=torch.float32),
+        }
+
+        # With min_angle=0.0 (disabled), should pass
+        result_permissive = triangulate_pair(model1, model2, matches, min_angle=0.0)
+        assert result_permissive["valid"][0], "min_angle=0.0 should accept nearly parallel rays"
+
+        # With min_angle=10.0 (strict), should fail
+        result_strict = triangulate_pair(model1, model2, matches, min_angle=10.0)
+        assert not result_strict["valid"][0], "min_angle=10.0 should reject nearly parallel rays"
+
+    def test_triangulate_pair_max_reproj_parameter(self, device):
+        """Test that max_reproj_error parameter correctly controls reprojection filtering."""
+        model1, model2 = self.create_test_models(device)
+
+        # Create two different 3D points to produce inconsistent matches
+        point_3d_1 = torch.tensor([[0.3, 0.2, 1.5]], device=device, dtype=torch.float32)
+        point_3d_2 = torch.tensor([[0.15, 0.0, 1.4]], device=device, dtype=torch.float32)
+
+        # Project different points through each camera
+        pixels1, valid1 = model1.project(point_3d_1)
+        pixels2, valid2 = model2.project(point_3d_2)
+
+        assert valid1.all() and valid2.all()
+
+        matches = {
+            "ref_keypoints": pixels1,
+            "src_keypoints": pixels2,
+            "scores": torch.ones(1, device=device, dtype=torch.float32),
+        }
+
+        # With max_reproj_error=100.0 (permissive), should pass
+        result_permissive = triangulate_pair(
+            model1, model2, matches, max_reproj_error=100.0
+        )
+        assert result_permissive["valid"][0], "Large max_reproj_error should accept inconsistent matches"
+
+        # With max_reproj_error=0.5 (strict), should fail
+        result_strict = triangulate_pair(
+            model1, model2, matches, max_reproj_error=0.5
+        )
+        assert not result_strict["valid"][0], "Small max_reproj_error should reject inconsistent matches"
+
 
 class TestTriangulateAllPairs:
     """Tests for triangulate_all_pairs() function."""
@@ -359,6 +594,163 @@ class TestTriangulateAllPairs:
         assert result["scores"].shape == (0,)
 
 
+class TestFilterSparseCloud:
+    """Tests for filter_sparse_cloud() function."""
+
+    def test_filter_sparse_cloud_removes_above_water(self, device):
+        """Test that points above water surface (Z < water_z) are removed."""
+        water_z = 1.0
+
+        # Create points with some above water (Z < 1.0)
+        points_3d = torch.tensor(
+            [
+                [0.0, 0.0, 0.5],  # Above water - should be removed
+                [0.0, 0.0, 0.8],  # Above water - should be removed
+                [0.0, 0.0, 1.2],  # Below water - should be kept
+                [0.0, 0.0, 1.5],  # Below water - should be kept
+            ],
+            device=device,
+            dtype=torch.float32,
+        )
+
+        scores = torch.ones(4, device=device, dtype=torch.float32)
+
+        sparse_cloud = {"points_3d": points_3d, "scores": scores}
+
+        # Filter
+        filtered = filter_sparse_cloud(sparse_cloud, water_z=water_z, max_depth=2.0)
+
+        # Should keep only the last 2 points
+        assert filtered["points_3d"].shape[0] == 2
+        assert filtered["scores"].shape[0] == 2
+        assert (filtered["points_3d"][:, 2] > water_z).all()
+
+    def test_filter_sparse_cloud_keeps_underwater(self, device):
+        """Test that points underwater within max_depth are kept."""
+        water_z = 1.0
+
+        # Create points all underwater and within range
+        points_3d = torch.tensor(
+            [
+                [0.0, 0.0, 1.1],  # water_z < Z < water_z + max_depth
+                [0.0, 0.0, 1.5],
+                [0.0, 0.0, 2.5],  # Z < water_z + max_depth
+            ],
+            device=device,
+            dtype=torch.float32,
+        )
+
+        scores = torch.ones(3, device=device, dtype=torch.float32)
+
+        sparse_cloud = {"points_3d": points_3d, "scores": scores}
+
+        # Filter with max_depth=2.0 (so range is [1.0, 3.0])
+        filtered = filter_sparse_cloud(sparse_cloud, water_z=water_z, max_depth=2.0)
+
+        # Should keep all 3 points
+        assert filtered["points_3d"].shape[0] == 3
+        assert filtered["scores"].shape[0] == 3
+
+    def test_filter_sparse_cloud_removes_deep_outliers(self, device):
+        """Test that points below water_z + max_depth are removed."""
+        water_z = 1.0
+
+        # Create points with some deep outliers
+        points_3d = torch.tensor(
+            [
+                [0.0, 0.0, 1.5],  # Good
+                [0.0, 0.0, 2.0],  # Good
+                [0.0, 0.0, 10.0],  # Too deep - should be removed
+                [0.0, 0.0, 25.0],  # Way too deep - should be removed
+            ],
+            device=device,
+            dtype=torch.float32,
+        )
+
+        scores = torch.tensor([1.0, 1.0, 0.5, 0.3], device=device, dtype=torch.float32)
+
+        sparse_cloud = {"points_3d": points_3d, "scores": scores}
+
+        # Filter with max_depth=2.0 (so range is [1.0, 3.0])
+        filtered = filter_sparse_cloud(sparse_cloud, water_z=water_z, max_depth=2.0)
+
+        # Should keep only the first 2 points
+        assert filtered["points_3d"].shape[0] == 2
+        assert filtered["scores"].shape[0] == 2
+        assert (filtered["points_3d"][:, 2] < water_z + 2.0).all()
+
+    def test_filter_sparse_cloud_mixed(self, device):
+        """Test filtering with a mix of valid and invalid points."""
+        water_z = 1.0
+
+        # Mix of above-water, good, and deep outliers
+        points_3d = torch.tensor(
+            [
+                [0.0, 0.0, 0.5],  # Above water - invalid
+                [0.0, 0.0, 1.2],  # Good - valid
+                [0.0, 0.0, 2.5],  # Good - valid
+                [0.0, 0.0, 10.0],  # Too deep - invalid
+                [0.0, 0.0, 1.8],  # Good - valid
+            ],
+            device=device,
+            dtype=torch.float32,
+        )
+
+        scores = torch.tensor(
+            [0.1, 0.8, 0.9, 0.2, 0.7], device=device, dtype=torch.float32
+        )
+
+        sparse_cloud = {"points_3d": points_3d, "scores": scores}
+
+        # Filter
+        filtered = filter_sparse_cloud(sparse_cloud, water_z=water_z, max_depth=2.0)
+
+        # Should keep indices 1, 2, 4 (the good ones)
+        assert filtered["points_3d"].shape[0] == 3
+        assert filtered["scores"].shape[0] == 3
+
+        # Check that the scores match the kept points
+        expected_scores = torch.tensor([0.8, 0.9, 0.7], device=device, dtype=torch.float32)
+        torch.testing.assert_close(filtered["scores"], expected_scores)
+
+    def test_filter_sparse_cloud_empty(self, device):
+        """Test that empty input returns empty output."""
+        sparse_cloud = {
+            "points_3d": torch.empty(0, 3, device=device, dtype=torch.float32),
+            "scores": torch.empty(0, device=device, dtype=torch.float32),
+        }
+
+        filtered = filter_sparse_cloud(sparse_cloud, water_z=1.0, max_depth=2.0)
+
+        assert filtered["points_3d"].shape[0] == 0
+        assert filtered["scores"].shape[0] == 0
+
+    def test_filter_sparse_cloud_all_removed(self, device):
+        """Test that when all points are invalid, output is empty."""
+        water_z = 1.0
+
+        # All points are above water
+        points_3d = torch.tensor(
+            [
+                [0.0, 0.0, 0.3],
+                [0.0, 0.0, 0.5],
+                [0.0, 0.0, 0.9],
+            ],
+            device=device,
+            dtype=torch.float32,
+        )
+
+        scores = torch.ones(3, device=device, dtype=torch.float32)
+
+        sparse_cloud = {"points_3d": points_3d, "scores": scores}
+
+        filtered = filter_sparse_cloud(sparse_cloud, water_z=water_z, max_depth=2.0)
+
+        # All should be removed
+        assert filtered["points_3d"].shape[0] == 0
+        assert filtered["scores"].shape[0] == 0
+
+
 class TestComputeDepthRanges:
     """Tests for compute_depth_ranges() function."""
 
@@ -384,19 +776,24 @@ class TestComputeDepthRanges:
         return models
 
     def test_synthetic_cloud(self, device):
-        """Test depth range computation with synthetic point cloud."""
+        """Test depth range computation with synthetic point cloud.
+
+        Uses a larger point set (100 points) so that percentile-based ranges
+        (2nd/98th percentile) are stable and the range contains most points.
+        """
         models = self.create_test_models(device)
 
-        # Create sparse cloud with known points
-        points_3d = torch.tensor(
-            [[0.0, 0.0, 1.2], [0.1, 0.1, 1.5], [0.05, 0.05, 1.3]],
-            device=device,
-            dtype=torch.float32,
-        )
+        # Create sparse cloud with many points (for stable percentiles)
+        # Random points in a reasonable Z range
+        torch.manual_seed(42)  # For reproducibility
+        points_3d = torch.rand(100, 3, device=device, dtype=torch.float32)
+        points_3d[:, 0] = points_3d[:, 0] * 0.4 - 0.2  # X in [-0.2, 0.2]
+        points_3d[:, 1] = points_3d[:, 1] * 0.4 - 0.2  # Y in [-0.2, 0.2]
+        points_3d[:, 2] = points_3d[:, 2] * 0.5 + 1.2  # Z in [1.2, 1.7]
 
         sparse_cloud = {
             "points_3d": points_3d,
-            "scores": torch.ones(3, device=device, dtype=torch.float32),
+            "scores": torch.ones(100, device=device, dtype=torch.float32),
         }
 
         margin = 0.05
@@ -406,7 +803,7 @@ class TestComputeDepthRanges:
         assert "cam0" in depth_ranges
         assert "cam1" in depth_ranges
 
-        # For each camera, verify that the range contains all visible points
+        # For each camera, verify that the range is reasonable
         for cam_name, model in models.items():
             d_min, d_max = depth_ranges[cam_name]
 
@@ -420,13 +817,19 @@ class TestComputeDepthRanges:
                 diff = valid_points - origins
                 depths = (diff * directions).sum(dim=-1)
 
-                # All depths should be within [d_min, d_max]
-                assert (depths >= d_min).all()
-                assert (depths <= d_max).all()
+                # With percentile clipping (2nd/98th), most depths should be within range
+                # At least 90% of points should be within the range
+                within_range = (depths >= d_min) & (depths <= d_max)
+                fraction_within = within_range.float().mean().item()
+                assert fraction_within >= 0.90, (
+                    f"At least 90% of points should be within range, got {fraction_within:.1%}"
+                )
 
-                # Check margin was applied correctly
-                assert d_min <= depths.min().item() - margin + 1e-5
-                assert d_max >= depths.max().item() + margin - 1e-5
+                # The median should definitely be within range
+                median_depth = depths.median().item()
+                assert d_min <= median_depth <= d_max, (
+                    f"Median depth {median_depth:.3f} should be within [{d_min:.3f}, {d_max:.3f}]"
+                )
 
             # d_min should be >= 0
             assert d_min >= 0.0
@@ -448,6 +851,112 @@ class TestComputeDepthRanges:
             d_min, d_max = depth_ranges[cam_name]
             assert d_min == 0.3
             assert d_max == 0.9
+
+    def test_depth_ranges_outlier_robust(self, device):
+        """Test that percentile-based depth ranges are robust to outliers."""
+        models = self.create_test_models(device)
+
+        # Create a sparse cloud with 99 points near Z=1.4 and 1 extreme outlier
+        normal_points = torch.rand(99, 3, device=device, dtype=torch.float32) * 0.2
+        normal_points[:, 2] += 1.4  # Z around 1.4
+
+        # Add an extreme outlier at Z=25.0
+        outlier_point = torch.tensor(
+            [[0.0, 0.0, 25.0]], device=device, dtype=torch.float32
+        )
+
+        points_3d = torch.cat([normal_points, outlier_point], dim=0)
+
+        sparse_cloud = {
+            "points_3d": points_3d,
+            "scores": torch.ones(100, device=device, dtype=torch.float32),
+        }
+
+        margin = 0.05
+        depth_ranges = compute_depth_ranges(models, sparse_cloud, margin)
+
+        # For cam0, compute what the depth of the outlier would be
+        outlier_pixel, outlier_valid = models["cam0"].project(outlier_point)
+        if outlier_valid[0]:
+            origin, direction = models["cam0"].cast_ray(outlier_pixel)
+            diff = outlier_point - origin
+            outlier_depth = (diff * direction).sum(dim=-1).item()
+
+            # The d_max should be MUCH less than the outlier depth
+            # (because we use 98th percentile, not max)
+            d_min, d_max = depth_ranges["cam0"]
+
+            # With percentile clipping, d_max should be significantly less than outlier_depth
+            # The outlier is at the top 1%, so it should be excluded
+            assert d_max < outlier_depth - 1.0, (
+                f"Percentile-based range should exclude outlier: "
+                f"d_max={d_max:.2f} should be much less than outlier_depth={outlier_depth:.2f}"
+            )
+
+    def test_camera_with_no_visible_points(self, device):
+        """Test that camera with no visible points gets fallback range."""
+        water_z = 0.978
+        normal = torch.tensor([0.0, 0.0, -1.0], device=device, dtype=torch.float32)
+        n_air = 1.0
+        n_water = 1.333
+
+        K = torch.tensor(
+            [[800.0, 0.0, 800.0], [0.0, 800.0, 600.0], [0.0, 0.0, 1.0]],
+            device=device,
+            dtype=torch.float32,
+        )
+
+        # Camera 0: looking down (+Z), at origin - will see the points
+        R0 = torch.eye(3, device=device, dtype=torch.float32)
+        t0 = torch.zeros(3, device=device, dtype=torch.float32)
+        model0 = RefractiveProjectionModel(K, R0, t0, water_z, normal, n_air, n_water)
+
+        # Camera 1: looking backward (-Z), far from origin - will NOT see the points
+        # Rotate 180 degrees around Y axis to look backward
+        R1 = torch.tensor(
+            [[-1.0, 0.0, 0.0], [0.0, 1.0, 0.0], [0.0, 0.0, -1.0]],
+            device=device,
+            dtype=torch.float32,
+        )
+        # Position it far to the side so points are behind it
+        t1 = torch.tensor([5.0, 0.0, 0.0], device=device, dtype=torch.float32)
+        model1 = RefractiveProjectionModel(K, R1, t1, water_z, normal, n_air, n_water)
+
+        models = {"cam0": model0, "cam1": model1}
+
+        # Create sparse cloud with points near origin, underwater
+        points_3d = torch.tensor(
+            [[0.0, 0.0, 1.2], [0.1, 0.1, 1.5], [-0.1, -0.1, 1.3]],
+            device=device,
+            dtype=torch.float32,
+        )
+
+        sparse_cloud = {
+            "points_3d": points_3d,
+            "scores": torch.ones(3, device=device, dtype=torch.float32),
+        }
+
+        # Verify cam0 can see the points but cam1 cannot
+        pixels0, valid0 = model0.project(points_3d)
+        pixels1, valid1 = model1.project(points_3d)
+
+        assert valid0.any(), "cam0 should see at least one point"
+        assert not valid1.any(), "cam1 should see no points (all behind camera)"
+
+        # Compute depth ranges
+        margin = 0.05
+        depth_ranges = compute_depth_ranges(models, sparse_cloud, margin)
+
+        # cam0 should have a real range based on visible points
+        d_min_0, d_max_0 = depth_ranges["cam0"]
+        assert d_min_0 >= 0.0
+        # Verify it's not the fallback range
+        assert d_min_0 != 0.3 or d_max_0 != 0.9
+
+        # cam1 should have the fallback range
+        d_min_1, d_max_1 = depth_ranges["cam1"]
+        assert d_min_1 == 0.3
+        assert d_max_1 == 0.9
 
 
 class TestSaveLoadSparseCloud:

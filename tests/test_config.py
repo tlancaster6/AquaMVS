@@ -14,9 +14,11 @@ from aquamvs.config import (
     FrameSamplingConfig,
     FusionConfig,
     MatchingConfig,
+    OutputConfig,
     PairSelectionConfig,
     PipelineConfig,
     SurfaceConfig,
+    VizConfig,
 )
 
 
@@ -115,7 +117,7 @@ class TestFusionConfig:
         assert config.min_consistent_views == 3
         assert config.depth_tolerance == 0.005
         assert config.voxel_size == 0.001
-        assert config.min_confidence == 0.5
+        assert config.min_confidence == 0.1
 
     def test_custom_values(self):
         """Test custom values."""
@@ -179,6 +181,50 @@ class TestDeviceConfig:
         assert config.device == "cuda"
 
 
+class TestOutputConfig:
+    """Tests for OutputConfig."""
+
+    def test_defaults(self):
+        """Test default values."""
+        config = OutputConfig()
+        assert config.save_features is False
+        assert config.save_depth_maps is True
+        assert config.save_point_cloud is True
+        assert config.save_mesh is True
+        assert config.keep_intermediates is True
+
+    def test_custom_values(self):
+        """Test custom values."""
+        config = OutputConfig(
+            save_features=True,
+            save_depth_maps=False,
+            save_point_cloud=False,
+            save_mesh=False,
+            keep_intermediates=False,
+        )
+        assert config.save_features is True
+        assert config.save_depth_maps is False
+        assert config.save_point_cloud is False
+        assert config.save_mesh is False
+        assert config.keep_intermediates is False
+
+
+class TestVizConfig:
+    """Tests for VizConfig."""
+
+    def test_defaults(self):
+        """Test default values."""
+        config = VizConfig()
+        assert config.enabled is False
+        assert config.stages == []
+
+    def test_custom_values(self):
+        """Test custom values."""
+        config = VizConfig(enabled=True, stages=["depth", "scene"])
+        assert config.enabled is True
+        assert config.stages == ["depth", "scene"]
+
+
 class TestPipelineConfig:
     """Tests for PipelineConfig."""
 
@@ -205,6 +251,8 @@ class TestPipelineConfig:
         assert config.surface == SurfaceConfig()
         assert config.evaluation == EvaluationConfig()
         assert config.device == DeviceConfig()
+        assert config.output == OutputConfig()
+        assert config.visualization == VizConfig()
 
     def test_empty_config(self):
         """Test creating an empty config (all defaults)."""
@@ -253,6 +301,19 @@ class TestPipelineConfig:
         with pytest.raises(ValueError, match="Invalid device"):
             config.validate()
 
+    def test_validation_invalid_viz_stage(self):
+        """Test validation catches invalid visualization stage."""
+        config = PipelineConfig()
+        config.visualization.stages = ["invalid"]
+        with pytest.raises(ValueError, match="Invalid visualization stage"):
+            config.validate()
+
+    def test_validation_valid_viz_stages(self):
+        """Test validation passes for valid visualization stages."""
+        config = PipelineConfig()
+        config.visualization.stages = ["depth", "scene"]
+        config.validate()  # Should not raise
+
 
 class TestYAMLRoundTrip:
     """Tests for YAML serialization and deserialization."""
@@ -284,6 +345,14 @@ class TestYAMLRoundTrip:
             ),
             evaluation=EvaluationConfig(icp_max_distance=0.02),
             device=DeviceConfig(device="cuda"),
+            output=OutputConfig(
+                save_features=True,
+                save_depth_maps=False,
+                save_point_cloud=True,
+                save_mesh=False,
+                keep_intermediates=False,
+            ),
+            visualization=VizConfig(enabled=True, stages=["depth", "scene"]),
         )
 
         # Save and load
@@ -307,6 +376,8 @@ class TestYAMLRoundTrip:
             assert loaded.surface == original.surface
             assert loaded.evaluation == original.evaluation
             assert loaded.device == original.device
+            assert loaded.output == original.output
+            assert loaded.visualization == original.visualization
         finally:
             temp_path.unlink()
 
@@ -452,6 +523,35 @@ device:
         finally:
             temp_path.unlink()
 
+    def test_backward_compatibility_missing_output_and_viz(self):
+        """Test that YAML without output/visualization fields uses defaults."""
+        yaml_content = """
+calibration_path: /path/to/calibration.json
+output_dir: /path/to/output
+camera_video_map:
+  cam1: /video1.mp4
+
+dense_stereo:
+  num_depths: 256
+"""
+
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".yaml", delete=False) as f:
+            f.write(yaml_content)
+            temp_path = Path(f.name)
+
+        try:
+            loaded = PipelineConfig.from_yaml(temp_path)
+
+            # Session fields should be loaded
+            assert loaded.calibration_path == "/path/to/calibration.json"
+            assert loaded.output_dir == "/path/to/output"
+
+            # Missing output/visualization should use defaults
+            assert loaded.output == OutputConfig()
+            assert loaded.visualization == VizConfig()
+        finally:
+            temp_path.unlink()
+
 
 class TestImports:
     """Test that all config classes can be imported individually."""
@@ -468,6 +568,8 @@ class TestImports:
         assert SurfaceConfig is not None
         assert EvaluationConfig is not None
         assert DeviceConfig is not None
+        assert OutputConfig is not None
+        assert VizConfig is not None
         assert PipelineConfig is not None
 
     def test_import_from_package(self):

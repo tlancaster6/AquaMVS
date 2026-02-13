@@ -184,6 +184,10 @@ def run_command(config_path: Path, verbose: bool = False, device: str | None = N
         datefmt="%H:%M:%S",
     )
 
+    # Silence noisy third-party loggers
+    for name in ("matplotlib", "PIL", "open3d"):
+        logging.getLogger(name).setLevel(logging.WARNING)
+
     # 2. Load config
     if not config_path.exists():
         print(f"Error: Config file not found: {config_path}", file=sys.stderr)

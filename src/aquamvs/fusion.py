@@ -152,9 +152,9 @@ def filter_depth_map(
 
         if lookup_valid.any():
             origins_t, directions_t = model_t.cast_ray(pixels_t[lookup_valid])
-            d_expected = (
-                (points_3d[lookup_valid] - origins_t) * directions_t
-            ).sum(dim=-1)
+            d_expected = ((points_3d[lookup_valid] - origins_t) * directions_t).sum(
+                dim=-1
+            )
 
             # Compare depths
             depth_diff = (depth_t_lookup[lookup_valid] - d_expected).abs()
@@ -205,8 +205,13 @@ def filter_all_depth_maps(
     """
     results = {}
     for ref_name in ring_cameras:
-        # Target cameras = all other ring cameras
-        target_names = [name for name in ring_cameras if name != ref_name]
+        if ref_name not in depth_maps:
+            continue
+
+        # Target cameras = all other ring cameras that have depth maps
+        target_names = [
+            name for name in ring_cameras if name != ref_name and name in depth_maps
+        ]
 
         filtered_depth, filtered_conf, count = filter_depth_map(
             ref_name=ref_name,
@@ -253,6 +258,10 @@ def backproject_depth_map(
     """
     H, W = depth_map.shape
     device = depth_map.device
+
+    # Ensure image is on the same device as the depth map (torch.from_numpy
+    # always returns CPU tensors, but depth maps may be on CUDA -- see B.10)
+    image = image.to(device)
 
     # Find valid pixels
     valid_mask = ~torch.isnan(depth_map)
@@ -351,12 +360,8 @@ def fuse_depth_maps(
 
     # Step 3: Convert to Open3D point cloud
     pcd = o3d.geometry.PointCloud()
-    pcd.points = o3d.utility.Vector3dVector(
-        points_cat.cpu().numpy().astype(np.float64)
-    )
-    pcd.colors = o3d.utility.Vector3dVector(
-        colors_cat.cpu().numpy().astype(np.float64)
-    )
+    pcd.points = o3d.utility.Vector3dVector(points_cat.cpu().numpy().astype(np.float64))
+    pcd.colors = o3d.utility.Vector3dVector(colors_cat.cpu().numpy().astype(np.float64))
 
     # Step 4: Voxel grid downsampling for deduplication
     pcd = pcd.voxel_down_sample(voxel_size=config.voxel_size)
@@ -372,7 +377,9 @@ def fuse_depth_maps(
 
     # Orient normals toward camera (upward, -Z in our coordinate system)
     # The cameras are above the surface, so normals should point toward -Z
-    pcd.orient_normals_towards_camera_location(camera_location=np.array([0.0, 0.0, 0.0]))
+    pcd.orient_normals_towards_camera_location(
+        camera_location=np.array([0.0, 0.0, 0.0])
+    )
 
     return pcd
 

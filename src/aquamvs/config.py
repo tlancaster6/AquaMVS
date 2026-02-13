@@ -90,7 +90,7 @@ class FusionConfig:
     min_consistent_views: int = 3
     depth_tolerance: float = 0.005
     voxel_size: float = 0.001
-    min_confidence: float = 0.5
+    min_confidence: float = 0.1
 
 
 @dataclass
@@ -131,6 +131,47 @@ class DeviceConfig:
 
 
 @dataclass
+class OutputConfig:
+    """Configuration for output artifact persistence.
+
+    Attributes:
+        save_features: Save features and matches (.pt files). Off by default.
+        save_depth_maps: Save per-camera depth + confidence maps (.npz). On by default.
+        save_point_cloud: Save fused point cloud (.ply). On by default.
+        save_mesh: Save surface mesh (.ply). On by default.
+        keep_intermediates: Keep depth maps after fusion. If False, depth maps
+            are deleted after successful fusion to save space. On by default.
+    """
+
+    save_features: bool = False
+    save_depth_maps: bool = True
+    save_point_cloud: bool = True
+    save_mesh: bool = True
+    keep_intermediates: bool = True
+
+
+VALID_VIZ_STAGES = ["depth", "features", "scene", "rig", "summary"]
+
+
+@dataclass
+class VizConfig:
+    """Configuration for visualization output.
+
+    When enabled=False, no visualization is generated (zero overhead).
+    When enabled=True, only the stages listed in `stages` are rendered.
+
+    Attributes:
+        enabled: Master switch for all visualization.
+        stages: List of visualization stages to run. Valid values:
+            "depth", "features", "scene", "rig", "summary".
+            Empty list with enabled=True means all stages.
+    """
+
+    enabled: bool = False
+    stages: list[str] = field(default_factory=list)
+
+
+@dataclass
 class PipelineConfig:
     """Top-level configuration for the AquaMVS reconstruction pipeline.
 
@@ -147,6 +188,8 @@ class PipelineConfig:
         surface: Surface reconstruction configuration.
         evaluation: Evaluation configuration.
         device: Device configuration.
+        output: Output artifact persistence configuration.
+        visualization: Visualization output configuration.
     """
 
     # Session fields (no sensible defaults)
@@ -166,6 +209,8 @@ class PipelineConfig:
     surface: SurfaceConfig = field(default_factory=SurfaceConfig)
     evaluation: EvaluationConfig = field(default_factory=EvaluationConfig)
     device: DeviceConfig = field(default_factory=DeviceConfig)
+    output: OutputConfig = field(default_factory=OutputConfig)
+    visualization: VizConfig = field(default_factory=VizConfig)
 
     def validate(self) -> None:
         """Validate configuration values.
@@ -199,6 +244,14 @@ class PipelineConfig:
             raise ValueError(
                 f"Invalid device: {self.device.device}. Must be 'cpu' or 'cuda'."
             )
+
+        # Validate viz stages
+        for stage in self.visualization.stages:
+            if stage not in VALID_VIZ_STAGES:
+                raise ValueError(
+                    f"Invalid visualization stage: {stage!r}. "
+                    f"Valid stages: {VALID_VIZ_STAGES}"
+                )
 
     @classmethod
     def from_yaml(cls, path: str | Path) -> "PipelineConfig":
@@ -239,6 +292,8 @@ class PipelineConfig:
         surface = data.pop("surface", None)
         evaluation = data.pop("evaluation", None)
         device = data.pop("device", None)
+        output = data.pop("output", None)
+        visualization = data.pop("visualization", None)
 
         # Build sub-configs
         config = cls(
@@ -256,6 +311,8 @@ class PipelineConfig:
             surface=_build_dataclass(SurfaceConfig, surface),
             evaluation=_build_dataclass(EvaluationConfig, evaluation),
             device=_build_dataclass(DeviceConfig, device),
+            output=_build_dataclass(OutputConfig, output),
+            visualization=_build_dataclass(VizConfig, visualization),
         )
 
         # Validate the loaded config

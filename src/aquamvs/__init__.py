@@ -37,6 +37,7 @@ from .surface import (
 )
 from .triangulation import (
     compute_depth_ranges,
+    filter_sparse_cloud,
     load_sparse_cloud,
     save_sparse_cloud,
     triangulate_all_pairs,
@@ -78,6 +79,7 @@ __all__ = [
     "triangulate_rays",
     "triangulate_pair",
     "triangulate_all_pairs",
+    "filter_sparse_cloud",
     "compute_depth_ranges",
     "save_sparse_cloud",
     "load_sparse_cloud",

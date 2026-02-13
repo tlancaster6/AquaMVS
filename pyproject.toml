@@ -35,6 +35,7 @@ dependencies = [
     "numpy",
     "scipy",
     "pyyaml",
+    "matplotlib",
     "lightglue @ git+https://github.com/cvg/LightGlue.git",
 ]
 
