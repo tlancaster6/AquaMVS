@@ -37,6 +37,13 @@ dependencies = [
     "pyyaml",
     "matplotlib",
     "lightglue @ git+https://github.com/cvg/LightGlue.git",
+    "romav2",
+    # Additional romav2 dependencies (explicitly listed for clarity since romav2
+    # declares dataclasses>=0.8 which doesn't exist on Python 3.10+; install with
+    # `pip install --no-deps romav2` followed by these deps to work around PyPI bug)
+    "einops>=0.8.1",
+    "rich>=14.2.0",
+    "tqdm>=4.67.1",
 ]
 
 [project.optional-dependencies]

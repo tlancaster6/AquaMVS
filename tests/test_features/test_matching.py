@@ -513,3 +513,28 @@ def test_match_all_pairs_no_self_pairs():
     # For now, just document the expected behavior
     # If needed, match_all_pairs could add: if canonical[0] == canonical[1]: continue
     pass
+
+
+class TestCreateMatcherBackends:
+    """Tests for create_matcher with different extractor backends."""
+
+    def test_create_matcher_superpoint(self):
+        """Test that create_matcher works with superpoint backend."""
+        from lightglue import LightGlue
+
+        matcher = create_matcher("superpoint", device="cpu")
+        assert isinstance(matcher, LightGlue)
+
+    def test_create_matcher_aliked(self):
+        """Test that create_matcher works with aliked backend."""
+        from lightglue import LightGlue
+
+        matcher = create_matcher("aliked", device="cpu")
+        assert isinstance(matcher, LightGlue)
+
+    def test_create_matcher_disk(self):
+        """Test that create_matcher works with disk backend."""
+        from lightglue import LightGlue
+
+        matcher = create_matcher("disk", device="cpu")
+        assert isinstance(matcher, LightGlue)

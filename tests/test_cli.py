@@ -530,3 +530,217 @@ def test_main_run_argument_parsing(tmp_path: Path):
                 verbose=False,
                 device="cuda",
             )
+
+
+# ============================================================================
+# Tests for `export-refs` command
+# ============================================================================
+
+
+def test_export_refs_creates_images(tmp_path: Path, calibration_json: Path):
+    """Test export-refs creates undistorted images for all cameras."""
+    from unittest.mock import MagicMock, call, patch
+
+    import numpy as np
+
+    # Create config
+    config_path = tmp_path / "config.yaml"
+    output_dir = str(tmp_path / "output")
+    config_data = {
+        "calibration_path": str(calibration_json),
+        "output_dir": output_dir,
+        "camera_video_map": {
+            "e3v82e0": str(tmp_path / "e3v82e0.mp4"),
+            "e3v831b": str(tmp_path / "e3v831b.mp4"),
+        },
+    }
+    with open(config_path, "w") as f:
+        yaml.dump(config_data, f)
+
+    # Mock VideoSet
+    mock_images = {
+        "e3v82e0": np.zeros((480, 640, 3), dtype=np.uint8),
+        "e3v831b": np.zeros((480, 640, 3), dtype=np.uint8),
+    }
+
+    mock_video_set = MagicMock()
+    mock_video_set.__enter__.return_value = mock_video_set
+    mock_video_set.iterate_frames.return_value = [(0, mock_images)]
+
+    # Mock calibration loading and undistortion
+    mock_cal_data = MagicMock()
+    mock_cam = MagicMock()
+    mock_cam.image_size = (640, 480)
+    mock_cal_data.cameras = {
+        "e3v82e0": mock_cam,
+        "e3v831b": mock_cam,
+    }
+
+    mock_undist_data = MagicMock()
+
+    with (
+        patch("aquamvs.cli.VideoSet", return_value=mock_video_set),
+        patch("aquamvs.cli.load_calibration_data", return_value=mock_cal_data),
+        patch("aquamvs.cli.compute_undistortion_maps", return_value=mock_undist_data),
+        patch("aquamvs.cli.undistort_image", side_effect=lambda img, _: img),
+        patch("aquamvs.cli.cv2.imwrite") as mock_imwrite,
+    ):
+        from aquamvs.cli import export_refs_command
+
+        export_refs_command(config_path, frame=0)
+
+        # Verify images were written
+        assert mock_imwrite.call_count == 2
+
+        # Check that the output directory was created and images saved
+        calls = mock_imwrite.call_args_list
+        saved_paths = [call[0][0] for call in calls]
+
+        assert any("e3v82e0.png" in path for path in saved_paths)
+        assert any("e3v831b.png" in path for path in saved_paths)
+
+
+def test_export_refs_includes_center_camera(tmp_path: Path):
+    """Test export-refs includes auxiliary (center) cameras."""
+    from unittest.mock import MagicMock, patch
+
+    import numpy as np
+
+    # Create calibration with ring and auxiliary cameras
+    cal_path = tmp_path / "calibration.json"
+    data = {
+        "version": "1.0",
+        "cameras": {
+            "e3v82e0": {"is_auxiliary": False},  # Ring camera
+            "center": {"is_auxiliary": True},  # Auxiliary camera
+        },
+    }
+    with open(cal_path, "w") as f:
+        json.dump(data, f)
+
+    # Create config
+    config_path = tmp_path / "config.yaml"
+    output_dir = str(tmp_path / "output")
+    config_data = {
+        "calibration_path": str(cal_path),
+        "output_dir": output_dir,
+        "camera_video_map": {
+            "e3v82e0": str(tmp_path / "e3v82e0.mp4"),
+            "center": str(tmp_path / "center.mp4"),
+        },
+    }
+    with open(config_path, "w") as f:
+        yaml.dump(config_data, f)
+
+    # Mock VideoSet
+    mock_images = {
+        "e3v82e0": np.zeros((480, 640, 3), dtype=np.uint8),
+        "center": np.zeros((480, 640, 3), dtype=np.uint8),
+    }
+
+    mock_video_set = MagicMock()
+    mock_video_set.__enter__.return_value = mock_video_set
+    mock_video_set.iterate_frames.return_value = [(0, mock_images)]
+
+    # Mock calibration
+    mock_cal_data = MagicMock()
+    mock_cam = MagicMock()
+    mock_cam.image_size = (640, 480)
+    mock_cal_data.cameras = {
+        "e3v82e0": mock_cam,
+        "center": mock_cam,
+    }
+
+    mock_undist_data = MagicMock()
+
+    with (
+        patch("aquamvs.cli.VideoSet", return_value=mock_video_set),
+        patch("aquamvs.cli.load_calibration_data", return_value=mock_cal_data),
+        patch("aquamvs.cli.compute_undistortion_maps", return_value=mock_undist_data),
+        patch("aquamvs.cli.undistort_image", side_effect=lambda img, _: img),
+        patch("aquamvs.cli.cv2.imwrite") as mock_imwrite,
+    ):
+        from aquamvs.cli import export_refs_command
+
+        export_refs_command(config_path, frame=0)
+
+        # Verify both cameras were exported
+        assert mock_imwrite.call_count == 2
+
+        calls = mock_imwrite.call_args_list
+        saved_paths = [call[0][0] for call in calls]
+
+        assert any("e3v82e0.png" in path for path in saved_paths)
+        assert any("center.png" in path for path in saved_paths)
+
+
+def test_export_refs_argument_parsing():
+    """Test main() correctly parses export-refs subcommand arguments."""
+    from unittest.mock import patch
+
+    # Test basic export-refs command (default frame=0)
+    with patch("sys.argv", ["aquamvs", "export-refs", "config.yaml"]):
+        with patch("aquamvs.cli.export_refs_command") as mock_export:
+            from aquamvs.cli import main
+
+            main()
+            mock_export.assert_called_once_with(
+                config_path=Path("config.yaml"),
+                frame=0,
+            )
+
+    # Test export-refs with --frame argument
+    with patch("sys.argv", ["aquamvs", "export-refs", "config.yaml", "--frame", "5"]):
+        with patch("aquamvs.cli.export_refs_command") as mock_export:
+            from aquamvs.cli import main
+
+            main()
+            mock_export.assert_called_once_with(
+                config_path=Path("config.yaml"),
+                frame=5,
+            )
+
+
+# ============================================================================
+# Tests for `benchmark` command
+# ============================================================================
+
+
+def test_benchmark_argument_parsing():
+    """Test main() correctly parses benchmark subcommand arguments."""
+    from unittest.mock import patch
+
+    # Test basic benchmark command (default frame=0)
+    with patch("sys.argv", ["aquamvs", "benchmark", "config.yaml"]):
+        with patch("aquamvs.cli.benchmark_command") as mock_benchmark:
+            from aquamvs.cli import main
+
+            main()
+            mock_benchmark.assert_called_once_with(
+                config_path=Path("config.yaml"),
+                frame=0,
+            )
+
+    # Test benchmark with --frame argument
+    with patch("sys.argv", ["aquamvs", "benchmark", "config.yaml", "--frame", "5"]):
+        with patch("aquamvs.cli.benchmark_command") as mock_benchmark:
+            from aquamvs.cli import main
+
+            main()
+            mock_benchmark.assert_called_once_with(
+                config_path=Path("config.yaml"),
+                frame=5,
+            )
+
+
+def test_benchmark_default_frame():
+    """Test benchmark command defaults to frame=0."""
+    from unittest.mock import patch
+
+    with patch("sys.argv", ["aquamvs", "benchmark", "config.yaml"]):
+        with patch("aquamvs.cli.benchmark_command") as mock_benchmark:
+            from aquamvs.cli import main
+
+            main()
+            # Verify frame defaults to 0
+            assert mock_benchmark.call_args[1]["frame"] == 0

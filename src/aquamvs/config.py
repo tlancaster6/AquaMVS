@@ -24,15 +24,21 @@ class FrameSamplingConfig:
 
 @dataclass
 class FeatureExtractionConfig:
-    """Configuration for SuperPoint feature extraction.
+    """Configuration for feature extraction.
 
     Attributes:
+        extractor_type: Feature extractor backend ("superpoint", "aliked", or "disk").
         max_keypoints: Maximum number of keypoints to extract per image.
-        detection_threshold: SuperPoint detection confidence threshold.
+        detection_threshold: Detection confidence threshold.
+        clahe_enabled: Apply CLAHE preprocessing before feature detection.
+        clahe_clip_limit: Contrast limit for CLAHE (higher = more enhancement).
     """
 
+    extractor_type: str = "superpoint"
     max_keypoints: int = 2048
     detection_threshold: float = 0.005
+    clahe_enabled: bool = False
+    clahe_clip_limit: float = 2.0
 
 
 @dataclass
@@ -151,6 +157,7 @@ class OutputConfig:
 
 
 VALID_VIZ_STAGES = ["depth", "features", "scene", "rig", "summary"]
+VALID_EXTRACTORS = ["superpoint", "aliked", "disk"]
 
 
 @dataclass
@@ -172,6 +179,25 @@ class VizConfig:
 
 
 @dataclass
+class BenchmarkConfig:
+    """Configuration for the benchmark sweep.
+
+    The runner computes the cross product of extractors x clahe to
+    produce the sweep matrix. Adding new extractors means appending
+    to the list -- no code change.
+
+    Attributes:
+        extractors: List of extractor backends to sweep.
+        clahe: List of CLAHE on/off settings to sweep.
+    """
+
+    extractors: list[str] = field(
+        default_factory=lambda: ["superpoint", "aliked", "disk"]
+    )
+    clahe: list[bool] = field(default_factory=lambda: [True, False])
+
+
+@dataclass
 class PipelineConfig:
     """Top-level configuration for the AquaMVS reconstruction pipeline.
 
@@ -179,6 +205,12 @@ class PipelineConfig:
         calibration_path: Path to AquaCal calibration JSON file.
         output_dir: Root output directory for reconstruction results.
         camera_video_map: Mapping from camera name to video file path.
+        mask_dir: Optional directory containing per-camera ROI mask PNGs.
+            If None, no masking is applied. Masks suppress features and depth
+            outside the valid region.
+        pipeline_mode: Pipeline execution mode ("sparse" or "full").
+            "sparse" mode stops after sparse triangulation and produces point cloud + mesh.
+            "full" mode runs the complete pipeline including dense stereo and fusion.
         frame_sampling: Frame sampling configuration.
         feature_extraction: Feature extraction configuration.
         pair_selection: Camera pair selection configuration.
@@ -196,6 +228,8 @@ class PipelineConfig:
     calibration_path: str = ""
     output_dir: str = ""
     camera_video_map: dict[str, str] = field(default_factory=dict)
+    mask_dir: str | None = None
+    pipeline_mode: str = "full"
 
     # Stage configurations (all have defaults)
     frame_sampling: FrameSamplingConfig = field(default_factory=FrameSamplingConfig)
@@ -211,6 +245,7 @@ class PipelineConfig:
     device: DeviceConfig = field(default_factory=DeviceConfig)
     output: OutputConfig = field(default_factory=OutputConfig)
     visualization: VizConfig = field(default_factory=VizConfig)
+    benchmark: BenchmarkConfig = field(default_factory=BenchmarkConfig)
 
     def validate(self) -> None:
         """Validate configuration values.
@@ -218,6 +253,13 @@ class PipelineConfig:
         Raises:
             ValueError: If any configuration value is invalid.
         """
+        # Validate pipeline mode
+        if self.pipeline_mode not in ["sparse", "full"]:
+            raise ValueError(
+                f"Invalid pipeline_mode: {self.pipeline_mode!r}. "
+                "Must be 'sparse' or 'full'."
+            )
+
         # Validate cost function
         if self.dense_stereo.cost_function not in ["ncc", "ssim"]:
             raise ValueError(
@@ -245,12 +287,27 @@ class PipelineConfig:
                 f"Invalid device: {self.device.device}. Must be 'cpu' or 'cuda'."
             )
 
+        # Validate extractor type
+        if self.feature_extraction.extractor_type not in VALID_EXTRACTORS:
+            raise ValueError(
+                f"Invalid extractor_type: {self.feature_extraction.extractor_type!r}. "
+                f"Valid types: {VALID_EXTRACTORS}"
+            )
+
         # Validate viz stages
         for stage in self.visualization.stages:
             if stage not in VALID_VIZ_STAGES:
                 raise ValueError(
                     f"Invalid visualization stage: {stage!r}. "
                     f"Valid stages: {VALID_VIZ_STAGES}"
+                )
+
+        # Validate benchmark extractors
+        for extractor in self.benchmark.extractors:
+            if extractor not in VALID_EXTRACTORS:
+                raise ValueError(
+                    f"Invalid benchmark extractor: {extractor!r}. "
+                    f"Valid extractors: {VALID_EXTRACTORS}"
                 )
 
     @classmethod
@@ -294,12 +351,15 @@ class PipelineConfig:
         device = data.pop("device", None)
         output = data.pop("output", None)
         visualization = data.pop("visualization", None)
+        benchmark = data.pop("benchmark", None)
 
         # Build sub-configs
         config = cls(
             calibration_path=data.get("calibration_path", ""),
             output_dir=data.get("output_dir", ""),
             camera_video_map=data.get("camera_video_map", {}),
+            mask_dir=data.get("mask_dir", None),
+            pipeline_mode=data.get("pipeline_mode", "full"),
             frame_sampling=_build_dataclass(FrameSamplingConfig, frame_sampling),
             feature_extraction=_build_dataclass(
                 FeatureExtractionConfig, feature_extraction
@@ -313,6 +373,7 @@ class PipelineConfig:
             device=_build_dataclass(DeviceConfig, device),
             output=_build_dataclass(OutputConfig, output),
             visualization=_build_dataclass(VizConfig, visualization),
+            benchmark=_build_dataclass(BenchmarkConfig, benchmark),
         )
 
         # Validate the loaded config

@@ -32,7 +32,32 @@ def _offscreen_available() -> bool:
         os.close(devnull_fd)
 
 
+def _legacy_visualizer_available() -> bool:
+    """Check if the legacy Visualizer with hidden window works.
+
+    Falls back to ``Visualizer.create_window(visible=False)`` which uses
+    the platform's native OpenGL rather than the Filament/EGL backend.
+    Works on Windows where OffscreenRenderer may fail with
+    ``EGL Headless is not supported on this platform``.
+    """
+    try:
+        vis = o3d.visualization.Visualizer()
+        ok = vis.create_window(visible=False, width=64, height=64)
+        vis.destroy_window()
+        return ok
+    except Exception:
+        return False
+
+
 OFFSCREEN_AVAILABLE = _offscreen_available()
+LEGACY_VISUALIZER_AVAILABLE = not OFFSCREEN_AVAILABLE and _legacy_visualizer_available()
+
+if OFFSCREEN_AVAILABLE:
+    logger.debug("Using OffscreenRenderer for 3D rendering")
+elif LEGACY_VISUALIZER_AVAILABLE:
+    logger.debug("OffscreenRenderer unavailable; using legacy Visualizer fallback")
+else:
+    logger.debug("No 3D rendering backend available")
 
 
 def compute_canonical_viewpoints(
@@ -76,11 +101,13 @@ def compute_canonical_viewpoints(
     # Up vector is -Z (pointing "up" in real world = negative Z)
     offset = max_extent * 1.0
     oblique = {
-        "eye": np.array([
-            center[0] + offset,
-            center[1] - offset,
-            bbox_min[2] - offset,
-        ]),
+        "eye": np.array(
+            [
+                center[0] + offset,
+                center[1] - offset,
+                bbox_min[2] - offset,
+            ]
+        ),
         "center": center.copy(),
         "up": np.array([0.0, 0.0, -1.0]),  # Z-down world
     }
@@ -96,6 +123,80 @@ def compute_canonical_viewpoints(
     return {"top": top, "oblique": oblique, "side": side}
 
 
+def _render_offscreen(
+    geometry: o3d.geometry.Geometry,
+    eye: np.ndarray,
+    center: np.ndarray,
+    up: np.ndarray,
+    output_path: str | Path,
+    width: int,
+    height: int,
+    background_color: tuple[float, float, float],
+    point_size: float,
+) -> None:
+    """Render using the Filament-based OffscreenRenderer."""
+    renderer = o3d.visualization.rendering.OffscreenRenderer(width, height)
+    renderer.scene.set_background(np.array([*background_color, 1.0]))
+
+    mat = o3d.visualization.rendering.MaterialRecord()
+    mat.shader = "defaultUnlit"
+    if isinstance(geometry, o3d.geometry.PointCloud):
+        mat.point_size = point_size
+
+    renderer.scene.add_geometry("scene", geometry, mat)
+    renderer.setup_camera(60.0, center, eye, up)
+
+    img = renderer.render_to_image()
+    o3d.io.write_image(str(output_path), img)
+
+
+def _render_legacy(
+    geometry: o3d.geometry.Geometry,
+    eye: np.ndarray,
+    center: np.ndarray,
+    up: np.ndarray,
+    output_path: str | Path,
+    width: int,
+    height: int,
+    background_color: tuple[float, float, float],
+    point_size: float,
+) -> None:
+    """Render using the legacy Visualizer with a hidden window.
+
+    Fallback for platforms where OffscreenRenderer is unavailable
+    (e.g., Windows with Open3D 0.19 where EGL headless is unsupported).
+    Uses the native OpenGL backend instead of Filament/EGL.
+    """
+    vis = o3d.visualization.Visualizer()
+    vis.create_window(visible=False, width=width, height=height)
+    vis.add_geometry(geometry)
+
+    opt = vis.get_render_option()
+    opt.background_color = np.array(background_color)
+    if isinstance(geometry, o3d.geometry.PointCloud):
+        opt.point_size = point_size
+    if isinstance(geometry, o3d.geometry.TriangleMesh):
+        opt.mesh_show_back_face = True
+
+    # Set camera via ViewControl
+    vc = vis.get_view_control()
+    front = eye - center
+    norm = np.linalg.norm(front)
+    if norm > 0:
+        front = front / norm
+    vc.set_lookat(center)
+    vc.set_front(front)
+    vc.set_up(up)
+    # Zoom controls how much of the scene fills the view; 0.5 approximates
+    # the 60-degree FOV used by the OffscreenRenderer path.
+    vc.set_zoom(0.5)
+
+    vis.poll_events()
+    vis.update_renderer()
+    vis.capture_screen_image(str(output_path), do_render=True)
+    vis.destroy_window()
+
+
 def render_geometry(
     geometry: o3d.geometry.Geometry,
     eye: np.ndarray,
@@ -107,10 +208,10 @@ def render_geometry(
     background_color: tuple[float, float, float] = (1.0, 1.0, 1.0),
     point_size: float = 2.0,
 ) -> None:
-    """Render an Open3D geometry from a given viewpoint using offscreen rendering.
+    """Render an Open3D geometry from a given viewpoint.
 
-    Uses Open3D's OffscreenRenderer for headless rendering. Works without
-    a display server.
+    Tries OffscreenRenderer first, falls back to the legacy Visualizer
+    with a hidden window if the Filament/EGL backend is unavailable.
 
     Args:
         geometry: Open3D PointCloud or TriangleMesh to render.
@@ -123,31 +224,40 @@ def render_geometry(
         background_color: RGB background color, each in [0, 1].
         point_size: Point size for point cloud rendering (ignored for meshes).
     """
-    if not OFFSCREEN_AVAILABLE:
+    output_path = Path(output_path)
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+
+    if OFFSCREEN_AVAILABLE:
+        _render_offscreen(
+            geometry,
+            eye,
+            center,
+            up,
+            output_path,
+            width,
+            height,
+            background_color,
+            point_size,
+        )
+    elif LEGACY_VISUALIZER_AVAILABLE:
+        _render_legacy(
+            geometry,
+            eye,
+            center,
+            up,
+            output_path,
+            width,
+            height,
+            background_color,
+            point_size,
+        )
+    else:
         logger.warning(
-            "Open3D offscreen rendering unavailable - skipping render to %s",
+            "No Open3D rendering backend available - skipping render to %s",
             output_path,
         )
         return
 
-    # Create offscreen renderer
-    renderer = o3d.visualization.rendering.OffscreenRenderer(width, height)
-    renderer.scene.set_background(np.array([*background_color, 1.0]))
-
-    # Material
-    mat = o3d.visualization.rendering.MaterialRecord()
-    mat.shader = "defaultUnlit"
-    if isinstance(geometry, o3d.geometry.PointCloud):
-        mat.point_size = point_size
-
-    renderer.scene.add_geometry("scene", geometry, mat)
-
-    # Set camera
-    renderer.setup_camera(60.0, center, eye, up)
-
-    # Render and save
-    img = renderer.render_to_image()
-    o3d.io.write_image(str(output_path), img)
     logger.info("Rendered to %s", output_path)
 
 
@@ -220,7 +330,9 @@ def render_all_scenes(
 
     if point_cloud is not None:
         logger.info("Rendering fused point cloud from canonical viewpoints")
-        render_scene(point_cloud, output_dir, prefix="fused", width=width, height=height)
+        render_scene(
+            point_cloud, output_dir, prefix="fused", width=width, height=height
+        )
     else:
         logger.warning("Point cloud is None - skipping fused renders")
 

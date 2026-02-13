@@ -8,12 +8,15 @@ import open3d as o3d
 import pytest
 
 from aquamvs.visualization.scene import (
+    LEGACY_VISUALIZER_AVAILABLE,
     OFFSCREEN_AVAILABLE,
     compute_canonical_viewpoints,
     render_all_scenes,
     render_geometry,
     render_scene,
 )
+
+RENDERING_AVAILABLE = OFFSCREEN_AVAILABLE or LEGACY_VISUALIZER_AVAILABLE
 
 
 class TestComputeCanonicalViewpoints:
@@ -92,7 +95,9 @@ class TestComputeCanonicalViewpoints:
         assert len(viewpoints) == 3
 
 
-@pytest.mark.skipif(not OFFSCREEN_AVAILABLE, reason="Open3D offscreen rendering unavailable")
+@pytest.mark.skipif(
+    not RENDERING_AVAILABLE, reason="No Open3D rendering backend available"
+)
 class TestRenderGeometry:
     """Tests for render_geometry()."""
 
@@ -122,11 +127,13 @@ class TestRenderGeometry:
     def test_render_mesh(self, tmp_path):
         """Test rendering a mesh to PNG."""
         # Create synthetic mesh (a simple triangle)
-        vertices = np.array([
-            [0.0, 0.0, 0.0],
-            [1.0, 0.0, 0.0],
-            [0.5, 1.0, 0.0],
-        ]).astype(np.float64)
+        vertices = np.array(
+            [
+                [0.0, 0.0, 0.0],
+                [1.0, 0.0, 0.0],
+                [0.5, 1.0, 0.0],
+            ]
+        ).astype(np.float64)
         triangles = np.array([[0, 1, 2]]).astype(np.int32)
 
         mesh = o3d.geometry.TriangleMesh()
@@ -160,14 +167,21 @@ class TestRenderGeometry:
         up = np.array([0.0, 1.0, 0.0])
 
         render_geometry(
-            pcd, eye, center, up, output_path,
-            width=640, height=480,
+            pcd,
+            eye,
+            center,
+            up,
+            output_path,
+            width=640,
+            height=480,
         )
 
         assert output_path.exists()
 
 
-@pytest.mark.skipif(not OFFSCREEN_AVAILABLE, reason="Open3D offscreen rendering unavailable")
+@pytest.mark.skipif(
+    not RENDERING_AVAILABLE, reason="No Open3D rendering backend available"
+)
 class TestRenderScene:
     """Tests for render_scene()."""
 
@@ -217,7 +231,9 @@ class TestRenderScene:
             assert (output_dir / "test_top.png").exists()
 
 
-@pytest.mark.skipif(not OFFSCREEN_AVAILABLE, reason="Open3D offscreen rendering unavailable")
+@pytest.mark.skipif(
+    not RENDERING_AVAILABLE, reason="No Open3D rendering backend available"
+)
 class TestRenderAllScenes:
     """Tests for render_all_scenes()."""
 
@@ -230,11 +246,13 @@ class TestRenderAllScenes:
         pcd.paint_uniform_color([0.5, 0.5, 0.5])
 
         # Create mesh
-        vertices = np.array([
-            [0.0, 0.0, 0.0],
-            [1.0, 0.0, 0.0],
-            [0.5, 1.0, 0.0],
-        ]).astype(np.float64)
+        vertices = np.array(
+            [
+                [0.0, 0.0, 0.0],
+                [1.0, 0.0, 0.0],
+                [0.5, 1.0, 0.0],
+            ]
+        ).astype(np.float64)
         triangles = np.array([[0, 1, 2]]).astype(np.int32)
         mesh = o3d.geometry.TriangleMesh()
         mesh.vertices = o3d.utility.Vector3dVector(vertices)
@@ -255,11 +273,13 @@ class TestRenderAllScenes:
     def test_none_point_cloud(self, tmp_path):
         """Test rendering with None point cloud only renders mesh."""
         # Create mesh
-        vertices = np.array([
-            [0.0, 0.0, 0.0],
-            [1.0, 0.0, 0.0],
-            [0.5, 1.0, 0.0],
-        ]).astype(np.float64)
+        vertices = np.array(
+            [
+                [0.0, 0.0, 0.0],
+                [1.0, 0.0, 0.0],
+                [0.5, 1.0, 0.0],
+            ]
+        ).astype(np.float64)
         triangles = np.array([[0, 1, 2]]).astype(np.int32)
         mesh = o3d.geometry.TriangleMesh()
         mesh.vertices = o3d.utility.Vector3dVector(vertices)
@@ -303,7 +323,9 @@ class TestRenderAllScenes:
 class TestEmptyGeometry:
     """Tests for handling empty geometries."""
 
-    @pytest.mark.skipif(not OFFSCREEN_AVAILABLE, reason="Open3D offscreen rendering unavailable")
+    @pytest.mark.skipif(
+        not RENDERING_AVAILABLE, reason="No Open3D rendering backend available"
+    )
     def test_empty_point_cloud(self, tmp_path):
         """Test rendering empty point cloud does not crash."""
         # Create empty point cloud
@@ -324,9 +346,11 @@ class TestOffscreenUnavailable:
 
     def test_render_geometry_when_unavailable(self, tmp_path, monkeypatch):
         """Test that render_geometry logs warning and returns when unavailable."""
-        # Temporarily patch OFFSCREEN_AVAILABLE to False
+        # Temporarily patch both backends to False
         import aquamvs.visualization.scene as scene_module
+
         monkeypatch.setattr(scene_module, "OFFSCREEN_AVAILABLE", False)
+        monkeypatch.setattr(scene_module, "LEGACY_VISUALIZER_AVAILABLE", False)
 
         # Create point cloud
         points = np.array([[0.0, 0.0, 0.0]]).astype(np.float64)

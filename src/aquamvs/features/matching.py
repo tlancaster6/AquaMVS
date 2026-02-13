@@ -8,16 +8,17 @@ from lightglue import LightGlue
 from ..config import MatchingConfig
 
 
-def create_matcher(device: str = "cpu") -> LightGlue:
+def create_matcher(extractor_type: str = "superpoint", device: str = "cpu") -> LightGlue:
     """Create and initialize a LightGlue feature matcher.
 
     Args:
+        extractor_type: Feature extractor backend ("superpoint", "aliked", or "disk").
         device: Device to place the model on.
 
     Returns:
-        Initialized LightGlue model in eval mode, configured for SuperPoint features.
+        Initialized LightGlue model in eval mode, configured for the specified extractor.
     """
-    matcher = LightGlue(features="superpoint").eval()
+    matcher = LightGlue(features=extractor_type).eval()
     return matcher.to(device)
 
 
@@ -56,6 +57,7 @@ def match_pair(
     config: MatchingConfig,
     matcher: LightGlue | None = None,
     device: str = "cpu",
+    extractor_type: str = "superpoint",
 ) -> dict[str, torch.Tensor]:
     """Match features between a reference and source image pair.
 
@@ -68,6 +70,7 @@ def match_pair(
         config: Matching configuration.
         matcher: Pre-initialized LightGlue model. If None, creates one.
         device: Device string (used only if matcher is None).
+        extractor_type: Feature extractor backend (used only if matcher is None).
 
     Returns:
         Dict with keys:
@@ -79,7 +82,7 @@ def match_pair(
     """
     # Create matcher if not provided
     if matcher is None:
-        matcher = create_matcher(device)
+        matcher = create_matcher(extractor_type, device)
 
     # Prepare LightGlue input format
     feats0 = _prepare_lightglue_input(feats_ref, image_size, device)
@@ -118,6 +121,7 @@ def match_all_pairs(
     image_size: tuple[int, int],
     config: MatchingConfig,
     device: str = "cpu",
+    extractor_type: str = "superpoint",
 ) -> dict[tuple[str, str], dict[str, torch.Tensor]]:
     """Match features for all selected camera pairs.
 
@@ -127,6 +131,7 @@ def match_all_pairs(
         image_size: Image dimensions as (width, height) in pixels.
         config: Matching configuration.
         device: Device for the matcher.
+        extractor_type: Feature extractor backend.
 
     Returns:
         Dict mapping (ref_camera, src_camera) tuple to matches dict.
@@ -134,7 +139,7 @@ def match_all_pairs(
         Each unordered pair {A, B} appears exactly once with canonical key (min(A,B), max(A,B)).
     """
     # Create matcher once for all pairs
-    matcher = create_matcher(device)
+    matcher = create_matcher(extractor_type, device)
 
     # Match all pairs, avoiding duplicates from bidirectional pair lists
     all_matches = {}

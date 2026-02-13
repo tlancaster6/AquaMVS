@@ -9,6 +9,7 @@ from .calibration import (
     undistort_image,
 )
 from .config import (
+    BenchmarkConfig,
     DenseStereoConfig,
     DeviceConfig,
     EvaluationConfig,
@@ -27,6 +28,12 @@ from .fusion import (
     fuse_depth_maps,
     load_point_cloud,
     save_point_cloud,
+)
+from .masks import (
+    apply_mask_to_depth,
+    apply_mask_to_features,
+    load_all_masks,
+    load_mask,
 )
 from .surface import (
     load_mesh,
@@ -70,6 +77,7 @@ __all__ = [
     "SurfaceConfig",
     "EvaluationConfig",
     "DeviceConfig",
+    "BenchmarkConfig",
     "CalibrationData",
     "CameraData",
     "UndistortionData",
@@ -89,6 +97,10 @@ __all__ = [
     "fuse_depth_maps",
     "save_point_cloud",
     "load_point_cloud",
+    "load_mask",
+    "load_all_masks",
+    "apply_mask_to_features",
+    "apply_mask_to_depth",
     "reconstruct_poisson",
     "reconstruct_heightfield",
     "reconstruct_surface",

@@ -181,6 +181,7 @@ def test_process_frame_directory_structure(
         ring_cameras=["cam0", "cam1"],
         auxiliary_cameras=["cam2"],
         device="cpu",
+        masks={},
     )
 
     # Mock all pipeline stages
@@ -273,6 +274,7 @@ def test_process_frame_no_valid_images(pipeline_config, mock_calibration_data, c
         ring_cameras=[],
         auxiliary_cameras=[],
         device="cpu",
+        masks={},
     )
 
     with caplog.at_level(logging.WARNING):
@@ -294,6 +296,7 @@ def test_process_frame_with_none_images(pipeline_config, mock_calibration_data, 
         ring_cameras=[],
         auxiliary_cameras=[],
         device="cpu",
+        masks={},
     )
 
     with caplog.at_level(logging.WARNING):
@@ -409,7 +412,9 @@ def _mock_pipeline_stages():
         patch("aquamvs.pipeline.extract_features_batch") as m_extract,
         patch("aquamvs.pipeline.match_all_pairs") as m_match,
         patch("aquamvs.pipeline.triangulate_all_pairs") as m_tri,
+        patch("aquamvs.pipeline.filter_sparse_cloud") as m_filter_sparse,
         patch("aquamvs.pipeline.compute_depth_ranges") as m_ranges,
+        patch("aquamvs.pipeline._sparse_cloud_to_open3d") as m_sparse_to_o3d,
         patch("aquamvs.pipeline.plane_sweep_stereo") as m_sweep,
         patch("aquamvs.pipeline.extract_depth") as m_extr,
         patch("aquamvs.pipeline.filter_all_depth_maps") as m_filter,
@@ -440,7 +445,12 @@ def _mock_pipeline_stages():
             "points_3d": torch.zeros(0, 3),
             "scores": torch.zeros(0),
         }
+        m_filter_sparse.side_effect = lambda cloud, **kwargs: cloud  # Pass through
         m_ranges.return_value = {"cam0": (0.3, 0.9)}
+        # Return non-empty point cloud by default for sparse mode
+        sparse_pcd = o3d.geometry.PointCloud()
+        sparse_pcd.points = o3d.utility.Vector3dVector([[0, 0, 1], [0.1, 0, 1]])
+        m_sparse_to_o3d.return_value = sparse_pcd
         m_sweep.return_value = {
             "cost_volume": torch.zeros(1, 1, 1),
             "depths": torch.tensor([0.5]),
@@ -467,7 +477,9 @@ def _mock_pipeline_stages():
             "extract": m_extract,
             "match": m_match,
             "triangulate": m_tri,
+            "filter_sparse": m_filter_sparse,
             "depth_ranges": m_ranges,
+            "sparse_to_o3d": m_sparse_to_o3d,
             "sweep": m_sweep,
             "extract_depth": m_extr,
             "filter": m_filter,
@@ -480,8 +492,17 @@ def _mock_pipeline_stages():
         }
 
 
-def _make_ctx(config, calibration_data):
-    """Create a PipelineContext for testing with minimal mocks."""
+def _make_ctx(config, calibration_data, masks=None):
+    """Create a PipelineContext for testing with minimal mocks.
+
+    Args:
+        config: PipelineConfig instance.
+        calibration_data: CalibrationData instance.
+        masks: Optional dict of camera_name -> mask array. Defaults to empty dict.
+    """
+    if masks is None:
+        masks = {}
+
     mock_proj_model = Mock()
     return PipelineContext(
         config=config,
@@ -507,6 +528,7 @@ def _make_ctx(config, calibration_data):
         ring_cameras=["cam0", "cam1"],
         auxiliary_cameras=["cam2"],
         device="cpu",
+        masks=masks,
     )
 
 
@@ -1104,3 +1126,379 @@ class TestSparseCloudFiltering:
 
                 # Pipeline should complete
                 assert "Frame 0: complete" in caplog.text
+
+
+# ---------------------------------------------------------------------------
+# P.34 tests: Sparse mode branch
+# ---------------------------------------------------------------------------
+
+
+class TestSparseMode:
+    """Tests for sparse pipeline mode (P.34)."""
+
+    def test_sparse_mode_skips_dense_stereo(self, tmp_path, mock_calibration_data):
+        """Sparse mode skips plane sweep, extract_depth, filter, and fusion."""
+        config = PipelineConfig(
+            calibration_path="dummy.json",
+            output_dir=str(tmp_path / "output"),
+            camera_video_map={"cam0": "v0.mp4", "cam1": "v1.mp4", "cam2": "v2.mp4"},
+            pipeline_mode="sparse",
+            device=DeviceConfig(device="cpu"),
+        )
+
+        ctx = _make_ctx(config, mock_calibration_data)
+
+        with _mock_pipeline_stages() as mocks:
+            process_frame(0, _RAW_IMAGES.copy(), ctx)
+
+            # Sparse mode should call triangulate and compute_depth_ranges
+            assert mocks["triangulate"].called
+            assert mocks["depth_ranges"].called
+
+            # But should NOT call dense stereo stages
+            assert not mocks["sweep"].called
+            assert not mocks["extract_depth"].called
+            assert not mocks["filter"].called
+            assert not mocks["fuse"].called
+
+    def test_sparse_mode_calls_surface_reconstruction(
+        self, tmp_path, mock_calibration_data
+    ):
+        """Sparse mode calls surface reconstruction with sparse cloud."""
+        config = PipelineConfig(
+            calibration_path="dummy.json",
+            output_dir=str(tmp_path / "output"),
+            camera_video_map={"cam0": "v0.mp4", "cam1": "v1.mp4", "cam2": "v2.mp4"},
+            pipeline_mode="sparse",
+            device=DeviceConfig(device="cpu"),
+        )
+
+        ctx = _make_ctx(config, mock_calibration_data)
+
+        with _mock_pipeline_stages() as mocks:
+            # Override triangulate to return non-empty cloud
+            mocks["triangulate"].return_value = {
+                "points_3d": torch.zeros(10, 3),
+                "scores": torch.ones(10),
+            }
+
+            process_frame(0, _RAW_IMAGES.copy(), ctx)
+
+            # Sparse-to-O3D conversion should be called
+            assert mocks["sparse_to_o3d"].called
+
+            # Surface reconstruction should be called
+            assert mocks["surface"].called
+
+            # Point cloud and mesh should be saved
+            assert mocks["save_pcd"].called
+            assert mocks["save_mesh"].called
+
+    def test_sparse_mode_saves_sparse_ply(self, tmp_path, mock_calibration_data):
+        """Sparse mode saves point cloud as sparse.ply, not fused.ply."""
+        config = PipelineConfig(
+            calibration_path="dummy.json",
+            output_dir=str(tmp_path / "output"),
+            camera_video_map={"cam0": "v0.mp4", "cam1": "v1.mp4", "cam2": "v2.mp4"},
+            pipeline_mode="sparse",
+            device=DeviceConfig(device="cpu"),
+        )
+
+        ctx = _make_ctx(config, mock_calibration_data)
+
+        with _mock_pipeline_stages() as mocks:
+            # Override triangulate to return non-empty cloud
+            mocks["triangulate"].return_value = {
+                "points_3d": torch.zeros(10, 3),
+                "scores": torch.ones(10),
+            }
+
+            process_frame(0, _RAW_IMAGES.copy(), ctx)
+
+            # Verify save_point_cloud was called with path ending in sparse.ply
+            assert mocks["save_pcd"].called
+            call_args = mocks["save_pcd"].call_args
+            save_path = call_args[0][1]  # Second positional arg is the path
+            assert str(save_path).endswith("sparse.ply")
+            assert "fused.ply" not in str(save_path)
+
+    def test_sparse_mode_empty_cloud_no_crash(
+        self, tmp_path, mock_calibration_data, caplog
+    ):
+        """Sparse mode with empty sparse cloud logs warning and skips surface reconstruction."""
+        config = PipelineConfig(
+            calibration_path="dummy.json",
+            output_dir=str(tmp_path / "output"),
+            camera_video_map={"cam0": "v0.mp4", "cam1": "v1.mp4", "cam2": "v2.mp4"},
+            pipeline_mode="sparse",
+            device=DeviceConfig(device="cpu"),
+        )
+
+        ctx = _make_ctx(config, mock_calibration_data)
+
+        with _mock_pipeline_stages() as mocks:
+            # Override triangulate to return empty cloud
+            mocks["triangulate"].return_value = {
+                "points_3d": torch.zeros(0, 3),
+                "scores": torch.zeros(0),
+            }
+
+            with caplog.at_level(logging.WARNING):
+                # Should NOT raise
+                process_frame(0, _RAW_IMAGES.copy(), ctx)
+
+            # Should log warning
+            assert "sparse cloud is empty" in caplog.text
+
+            # sparse_to_o3d should NOT be called (no points)
+            assert not mocks["sparse_to_o3d"].called
+
+            # Surface reconstruction should NOT be called
+            assert not mocks["surface"].called
+
+            # Save functions should NOT be called
+            assert not mocks["save_pcd"].called
+            assert not mocks["save_mesh"].called
+
+    def test_sparse_mode_scene_viz(self, tmp_path, mock_calibration_data):
+        """Sparse mode with scene viz enabled renders the sparse cloud."""
+        config = PipelineConfig(
+            calibration_path="dummy.json",
+            output_dir=str(tmp_path / "output"),
+            camera_video_map={"cam0": "v0.mp4", "cam1": "v1.mp4", "cam2": "v2.mp4"},
+            pipeline_mode="sparse",
+            visualization=VizConfig(enabled=True, stages=["scene"]),
+            device=DeviceConfig(device="cpu"),
+        )
+
+        ctx = _make_ctx(config, mock_calibration_data)
+
+        with _mock_pipeline_stages() as mocks:
+            # Override triangulate to return non-empty cloud
+            mocks["triangulate"].return_value = {
+                "points_3d": torch.zeros(10, 3),
+                "scores": torch.ones(10),
+            }
+
+            with patch("aquamvs.visualization.scene.render_all_scenes") as m_scene_viz:
+                process_frame(0, _RAW_IMAGES.copy(), ctx)
+
+                # Scene viz should be called
+                assert m_scene_viz.called
+
+                # Depth viz should NOT be called (no depth maps in sparse mode)
+                # (tested implicitly by _mock_pipeline_stages not having depth viz patched)
+
+    def test_sparse_mode_rig_viz(self, tmp_path, mock_calibration_data):
+        """Sparse mode with rig viz enabled renders the sparse cloud."""
+        config = PipelineConfig(
+            calibration_path="dummy.json",
+            output_dir=str(tmp_path / "output"),
+            camera_video_map={"cam0": "v0.mp4", "cam1": "v1.mp4", "cam2": "v2.mp4"},
+            pipeline_mode="sparse",
+            visualization=VizConfig(enabled=True, stages=["rig"]),
+            device=DeviceConfig(device="cpu"),
+        )
+
+        ctx = _make_ctx(config, mock_calibration_data)
+
+        with _mock_pipeline_stages() as mocks:
+            # Override triangulate to return non-empty cloud
+            mocks["triangulate"].return_value = {
+                "points_3d": torch.zeros(10, 3),
+                "scores": torch.ones(10),
+            }
+
+            with patch("aquamvs.visualization.rig.render_rig_diagram") as m_rig_viz:
+                process_frame(0, _RAW_IMAGES.copy(), ctx)
+
+                # Rig viz should be called
+                assert m_rig_viz.called
+
+    def test_full_mode_unchanged(self, tmp_path, mock_calibration_data):
+        """Full mode (default) runs the complete pipeline as before."""
+        config = PipelineConfig(
+            calibration_path="dummy.json",
+            output_dir=str(tmp_path / "output"),
+            camera_video_map={"cam0": "v0.mp4", "cam1": "v1.mp4", "cam2": "v2.mp4"},
+            pipeline_mode="full",
+            device=DeviceConfig(device="cpu"),
+        )
+
+        ctx = _make_ctx(config, mock_calibration_data)
+
+        with _mock_pipeline_stages() as mocks:
+            process_frame(0, _RAW_IMAGES.copy(), ctx)
+
+            # Full mode should call all stages
+            assert mocks["triangulate"].called
+            assert mocks["depth_ranges"].called
+            assert mocks["sweep"].called
+            assert mocks["extract_depth"].called
+            assert mocks["filter"].called
+            assert mocks["fuse"].called
+            assert mocks["surface"].called
+
+            # sparse_to_o3d should NOT be called in full mode
+            assert not mocks["sparse_to_o3d"].called
+
+    def test_sparse_mode_logs_completion(
+        self, tmp_path, mock_calibration_data, caplog
+    ):
+        """Sparse mode logs 'complete (sparse mode)' at end."""
+        config = PipelineConfig(
+            calibration_path="dummy.json",
+            output_dir=str(tmp_path / "output"),
+            camera_video_map={"cam0": "v0.mp4", "cam1": "v1.mp4", "cam2": "v2.mp4"},
+            pipeline_mode="sparse",
+            device=DeviceConfig(device="cpu"),
+        )
+
+        ctx = _make_ctx(config, mock_calibration_data)
+
+        with _mock_pipeline_stages():
+            with caplog.at_level(logging.INFO):
+                process_frame(0, _RAW_IMAGES.copy(), ctx)
+
+            # Should log sparse mode completion
+            assert "complete (sparse mode)" in caplog.text
+
+
+# ---------------------------------------------------------------------------
+# P.35 tests: ROI mask integration
+# ---------------------------------------------------------------------------
+
+
+class TestMaskIntegration:
+    """Tests for ROI mask integration in pipeline (P.35)."""
+
+    def test_masks_loaded_in_setup(self, tmp_path, mock_calibration_data):
+        """setup_pipeline calls load_all_masks and stores result in ctx.masks."""
+        config = PipelineConfig(
+            calibration_path="dummy.json",
+            output_dir=str(tmp_path / "output"),
+            camera_video_map={"cam0": "v0.mp4", "cam1": "v1.mp4", "cam2": "v2.mp4"},
+            mask_dir=str(tmp_path / "masks"),
+            device=DeviceConfig(device="cpu"),
+        )
+
+        with patch(
+            "aquamvs.pipeline.load_calibration_data", return_value=mock_calibration_data
+        ):
+            with patch("aquamvs.pipeline.select_pairs") as mock_select_pairs:
+                mock_select_pairs.return_value = {"cam0": ["cam1"]}
+
+                with patch("aquamvs.masks.load_all_masks") as mock_load_masks:
+                    mock_load_masks.return_value = {"cam0": np.ones((480, 640), dtype=np.uint8)}
+
+                    ctx = setup_pipeline(config)
+
+                    # Verify load_all_masks was called with correct args
+                    assert mock_load_masks.called
+                    call_args = mock_load_masks.call_args
+                    assert call_args[0][0] == config.mask_dir
+                    assert call_args[0][1] == mock_calibration_data.cameras
+
+                    # Verify result is stored in ctx
+                    assert "cam0" in ctx.masks
+                    assert np.array_equal(
+                        ctx.masks["cam0"],
+                        np.ones((480, 640), dtype=np.uint8),
+                    )
+
+    def test_masks_filter_features(self, tmp_path, mock_calibration_data, caplog):
+        """Masks filter features before matching in process_frame."""
+        config = PipelineConfig(
+            calibration_path="dummy.json",
+            output_dir=str(tmp_path / "output"),
+            camera_video_map={"cam0": "v0.mp4", "cam1": "v1.mp4", "cam2": "v2.mp4"},
+            device=DeviceConfig(device="cpu"),
+        )
+
+        # Create a mask for cam0 (right half valid)
+        mask_cam0 = np.zeros((480, 640), dtype=np.uint8)
+        mask_cam0[:, 320:] = 255  # Right half valid
+
+        ctx = _make_ctx(config, mock_calibration_data, masks={"cam0": mask_cam0})
+
+        with _mock_pipeline_stages() as mocks:
+            # Override extract to return features spanning both halves
+            mocks["extract"].return_value = {
+                "cam0": {
+                    "keypoints": torch.tensor(
+                        [
+                            [100.0, 240.0],  # Left (should be filtered)
+                            [400.0, 240.0],  # Right (should survive)
+                            [500.0, 300.0],  # Right (should survive)
+                        ]
+                    ),
+                    "descriptors": torch.randn(3, 256),
+                    "scores": torch.ones(3),
+                },
+            }
+
+            with patch("aquamvs.masks.apply_mask_to_features") as mock_apply:
+                # Pass through but record that it was called
+                mock_apply.side_effect = lambda feats, mask: feats
+
+                with caplog.at_level(logging.DEBUG):
+                    process_frame(0, _RAW_IMAGES.copy(), ctx)
+
+                # Verify apply_mask_to_features was called
+                assert mock_apply.called
+                call_args = mock_apply.call_args
+                # Verify mask was passed
+                assert np.array_equal(call_args[0][1], mask_cam0)
+
+    def test_masks_filter_depth(self, tmp_path, mock_calibration_data):
+        """Masks filter depth maps after extraction in process_frame."""
+        config = PipelineConfig(
+            calibration_path="dummy.json",
+            output_dir=str(tmp_path / "output"),
+            camera_video_map={"cam0": "v0.mp4", "cam1": "v1.mp4", "cam2": "v2.mp4"},
+            device=DeviceConfig(device="cpu"),
+        )
+
+        # Create a mask for cam0 (top half excluded)
+        mask_cam0 = np.ones((480, 640), dtype=np.uint8) * 255
+        mask_cam0[:240, :] = 0  # Top half excluded
+
+        ctx = _make_ctx(config, mock_calibration_data, masks={"cam0": mask_cam0})
+
+        with _mock_pipeline_stages():
+            with patch("aquamvs.masks.apply_mask_to_depth") as mock_apply:
+                # Pass through but record that it was called
+                mock_apply.side_effect = lambda depth, conf, mask: (depth, conf)
+
+                process_frame(0, _RAW_IMAGES.copy(), ctx)
+
+                # Verify apply_mask_to_depth was called
+                assert mock_apply.called
+                call_args = mock_apply.call_args
+                # Verify mask was passed
+                assert np.array_equal(call_args[0][2], mask_cam0)
+
+    def test_no_masks_unchanged(self, tmp_path, mock_calibration_data):
+        """Pipeline runs identically when masks={} (no masking configured)."""
+        config = PipelineConfig(
+            calibration_path="dummy.json",
+            output_dir=str(tmp_path / "output"),
+            camera_video_map={"cam0": "v0.mp4", "cam1": "v1.mp4", "cam2": "v2.mp4"},
+            device=DeviceConfig(device="cpu"),
+        )
+
+        # Empty masks dict (no masking)
+        ctx = _make_ctx(config, mock_calibration_data, masks={})
+
+        with _mock_pipeline_stages() as mocks:
+            with patch("aquamvs.masks.apply_mask_to_features") as mock_apply_feat:
+                with patch("aquamvs.masks.apply_mask_to_depth") as mock_apply_depth:
+                    process_frame(0, _RAW_IMAGES.copy(), ctx)
+
+                    # Mask application should NOT be called when masks is empty
+                    assert not mock_apply_feat.called
+                    assert not mock_apply_depth.called
+
+                    # Pipeline should still run normally
+                    assert mocks["extract"].called
+                    assert mocks["match"].called

@@ -1,10 +1,11 @@
-"""Feature extraction using SuperPoint."""
+"""Feature extraction using configurable detector backends."""
 
 from pathlib import Path
 
+import cv2
 import numpy as np
 import torch
-from lightglue import SuperPoint
+from lightglue import ALIKED, DISK, SuperPoint
 
 from aquamvs.config import FeatureExtractionConfig
 
@@ -12,30 +13,104 @@ from aquamvs.config import FeatureExtractionConfig
 def create_extractor(
     config: FeatureExtractionConfig,
     device: str = "cpu",
-) -> SuperPoint:
-    """Create and initialize a SuperPoint feature extractor.
+) -> torch.nn.Module:
+    """Create and initialize a feature extractor.
 
     Args:
         config: Feature extraction configuration.
         device: Device to place the model on.
 
     Returns:
-        Initialized SuperPoint model in eval mode.
+        Initialized extractor model (SuperPoint, ALIKED, or DISK) in eval mode.
+
+    Raises:
+        ValueError: If extractor_type is not recognized.
     """
-    extractor = SuperPoint(
-        max_num_keypoints=config.max_keypoints,
-        detection_threshold=config.detection_threshold,
-    ).eval()
-    return extractor.to(device)
+    if config.extractor_type == "superpoint":
+        extractor = SuperPoint(
+            max_num_keypoints=config.max_keypoints,
+            detection_threshold=config.detection_threshold,
+        )
+    elif config.extractor_type == "aliked":
+        extractor = ALIKED(
+            max_num_keypoints=config.max_keypoints,
+            detection_threshold=config.detection_threshold,
+        )
+    elif config.extractor_type == "disk":
+        extractor = DISK(
+            max_num_keypoints=config.max_keypoints,
+            detection_threshold=config.detection_threshold,
+        )
+    else:
+        raise ValueError(
+            f"Unknown extractor_type: {config.extractor_type!r}. "
+            "Valid types: 'superpoint', 'aliked', 'disk'"
+        )
+
+    return extractor.eval().to(device)
+
+
+def _apply_clahe(
+    gray: torch.Tensor,
+    clip_limit: float,
+) -> torch.Tensor:
+    """Apply CLAHE preprocessing to grayscale image.
+
+    Args:
+        gray: Grayscale tensor of shape (H, W). May be uint8 or float32.
+        clip_limit: Contrast limit for CLAHE (higher = more enhancement).
+
+    Returns:
+        Enhanced grayscale tensor with same dtype and device as input.
+    """
+    # Remember original dtype and device
+    original_dtype = gray.dtype
+    original_device = gray.device
+
+    # Convert to numpy uint8 for OpenCV CLAHE
+    if gray.dtype.is_floating_point:
+        # If float and max > 1.0, assume [0, 255] range
+        if gray.max() > 1.0:
+            gray_uint8 = torch.clamp(gray, 0, 255).cpu().numpy().astype(np.uint8)
+        else:
+            # If float and max <= 1.0, assume [0, 1] range
+            gray_uint8 = (torch.clamp(gray, 0, 1) * 255).cpu().numpy().astype(np.uint8)
+    else:
+        # Already uint8
+        gray_uint8 = gray.cpu().numpy().astype(np.uint8)
+
+    # Apply CLAHE
+    clahe = cv2.createCLAHE(clipLimit=clip_limit, tileGridSize=(8, 8))
+    enhanced = clahe.apply(gray_uint8)
+
+    # Convert back to torch tensor
+    result = torch.from_numpy(enhanced)
+
+    # Convert back to original dtype
+    if original_dtype.is_floating_point:
+        if gray.max() > 1.0:
+            # Return float in [0, 255] range
+            result = result.float()
+        else:
+            # Return float in [0, 1] range
+            result = result.float() / 255.0
+    else:
+        # Return uint8
+        result = result.to(torch.uint8)
+
+    # Move to original device
+    result = result.to(original_device)
+
+    return result
 
 
 def extract_features(
     image: torch.Tensor | np.ndarray,
     config: FeatureExtractionConfig,
-    extractor: SuperPoint | None = None,
+    extractor: torch.nn.Module | None = None,
     device: str = "cpu",
 ) -> dict[str, torch.Tensor]:
-    """Extract SuperPoint keypoints and descriptors from a single image.
+    """Extract keypoints and descriptors from a single image.
 
     Args:
         image: Undistorted image as tensor or array. Supported formats:
@@ -43,7 +118,7 @@ def extract_features(
             - np.ndarray: (H, W, 3) or (H, W), uint8 or float32
             If uint8 HWC, converted to float32 grayscale (1, 1, H, W) internally.
         config: Feature extraction configuration.
-        extractor: Pre-initialized SuperPoint model. If None, creates one.
+        extractor: Pre-initialized extractor model. If None, creates one using config.extractor_type.
         device: Device string for the extractor (used only if extractor is None).
 
     Returns:
@@ -73,6 +148,10 @@ def extract_features(
             f"Expected image with shape (H, W) or (H, W, 3), got {image.shape}"
         )
 
+    # Optional CLAHE preprocessing
+    if config.clahe_enabled:
+        gray = _apply_clahe(gray, config.clahe_clip_limit)
+
     # Ensure float type
     if not gray.dtype.is_floating_point:
         gray = gray.float()
@@ -96,7 +175,7 @@ def extract_features(
         feats = extractor.extract(gray)
 
     # Squeeze batch dimension and rename keys
-    # SuperPoint outputs: (1, N, 2), (1, N, 256), (1, N)
+    # All extractors output: keypoints (1, N, 2), descriptors (1, N, D), keypoint_scores (1, N)
     keypoints = feats["keypoints"].squeeze(0)  # (N, 2)
     descriptors = feats["descriptors"].squeeze(0)  # (N, D)
     scores = feats["keypoint_scores"].squeeze(0)  # (N,)

@@ -5,6 +5,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 import numpy as np
+import open3d as o3d
 import torch
 from aquacal.io.video import VideoSet
 
@@ -108,6 +109,90 @@ def _collect_height_maps(
     return height_maps
 
 
+def _sparse_cloud_to_open3d(
+    sparse_cloud: dict[str, torch.Tensor],
+    projection_models: dict[str, ProjectionModel],
+    images: dict[str, torch.Tensor],
+    voxel_size: float,
+) -> o3d.geometry.PointCloud:
+    """Convert sparse triangulated cloud to Open3D PointCloud with colors and normals.
+
+    For each point, projects into all cameras and samples color from the camera
+    with the best viewing angle (closest to image center among valid projections).
+    Then voxel downsamples and estimates normals.
+
+    Args:
+        sparse_cloud: Dict with "points_3d" (N, 3) and "scores" (N,) tensors.
+        projection_models: Dict of ProjectionModel by camera name.
+        images: Dict of undistorted BGR images (H, W, 3) uint8 tensors by camera name.
+        voxel_size: Voxel size for downsampling (meters).
+
+    Returns:
+        Open3D PointCloud with points, colors, and normals.
+    """
+    points_3d = sparse_cloud["points_3d"]  # (N, 3)
+    N = points_3d.shape[0]
+
+    if N == 0:
+        return o3d.geometry.PointCloud()
+
+    # Prepare color array
+    colors_rgb = np.full((N, 3), 0.5, dtype=np.float64)  # Default gray
+
+    # For each camera, project all points and sample colors
+    for cam_name, model in projection_models.items():
+        if cam_name not in images:
+            continue
+
+        image = images[cam_name]  # (H, W, 3) uint8
+        H, W = image.shape[:2]
+
+        # Project all points into this camera
+        pixels, valid = model.project(points_3d)  # (N, 2), (N,)
+        pixels_np = pixels.cpu().numpy()
+        valid_np = valid.cpu().numpy()
+
+        # For each valid projection, sample color
+        for i in range(N):
+            if not valid_np[i]:
+                continue
+
+            u, v = pixels_np[i]
+            # Convert to integer indices with bounds checking
+            v_int = int(np.clip(np.round(v), 0, H - 1))
+            u_int = int(np.clip(np.round(u), 0, W - 1))
+
+            # Sample BGR pixel and convert to RGB [0, 1]
+            bgr = image[v_int, u_int].cpu().numpy()
+            rgb = bgr[[2, 1, 0]] / 255.0
+
+            # Simple heuristic: use first valid camera color
+            # (could be improved to pick camera with best viewing angle)
+            if np.allclose(colors_rgb[i], 0.5):  # Still default gray
+                colors_rgb[i] = rgb
+
+    # Convert to Open3D
+    pcd = o3d.geometry.PointCloud()
+    pcd.points = o3d.utility.Vector3dVector(points_3d.cpu().numpy())
+    pcd.colors = o3d.utility.Vector3dVector(colors_rgb)
+
+    # Voxel downsample
+    if N > 0:
+        pcd = pcd.voxel_down_sample(voxel_size)
+
+    # Estimate normals (same parameters as fusion)
+    if pcd.has_points():
+        pcd.estimate_normals(
+            search_param=o3d.geometry.KDTreeSearchParamHybrid(
+                radius=voxel_size * 5, max_nn=30
+            )
+        )
+        # Orient normals toward camera origin (0, 0, 0)
+        pcd.orient_normals_towards_camera_location(np.array([0.0, 0.0, 0.0]))
+
+    return pcd
+
+
 @dataclass
 class PipelineContext:
     """Precomputed data that is constant across all frames.
@@ -123,6 +208,7 @@ class PipelineContext:
     ring_cameras: list[str]
     auxiliary_cameras: list[str]
     device: str
+    masks: dict[str, np.ndarray]
 
 
 def setup_pipeline(config: PipelineConfig) -> PipelineContext:
@@ -212,6 +298,11 @@ def setup_pipeline(config: PipelineConfig) -> PipelineContext:
         config.pair_selection,
     )
 
+    # 4b. Load ROI masks
+    from .masks import load_all_masks
+
+    masks = load_all_masks(config.mask_dir, calibration.cameras)
+
     # 5. Create output directory
     output_dir = Path(config.output_dir)
     output_dir.mkdir(parents=True, exist_ok=True)
@@ -229,6 +320,7 @@ def setup_pipeline(config: PipelineConfig) -> PipelineContext:
         ring_cameras=ring_cameras,
         auxiliary_cameras=auxiliary_cameras,
         device=device,
+        masks=masks,
     )
 
 
@@ -282,6 +374,25 @@ def process_frame(
         device=device,
     )
 
+    # --- Apply masks to features ---
+    if ctx.masks:
+        from .masks import apply_mask_to_features
+
+        for cam_name in list(all_features.keys()):
+            if cam_name in ctx.masks:
+                n_before = all_features[cam_name]["keypoints"].shape[0]
+                all_features[cam_name] = apply_mask_to_features(
+                    all_features[cam_name], ctx.masks[cam_name]
+                )
+                n_after = all_features[cam_name]["keypoints"].shape[0]
+                logger.debug(
+                    "Frame %d: %s mask filtered %d -> %d keypoints",
+                    frame_idx,
+                    cam_name,
+                    n_before,
+                    n_after,
+                )
+
     # --- Stage 3: Feature Matching ---
     logger.info("Frame %d: matching features", frame_idx)
     all_matches = match_all_pairs(
@@ -290,6 +401,7 @@ def process_frame(
         image_size=list(ctx.calibration.cameras.values())[0].image_size,
         config=config.matching,
         device=device,
+        extractor_type=config.feature_extraction.extractor_type,
     )
 
     # --- [viz] Feature overlays ---
@@ -368,6 +480,101 @@ def process_frame(
         margin=config.dense_stereo.depth_margin,
     )
 
+    # --- Sparse mode branch: convert sparse cloud to Open3D, surface, viz, done ---
+    if config.pipeline_mode == "sparse":
+        # Convert sparse cloud to Open3D PointCloud
+        pcd = None
+        if sparse_cloud["points_3d"].shape[0] > 0:
+            pcd = _sparse_cloud_to_open3d(
+                sparse_cloud,
+                ctx.projection_models,
+                undistorted_tensors,
+                config.fusion.voxel_size,
+            )
+        else:
+            logger.warning(
+                "Frame %d: sparse cloud is empty, skipping surface reconstruction",
+                frame_idx,
+            )
+
+        # Save point cloud (if non-empty and save_point_cloud is enabled)
+        if pcd is not None and pcd.has_points() and config.output.save_point_cloud:
+            pcd_dir = frame_dir / "point_cloud"
+            pcd_dir.mkdir(exist_ok=True)
+            save_point_cloud(pcd, pcd_dir / "sparse.ply")
+
+        # Surface reconstruction (if non-empty)
+        mesh = None
+        if pcd is not None and pcd.has_points():
+            logger.info("Frame %d: reconstructing surface", frame_idx)
+            mesh = reconstruct_surface(pcd, config.surface)
+
+            # Save mesh (opt-out)
+            if config.output.save_mesh:
+                mesh_dir = frame_dir / "mesh"
+                mesh_dir.mkdir(exist_ok=True)
+                save_mesh(mesh, mesh_dir / "surface.ply")
+
+        # [viz] 3D scene renders
+        if _should_viz(config, "scene") and pcd is not None:
+            try:
+                from .visualization.scene import render_all_scenes
+
+                logger.info("Frame %d: rendering 3D scene visualizations", frame_idx)
+                viz_dir = frame_dir / "viz"
+                viz_dir.mkdir(exist_ok=True)
+
+                render_all_scenes(
+                    point_cloud=pcd,
+                    mesh=mesh,
+                    output_dir=viz_dir,
+                )
+            except Exception:
+                logger.exception("Frame %d: scene visualization failed", frame_idx)
+
+        # [viz] Camera rig diagram
+        if _should_viz(config, "rig"):
+            try:
+                from .visualization.rig import render_rig_diagram
+
+                logger.info("Frame %d: rendering rig diagram", frame_idx)
+                viz_dir = frame_dir / "viz"
+                viz_dir.mkdir(exist_ok=True)
+
+                # Convert camera data to numpy
+                cam_positions = {
+                    name: pos.cpu().numpy()
+                    for name, pos in ctx.calibration.camera_positions().items()
+                }
+                cam_rotations = {
+                    name: cam.R.cpu().numpy()
+                    for name, cam in ctx.calibration.cameras.items()
+                }
+
+                # Optional point cloud overlay
+                pcd_points = None
+                if pcd is not None and pcd.has_points():
+                    pcd_points = np.asarray(pcd.points)
+
+                # Get K and image_size from first camera for frustum aspect ratio
+                first_cam = next(iter(ctx.calibration.cameras.values()))
+                K_np = first_cam.K.cpu().numpy()
+
+                render_rig_diagram(
+                    camera_positions=cam_positions,
+                    camera_rotations=cam_rotations,
+                    water_z=ctx.calibration.water_z,
+                    output_path=viz_dir / "rig.png",
+                    K=K_np,
+                    image_size=first_cam.image_size,
+                    point_cloud_points=pcd_points,
+                )
+            except Exception:
+                logger.exception("Frame %d: rig visualization failed", frame_idx)
+
+        logger.info("Frame %d: complete (sparse mode)", frame_idx)
+        return
+
     # --- Stage 6: Dense Stereo (per ring camera) ---
     logger.info("Frame %d: running dense stereo", frame_idx)
     depth_maps = {}
@@ -405,6 +612,14 @@ def process_frame(
             sweep_result["cost_volume"],
             sweep_result["depths"],
         )
+
+        # Apply mask to depth map
+        if ref_name in ctx.masks:
+            from .masks import apply_mask_to_depth
+
+            depth_map, confidence = apply_mask_to_depth(
+                depth_map, confidence, ctx.masks[ref_name]
+            )
 
         depth_maps[ref_name] = depth_map
         confidence_maps[ref_name] = confidence

@@ -7,6 +7,7 @@ import pytest
 import yaml
 
 from aquamvs.config import (
+    BenchmarkConfig,
     DenseStereoConfig,
     DeviceConfig,
     EvaluationConfig,
@@ -46,14 +47,29 @@ class TestFeatureExtractionConfig:
     def test_defaults(self):
         """Test default values."""
         config = FeatureExtractionConfig()
+        assert config.extractor_type == "superpoint"
         assert config.max_keypoints == 2048
         assert config.detection_threshold == 0.005
 
     def test_custom_values(self):
         """Test custom values."""
-        config = FeatureExtractionConfig(max_keypoints=1024, detection_threshold=0.01)
+        config = FeatureExtractionConfig(
+            extractor_type="aliked", max_keypoints=1024, detection_threshold=0.01
+        )
+        assert config.extractor_type == "aliked"
         assert config.max_keypoints == 1024
         assert config.detection_threshold == 0.01
+
+    def test_extractor_type_default(self):
+        """Test that extractor_type defaults to superpoint."""
+        config = FeatureExtractionConfig()
+        assert config.extractor_type == "superpoint"
+
+    def test_clahe_defaults(self):
+        """Test that CLAHE defaults are correct."""
+        config = FeatureExtractionConfig()
+        assert config.clahe_enabled is False
+        assert config.clahe_clip_limit == 2.0
 
 
 class TestPairSelectionConfig:
@@ -225,6 +241,25 @@ class TestVizConfig:
         assert config.stages == ["depth", "scene"]
 
 
+class TestBenchmarkConfig:
+    """Tests for BenchmarkConfig."""
+
+    def test_defaults(self):
+        """Test default values."""
+        config = BenchmarkConfig()
+        assert config.extractors == ["superpoint", "aliked", "disk"]
+        assert config.clahe == [True, False]
+
+    def test_custom_values(self):
+        """Test custom values."""
+        config = BenchmarkConfig(
+            extractors=["superpoint", "aliked"],
+            clahe=[False],
+        )
+        assert config.extractors == ["superpoint", "aliked"]
+        assert config.clahe == [False]
+
+
 class TestPipelineConfig:
     """Tests for PipelineConfig."""
 
@@ -260,6 +295,7 @@ class TestPipelineConfig:
         assert config.calibration_path == ""
         assert config.output_dir == ""
         assert config.camera_video_map == {}
+        assert config.pipeline_mode == "full"
 
     def test_validation_valid_config(self):
         """Test validation passes for valid config."""
@@ -312,6 +348,52 @@ class TestPipelineConfig:
         """Test validation passes for valid visualization stages."""
         config = PipelineConfig()
         config.visualization.stages = ["depth", "scene"]
+        config.validate()  # Should not raise
+
+    def test_validation_valid_pipeline_mode_sparse(self):
+        """Test validation passes for pipeline_mode='sparse'."""
+        config = PipelineConfig()
+        config.pipeline_mode = "sparse"
+        config.validate()  # Should not raise
+
+    def test_validation_valid_pipeline_mode_full(self):
+        """Test validation passes for pipeline_mode='full'."""
+        config = PipelineConfig()
+        config.pipeline_mode = "full"
+        config.validate()  # Should not raise
+
+    def test_validation_invalid_pipeline_mode(self):
+        """Test validation catches invalid pipeline_mode."""
+        config = PipelineConfig()
+        config.pipeline_mode = "dense"
+        with pytest.raises(ValueError, match="Invalid pipeline_mode"):
+            config.validate()
+
+    def test_validation_valid_extractor_types(self):
+        """Test validation passes for valid extractor types."""
+        for extractor_type in ["superpoint", "aliked", "disk"]:
+            config = PipelineConfig()
+            config.feature_extraction.extractor_type = extractor_type
+            config.validate()  # Should not raise
+
+    def test_validation_invalid_extractor_type(self):
+        """Test validation catches invalid extractor_type."""
+        config = PipelineConfig()
+        config.feature_extraction.extractor_type = "invalid"
+        with pytest.raises(ValueError, match="Invalid extractor_type"):
+            config.validate()
+
+    def test_validation_invalid_benchmark_extractor(self):
+        """Test validation catches invalid benchmark extractor."""
+        config = PipelineConfig()
+        config.benchmark.extractors = ["superpoint", "invalid"]
+        with pytest.raises(ValueError, match="Invalid benchmark extractor"):
+            config.validate()
+
+    def test_validation_valid_benchmark_extractors(self):
+        """Test validation passes for valid benchmark extractors."""
+        config = PipelineConfig()
+        config.benchmark.extractors = ["superpoint", "aliked", "disk"]
         config.validate()  # Should not raise
 
 
@@ -549,6 +631,137 @@ dense_stereo:
             # Missing output/visualization should use defaults
             assert loaded.output == OutputConfig()
             assert loaded.visualization == VizConfig()
+        finally:
+            temp_path.unlink()
+
+    def test_backward_compatibility_missing_pipeline_mode(self):
+        """Test that YAML without pipeline_mode defaults to 'full'."""
+        yaml_content = """
+calibration_path: /path/to/calibration.json
+output_dir: /path/to/output
+camera_video_map:
+  cam1: /video1.mp4
+"""
+
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".yaml", delete=False) as f:
+            f.write(yaml_content)
+            temp_path = Path(f.name)
+
+        try:
+            loaded = PipelineConfig.from_yaml(temp_path)
+
+            # Missing pipeline_mode should default to 'full'
+            assert loaded.pipeline_mode == "full"
+        finally:
+            temp_path.unlink()
+
+    def test_yaml_round_trip_with_pipeline_mode(self):
+        """Test that pipeline_mode survives YAML round-trip."""
+        original = PipelineConfig(
+            calibration_path="/path/to/calibration.json",
+            output_dir="/path/to/output",
+            camera_video_map={"cam1": "/video1.mp4"},
+            pipeline_mode="sparse",
+        )
+
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".yaml", delete=False) as f:
+            temp_path = Path(f.name)
+
+        try:
+            original.to_yaml(temp_path)
+            loaded = PipelineConfig.from_yaml(temp_path)
+
+            assert loaded.pipeline_mode == "sparse"
+        finally:
+            temp_path.unlink()
+
+    def test_extractor_type_yaml_roundtrip(self):
+        """Test that extractor_type survives YAML round-trip."""
+        original = PipelineConfig(
+            calibration_path="/path/to/calibration.json",
+            output_dir="/path/to/output",
+            camera_video_map={"cam1": "/video1.mp4"},
+            feature_extraction=FeatureExtractionConfig(extractor_type="aliked"),
+        )
+
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".yaml", delete=False) as f:
+            temp_path = Path(f.name)
+
+        try:
+            original.to_yaml(temp_path)
+            loaded = PipelineConfig.from_yaml(temp_path)
+
+            assert loaded.feature_extraction.extractor_type == "aliked"
+        finally:
+            temp_path.unlink()
+
+    def test_clahe_yaml_roundtrip(self):
+        """Test that CLAHE config survives YAML round-trip."""
+        original = PipelineConfig(
+            calibration_path="/path/to/calibration.json",
+            output_dir="/path/to/output",
+            camera_video_map={"cam1": "/video1.mp4"},
+            feature_extraction=FeatureExtractionConfig(
+                clahe_enabled=True, clahe_clip_limit=4.0
+            ),
+        )
+
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".yaml", delete=False) as f:
+            temp_path = Path(f.name)
+
+        try:
+            original.to_yaml(temp_path)
+            loaded = PipelineConfig.from_yaml(temp_path)
+
+            assert loaded.feature_extraction.clahe_enabled is True
+            assert loaded.feature_extraction.clahe_clip_limit == 4.0
+        finally:
+            temp_path.unlink()
+
+    def test_benchmark_config_yaml_roundtrip(self):
+        """Test that benchmark config survives YAML round-trip."""
+        original = PipelineConfig(
+            calibration_path="/path/to/calibration.json",
+            output_dir="/path/to/output",
+            camera_video_map={"cam1": "/video1.mp4"},
+            benchmark=BenchmarkConfig(
+                extractors=["superpoint", "aliked"],
+                clahe=[False],
+            ),
+        )
+
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".yaml", delete=False) as f:
+            temp_path = Path(f.name)
+
+        try:
+            original.to_yaml(temp_path)
+            loaded = PipelineConfig.from_yaml(temp_path)
+
+            assert loaded.benchmark.extractors == ["superpoint", "aliked"]
+            assert loaded.benchmark.clahe == [False]
+        finally:
+            temp_path.unlink()
+
+    def test_backward_compat_no_benchmark(self):
+        """Test that YAML without benchmark section loads with defaults."""
+        yaml_content = """
+calibration_path: /path/to/calibration.json
+output_dir: /path/to/output
+camera_video_map:
+  cam1: /video1.mp4
+"""
+
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".yaml", delete=False) as f:
+            f.write(yaml_content)
+            temp_path = Path(f.name)
+
+        try:
+            loaded = PipelineConfig.from_yaml(temp_path)
+
+            # Missing benchmark should use defaults
+            assert loaded.benchmark == BenchmarkConfig()
+            assert loaded.benchmark.extractors == ["superpoint", "aliked", "disk"]
+            assert loaded.benchmark.clahe == [True, False]
         finally:
             temp_path.unlink()
 
