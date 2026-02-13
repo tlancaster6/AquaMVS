@@ -21,8 +21,19 @@ from .config import (
     SurfaceConfig,
 )
 from .fusion import (
+    backproject_depth_map,
     filter_all_depth_maps,
     filter_depth_map,
+    fuse_depth_maps,
+    load_point_cloud,
+    save_point_cloud,
+)
+from .surface import (
+    load_mesh,
+    reconstruct_heightfield,
+    reconstruct_poisson,
+    reconstruct_surface,
+    save_mesh,
 )
 from .triangulation import (
     compute_depth_ranges,
@@ -60,4 +71,13 @@ __all__ = [
     "load_sparse_cloud",
     "filter_depth_map",
     "filter_all_depth_maps",
+    "backproject_depth_map",
+    "fuse_depth_maps",
+    "save_point_cloud",
+    "load_point_cloud",
+    "reconstruct_poisson",
+    "reconstruct_heightfield",
+    "reconstruct_surface",
+    "save_mesh",
+    "load_mesh",
 ]

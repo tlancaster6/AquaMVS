@@ -1,5 +1,9 @@
 """Depth map fusion into unified point clouds."""
 
+from pathlib import Path
+
+import numpy as np
+import open3d as o3d
 import torch
 import torch.nn.functional as F
 
@@ -217,3 +221,184 @@ def filter_all_depth_maps(
         results[ref_name] = (filtered_depth, filtered_conf, count)
 
     return results
+
+
+def backproject_depth_map(
+    model: ProjectionModel,
+    depth_map: torch.Tensor,
+    image: torch.Tensor,
+    confidence: torch.Tensor | None = None,
+) -> dict[str, torch.Tensor]:
+    """Back-project a filtered depth map to a colored 3D point cloud.
+
+    For each valid (non-NaN) pixel in the depth map, casts a ray through
+    the projection model, computes the 3D point at the stored ray depth,
+    and samples the color from the reference image.
+
+    Args:
+        model: Projection model for this camera.
+        depth_map: Filtered depth map, shape (H, W), float32. NaN = invalid.
+        image: Reference BGR image, shape (H, W, 3), uint8.
+        confidence: Optional confidence map, shape (H, W), float32.
+            If provided, included in the output for downstream use.
+
+    Returns:
+        Dict with keys:
+            "points": shape (K, 3), float32 -- 3D world coordinates
+            "colors": shape (K, 3), float32 -- RGB colors in [0, 1]
+            "confidence": shape (K,), float32 -- confidence values (if provided,
+                else ones)
+        Where K is the number of valid (non-NaN) pixels.
+        Returns empty tensors if no valid pixels.
+    """
+    H, W = depth_map.shape
+    device = depth_map.device
+
+    # Find valid pixels
+    valid_mask = ~torch.isnan(depth_map)
+    valid_indices = torch.where(valid_mask.reshape(-1))[0]  # (K,)
+    K = valid_indices.shape[0]
+
+    if K == 0:
+        return {
+            "points": torch.zeros(0, 3, device=device),
+            "colors": torch.zeros(0, 3, device=device),
+            "confidence": torch.zeros(0, device=device),
+        }
+
+    # Get pixel coordinates
+    v_coords = valid_indices // W
+    u_coords = valid_indices % W
+    pixels = torch.stack([u_coords.float(), v_coords.float()], dim=-1)  # (K, 2)
+
+    # Get depths
+    depths = depth_map.reshape(-1)[valid_indices]  # (K,)
+
+    # Cast rays and compute 3D points
+    origins, directions = model.cast_ray(pixels)  # (K, 3), (K, 3)
+    points = origins + depths.unsqueeze(-1) * directions  # (K, 3)
+
+    # Sample colors from the image (BGR uint8 -> RGB float [0, 1])
+    # Use integer pixel coords (nearest neighbor for color -- sub-pixel not needed)
+    colors_bgr = image[v_coords.long(), u_coords.long()]  # (K, 3), uint8
+    colors_rgb = colors_bgr[:, [2, 1, 0]].float() / 255.0  # (K, 3), RGB [0, 1]
+
+    # Confidence
+    if confidence is not None:
+        conf = confidence.reshape(-1)[valid_indices]  # (K,)
+    else:
+        conf = torch.ones(K, device=device)
+
+    return {
+        "points": points,
+        "colors": colors_rgb,
+        "confidence": conf,
+    }
+
+
+def fuse_depth_maps(
+    ring_cameras: list[str],
+    projection_models: dict[str, ProjectionModel],
+    filtered_depth_maps: dict[str, torch.Tensor],
+    filtered_confidence_maps: dict[str, torch.Tensor],
+    images: dict[str, torch.Tensor],
+    config: FusionConfig,
+) -> o3d.geometry.PointCloud:
+    """Fuse filtered depth maps from all ring cameras into a single point cloud.
+
+    Back-projects each camera's filtered depth map to 3D with colors,
+    concatenates all points, deduplicates via voxel grid downsampling,
+    and estimates normals.
+
+    Args:
+        ring_cameras: List of ring camera names.
+        projection_models: Camera name to ProjectionModel mapping.
+        filtered_depth_maps: Camera name to filtered depth map (H, W) mapping
+            (output of filter_all_depth_maps).
+        filtered_confidence_maps: Camera name to filtered confidence map (H, W) mapping.
+        images: Camera name to BGR image (H, W, 3) uint8 mapping.
+        config: Fusion configuration.
+
+    Returns:
+        Open3D PointCloud with positions, colors, and estimated normals.
+    """
+    # Step 1: Back-project each camera's depth map
+    all_points = []
+    all_colors = []
+
+    for cam_name in ring_cameras:
+        if cam_name not in filtered_depth_maps:
+            continue
+
+        result = backproject_depth_map(
+            model=projection_models[cam_name],
+            depth_map=filtered_depth_maps[cam_name],
+            image=images[cam_name],
+            confidence=filtered_confidence_maps.get(cam_name),
+        )
+
+        if result["points"].shape[0] > 0:
+            all_points.append(result["points"])
+            all_colors.append(result["colors"])
+
+    if len(all_points) == 0:
+        # Return empty point cloud
+        return o3d.geometry.PointCloud()
+
+    # Step 2: Concatenate
+    points_cat = torch.cat(all_points, dim=0)  # (N_total, 3)
+    colors_cat = torch.cat(all_colors, dim=0)  # (N_total, 3)
+
+    # Step 3: Convert to Open3D point cloud
+    pcd = o3d.geometry.PointCloud()
+    pcd.points = o3d.utility.Vector3dVector(
+        points_cat.cpu().numpy().astype(np.float64)
+    )
+    pcd.colors = o3d.utility.Vector3dVector(
+        colors_cat.cpu().numpy().astype(np.float64)
+    )
+
+    # Step 4: Voxel grid downsampling for deduplication
+    pcd = pcd.voxel_down_sample(voxel_size=config.voxel_size)
+
+    # Step 5: Estimate normals
+    # Use a search radius proportional to voxel size for local consistency
+    pcd.estimate_normals(
+        search_param=o3d.geometry.KDTreeSearchParamHybrid(
+            radius=config.voxel_size * 5,
+            max_nn=30,
+        )
+    )
+
+    # Orient normals toward camera (upward, -Z in our coordinate system)
+    # The cameras are above the surface, so normals should point toward -Z
+    pcd.orient_normals_towards_camera_location(camera_location=np.array([0.0, 0.0, 0.0]))
+
+    return pcd
+
+
+def save_point_cloud(
+    pcd: o3d.geometry.PointCloud,
+    path: str | Path,
+) -> None:
+    """Save a point cloud to a PLY file (binary).
+
+    Args:
+        pcd: Open3D PointCloud with points, colors, and optionally normals.
+        path: Output file path (should end with .ply).
+    """
+    o3d.io.write_point_cloud(str(path), pcd, write_ascii=False)
+
+
+def load_point_cloud(
+    path: str | Path,
+) -> o3d.geometry.PointCloud:
+    """Load a point cloud from a PLY file.
+
+    Args:
+        path: Path to .ply file.
+
+    Returns:
+        Open3D PointCloud.
+    """
+    return o3d.io.read_point_cloud(str(path))
