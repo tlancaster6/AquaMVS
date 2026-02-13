@@ -20,6 +20,10 @@ from .config import (
     PipelineConfig,
     SurfaceConfig,
 )
+from .fusion import (
+    filter_all_depth_maps,
+    filter_depth_map,
+)
 from .triangulation import (
     compute_depth_ranges,
     load_sparse_cloud,
@@ -54,4 +58,6 @@ __all__ = [
     "compute_depth_ranges",
     "save_sparse_cloud",
     "load_sparse_cloud",
+    "filter_depth_map",
+    "filter_all_depth_maps",
 ]
