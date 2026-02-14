@@ -24,6 +24,7 @@ def detect_input_type(camera_map: dict[str, str]) -> str:
     if not camera_map:
         raise ValueError("camera_map is empty")
 
+    video_exts = {".mp4", ".avi", ".mkv", ".mov", ".wmv", ".flv"}
     paths = [Path(p) for p in camera_map.values()]
     is_dir = [p.is_dir() for p in paths]
     is_file = [p.is_file() for p in paths]
@@ -32,11 +33,17 @@ def detect_input_type(camera_map: dict[str, str]) -> str:
         return "images"
     elif all(is_file):
         return "video"
-    else:
-        raise ValueError(
-            "camera_map contains mixed types (directories and files). "
-            "All paths must be either directories or files."
-        )
+    elif not any(is_dir) and not any(is_file):
+        # Paths don't exist yet — infer from extension (e.g. mock/test paths)
+        has_video_ext = [p.suffix.lower() in video_exts for p in paths]
+        if all(has_video_ext):
+            return "video"
+        elif not any(has_video_ext):
+            return "images"
+    raise ValueError(
+        "camera_map contains mixed types (directories and files). "
+        "All paths must be either directories or files."
+    )
 
 
 class ImageDirectorySet:
