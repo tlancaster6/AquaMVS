@@ -13,6 +13,7 @@ AquaMVS already delivers working refractive multi-view stereo reconstruction. Th
 Decimal phases appear between their surrounding integers in numeric order.
 
 - [x] **Phase 1: Dependency Resolution and Packaging Foundations** - Resolve PyPI blockers, establish clean wheel, set up CI/CD
+- [x] **Phase 01.1: Last-Minute Feature Additions** - Temporal median, mesh export, outlier removal, consistency maps, image input
 - [ ] **Phase 2: Configuration and API Cleanup** - Consolidate config, validate inputs, establish type hints and deprecation patterns
 - [ ] **Phase 3: Pipeline Decomposition and Modularization** - Refactor 995-line pipeline.py into modular package with protocols
 - [ ] **Phase 4: Documentation and Examples** - Sphinx docs, Jupyter tutorials, example datasets, ReadTheDocs hosting
@@ -51,8 +52,8 @@ Plans:
 **Plans:** 2 plans
 
 Plans:
-- [ ] 01.1-01-PLAN.md — New CLI tools: temporal median preprocessing + mesh export/simplification
-- [ ] 01.1-02-PLAN.md — Pipeline enhancements: statistical outlier removal + consistency maps + image input support
+- [x] 01.1-01-PLAN.md — New CLI tools: temporal median preprocessing + mesh export/simplification
+- [x] 01.1-02-PLAN.md — Pipeline enhancements: statistical outlier removal + consistency maps + image input support
 
 ### Phase 2: Configuration and API Cleanup
 **Goal**: Configuration is validated at load time with clear error messages, and public APIs are typed and stable
@@ -121,6 +122,7 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
 | 1. Dependency Resolution and Packaging Foundations | 2/2 | ✓ Complete | 2026-02-14 |
+| 01.1. Last-Minute Feature Additions | 2/2 | ✓ Complete | 2026-02-14 |
 | 2. Configuration and API Cleanup | 0/TBD | Not started | - |
 | 3. Pipeline Decomposition and Modularization | 0/TBD | Not started | - |
 | 4. Documentation and Examples | 0/TBD | Not started | - |
