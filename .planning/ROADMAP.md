@@ -12,7 +12,7 @@ AquaMVS already delivers working refractive multi-view stereo reconstruction. Th
 
 Decimal phases appear between their surrounding integers in numeric order.
 
-- [ ] **Phase 1: Dependency Resolution and Packaging Foundations** - Resolve PyPI blockers, establish clean wheel, set up CI/CD
+- [x] **Phase 1: Dependency Resolution and Packaging Foundations** - Resolve PyPI blockers, establish clean wheel, set up CI/CD
 - [ ] **Phase 2: Configuration and API Cleanup** - Consolidate config, validate inputs, establish type hints and deprecation patterns
 - [ ] **Phase 3: Pipeline Decomposition and Modularization** - Refactor 995-line pipeline.py into modular package with protocols
 - [ ] **Phase 4: Documentation and Examples** - Sphinx docs, Jupyter tutorials, example datasets, ReadTheDocs hosting
@@ -34,8 +34,8 @@ Decimal phases appear between their surrounding integers in numeric order.
 **Plans:** 2 plans
 
 Plans:
-- [ ] 01-01-PLAN.md — Resolve dependency blockers (LightGlue, RoMa, AquaCal), clean pyproject.toml, versioning setup
-- [ ] 01-02-PLAN.md — Create CI/CD workflows (test matrix + PyPI publish)
+- [x] 01-01-PLAN.md — Resolve dependency blockers (LightGlue, RoMa, AquaCal), clean pyproject.toml, versioning setup
+- [x] 01-02-PLAN.md — Create CI/CD workflows (test matrix + PyPI publish)
 
 ### Phase 2: Configuration and API Cleanup
 **Goal**: Configuration is validated at load time with clear error messages, and public APIs are typed and stable
@@ -103,7 +103,7 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
-| 1. Dependency Resolution and Packaging Foundations | 0/2 | Planned | - |
+| 1. Dependency Resolution and Packaging Foundations | 2/2 | ✓ Complete | 2026-02-14 |
 | 2. Configuration and API Cleanup | 0/TBD | Not started | - |
 | 3. Pipeline Decomposition and Modularization | 0/TBD | Not started | - |
 | 4. Documentation and Examples | 0/TBD | Not started | - |
