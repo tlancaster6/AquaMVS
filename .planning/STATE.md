@@ -9,19 +9,19 @@ See: .planning/PROJECT.md (updated 2026-02-14)
 
 ## Current Position
 
-Phase: 02 (Configuration and API Cleanup)
-Plan: 2 of 2 plans complete
-Status: Complete — phase 02 finished
-Last activity: 2026-02-14 - Phase 02 verified and complete
+Phase: 03 (Pipeline Decomposition and Modularization)
+Plan: 1 of 3 plans complete
+Status: In progress — executing phase 03
+Last activity: 2026-02-14 - Phase 03 Plan 01 complete
 
-Progress: [██████░░░░] 60% (3 of 5 phases complete)
+Progress: [██████░░░░] 60% (3 of 5 phases complete, phase 03 1/3)
 
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 6
-- Average duration: 9.2 min
-- Total execution time: 0.92 hours
+- Total plans completed: 7
+- Average duration: 8.6 min
+- Total execution time: 1.0 hours
 
 **By Phase:**
 
@@ -30,10 +30,12 @@ Progress: [██████░░░░] 60% (3 of 5 phases complete)
 | 01    | 2     | 20min | 10min    |
 | 01.1  | 2     | 17min | 8.5min   |
 | 02    | 2     | 16min | 8min     |
+| 03    | 1     | 4min  | 4min     |
 
 **Recent Trend:**
-- Last 5 plans: 01.1-01 (5min), 01.1-02 (12min), 02-01 (5min), 02-02 (11min)
-- Trend: Mixed pace - simple migrations fast (5min), comprehensive updates moderate (11min)
+- Last 5 plans: 01.1-02 (12min), 02-01 (5min), 02-02 (11min), 03-01 (4min)
+- Trend: Refactoring/extraction tasks very fast (4min), comprehensive updates moderate (11min)
+| Phase 03 P01 | 4 | 2 tasks | 6 files |
 
 ## Accumulated Context
 
@@ -85,6 +87,13 @@ Recent decisions affecting current work:
 - CLI --quiet flag to suppress progress bars
 - Progress bars auto-disable in non-TTY contexts (CI, pipes, logs)
 
+**Phase 03 Plan 01 (2026-02-14):**
+- FrameSource protocol abstracts VideoSet and ImageDirectorySet with iterate_frames() method
+- CalibrationProvider protocol defined; existing CalibrationData already satisfies it structurally
+- ensure_refractive_params() provides refraction-naive fallback (n_air=n_water=1.0) with warning
+- build_pipeline_context() replaces setup_pipeline (alias preserved for backward compatibility)
+- Pipeline package structure: interfaces.py, context.py, builder.py, helpers.py
+
 ### Roadmap Evolution
 
 - Phase 1.1 inserted after Phase 1: Last-Minute Feature Additions (URGENT)
@@ -112,6 +121,6 @@ approved
 
 ## Session Continuity
 
-Last session: 2026-02-14 (phase 02 execution)
-Stopped at: Phase 02 complete — ready for Phase 3 planning
+Last session: 2026-02-14 (phase 03 execution)
+Stopped at: Completed 03-01-PLAN.md
 Resume file: None
