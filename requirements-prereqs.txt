@@ -1,0 +1,6 @@
+# Git-based prerequisites for AquaMVS
+# Install these BEFORE installing aquamvs
+# PyTorch must be installed separately from pytorch.org (see INSTALL.md)
+
+git+https://github.com/cvg/LightGlue.git@edb2b83
+git+https://github.com/tlancaster6/RoMaV2.git@3862b19d5880cd7d690b544d27f30bb88e7d8fa4

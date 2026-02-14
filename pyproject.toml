@@ -34,8 +34,8 @@ dependencies = [
     "pyyaml>=6.0",
     "matplotlib>=3.7.0",
     "aquacal>=0.1.0",
-    "lightglue @ git+https://github.com/cvg/LightGlue.git@edb2b83",
-    "romav2 @ git+https://github.com/tlancaster6/RoMaV2.git@3862b19d5880cd7d690b544d27f30bb88e7d8fa4",
+    "lightglue",
+    "romav2",
 ]
 
 [project.optional-dependencies]
