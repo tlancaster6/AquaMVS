@@ -9,29 +9,30 @@ See: .planning/PROJECT.md (updated 2026-02-14)
 
 ## Current Position
 
-Phase: 1 of 5 — COMPLETE (Dependency Resolution and Packaging Foundations)
-Plan: All 2/2 plans complete, verified, approved
-Status: Phase 1 complete — ready for Phase 2 planning
-Last activity: 2026-02-14 - Completed quick task 1: Add slow-test workflow, adopt Ruff+pre-commit, add coverage reporting, add docs workflow with Sphinx scaffolding
+Phase: 01.1 (Last-Minute Feature Additions)
+Plan: 1 of 2 plans complete
+Status: In progress — executing phase 01.1
+Last activity: 2026-02-14 - Completed 01.1-01-PLAN.md: Temporal median preprocessing and mesh export
 
-Progress: [██░░░░░░░░] 20% (1 of 5 phases complete)
+Progress: [██░░░░░░░░] 20% (1 of 5 phases complete, 1 of 2 plans in phase 01.1)
 
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 2
-- Average duration: 10 min
-- Total execution time: 0.33 hours
+- Total plans completed: 3
+- Average duration: 8.3 min
+- Total execution time: 0.42 hours
 
 **By Phase:**
 
 | Phase | Plans | Total | Avg/Plan |
 |-------|-------|-------|----------|
 | 01    | 2     | 20min | 10min    |
+| 01.1  | 1     | 5min  | 5min     |
 
 **Recent Trend:**
-- Last 5 plans: 01-01 (15min), 01-02 (5min)
-- Trend: Accelerating (33% faster than baseline)
+- Last 5 plans: 01-01 (15min), 01-02 (5min), 01.1-01 (5min)
+- Trend: Accelerating (40% faster than baseline)
 
 ## Accumulated Context
 
@@ -55,6 +56,12 @@ Recent decisions affecting current work:
 - Matrix testing across Ubuntu and Windows with Python 3.10, 3.11, 3.12 (6 combinations)
 - Trusted Publishing (OIDC) eliminates API token management for PyPI uploads
 - Three-stage publish pipeline: build -> TestPyPI -> PyPI with manual approval gate
+
+**Phase 01.1 Plan 01 (2026-02-14):**
+- Lazy imports in CLI handlers to avoid loading cv2/Open3D at parse time
+- Circular buffer for memory-efficient temporal median filtering
+- Auto-compute normals for STL export (Open3D requirement)
+- Format detection from output_path suffix for mesh export
 
 ### Roadmap Evolution
 
@@ -83,6 +90,6 @@ approved
 
 ## Session Continuity
 
-Last session: 2026-02-14 (phase 1 execution + verification)
-Stopped at: Phase 1 complete and verified — ready for Phase 2 planning
+Last session: 2026-02-14 (phase 01.1 execution)
+Stopped at: Completed 01.1-01-PLAN.md — ready for 01.1-02-PLAN.md
 Resume file: None
