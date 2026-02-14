@@ -12,7 +12,7 @@ See: .planning/PROJECT.md (updated 2026-02-14)
 Phase: 1 of 5 — COMPLETE (Dependency Resolution and Packaging Foundations)
 Plan: All 2/2 plans complete, verified, approved
 Status: Phase 1 complete — ready for Phase 2 planning
-Last activity: 2026-02-14 — Phase 1 verified and approved
+Last activity: 2026-02-14 - Completed quick task 1: Add slow-test workflow, adopt Ruff+pre-commit, add coverage reporting, add docs workflow with Sphinx scaffolding
 
 Progress: [██░░░░░░░░] 20% (1 of 5 phases complete)
 
@@ -70,6 +70,12 @@ None yet.
 approved
 **Phase 3 Refactoring:**
 - Backward compatibility scope needs definition — audit which APIs are public vs internal to minimize breakage
+
+### Quick Tasks Completed
+
+| # | Description | Date | Commit | Directory |
+|---|-------------|------|--------|-----------|
+| 1 | Add slow-test workflow, adopt Ruff+pre-commit, add coverage reporting, add docs workflow with Sphinx scaffolding | 2026-02-14 | c69270d | [1-add-slow-test-workflow-adopt-ruff-pre-co](./quick/1-add-slow-test-workflow-adopt-ruff-pre-co/) |
 
 ## Session Continuity
 
