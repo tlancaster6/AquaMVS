@@ -17,7 +17,6 @@ Decimal phases appear between their surrounding integers in numeric order.
 - [ ] **Phase 3: Pipeline Decomposition and Modularization** - Refactor 995-line pipeline.py into modular package with protocols
 - [ ] **Phase 4: Documentation and Examples** - Sphinx docs, Jupyter tutorials, example datasets, ReadTheDocs hosting
 - [ ] **Phase 5: Performance and Optimization** - Benchmark suite, profiling, optimization based on measurements
-
 ## Phase Details
 
 ### Phase 1: Dependency Resolution and Packaging Foundations
@@ -36,6 +35,23 @@ Decimal phases appear between their surrounding integers in numeric order.
 Plans:
 - [x] 01-01-PLAN.md — Resolve dependency blockers (LightGlue, RoMa, AquaCal), clean pyproject.toml, versioning setup
 - [x] 01-02-PLAN.md — Create CI/CD workflows (test matrix + PyPI publish)
+
+### Phase 01.1: Last-Minute Feature Additions (INSERTED)
+
+**Goal:** Add high-impact, low-code features before V1: temporal median preprocessing (fish removal), mesh export formats (OBJ/STL/GLTF), mesh simplification, statistical outlier removal on fused clouds, consistency map output, and image input support for the pipeline
+**Depends on:** Phase 1
+**Requirements**: Temporal median preprocessing, mesh export CLI, mesh simplification, outlier removal, consistency maps, image input support
+**Success Criteria** (what must be TRUE):
+  1. User can run `aquamvs preprocess` on a video file to produce temporal median frames (PNG or MP4 output)
+  2. User can run `aquamvs export-mesh input.ply --format obj` to convert meshes to OBJ, STL, or GLTF
+  3. Mesh simplification is available via `--simplify N` in export-mesh and `target_faces` in SurfaceConfig
+  4. Statistical outlier removal runs by default on fused point clouds before surface reconstruction
+  5. Consistency maps can be saved (opt-in) as colormapped PNG + NPZ alongside depth maps
+  6. Pipeline accepts image directories as input (not just video files)
+**Plans:** TBD
+
+Plans:
+- TBD during planning
 
 ### Phase 2: Configuration and API Cleanup
 **Goal**: Configuration is validated at load time with clear error messages, and public APIs are typed and stable
