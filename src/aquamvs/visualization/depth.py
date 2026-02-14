@@ -3,9 +3,10 @@
 import matplotlib
 
 matplotlib.use("Agg")
+from pathlib import Path
+
 import matplotlib.pyplot as plt
 import numpy as np
-from pathlib import Path
 
 
 def render_depth_map(
@@ -126,7 +127,7 @@ def render_all_depth_maps(
         vmax = None
 
     # Render depth and confidence for each camera
-    for camera_name in depth_maps.keys():
+    for camera_name in depth_maps:
         depth_map = depth_maps[camera_name]
         confidence = confidence_maps[camera_name]
 

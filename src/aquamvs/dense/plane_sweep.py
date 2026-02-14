@@ -96,7 +96,6 @@ def _warp_source_at_depth(
         Out-of-bounds or invalid pixels are NaN.
     """
     H, W = height, width
-    N = origins.shape[0]
 
     # Compute 3D points at this depth hypothesis
     points_3d = origins + depth * directions  # (N, 3)
@@ -338,9 +337,9 @@ def extract_depth(
     # Look up the discrete depth value
     depth_step = depths[1] - depths[0]  # uniform spacing
     best_depth = depths[best_idx]  # (H, W)
-    best_cost = torch.gather(
-        cost_volume, 2, best_idx.unsqueeze(-1)
-    ).squeeze(-1)  # (H, W)
+    best_cost = torch.gather(cost_volume, 2, best_idx.unsqueeze(-1)).squeeze(
+        -1
+    )  # (H, W)
 
     # Stage 2: Sub-Pixel Parabola Refinement
     # Get indices for neighbors (clamp to valid range)
@@ -348,7 +347,9 @@ def extract_depth(
     idx_plus = (best_idx + 1).clamp(max=D - 1)  # (H, W)
 
     # Gather costs at the three indices
-    c_minus = torch.gather(cost_volume, 2, idx_minus.unsqueeze(-1)).squeeze(-1)  # (H, W)
+    c_minus = torch.gather(cost_volume, 2, idx_minus.unsqueeze(-1)).squeeze(
+        -1
+    )  # (H, W)
     c_center = best_cost  # (H, W)
     c_plus = torch.gather(cost_volume, 2, idx_plus.unsqueeze(-1)).squeeze(-1)  # (H, W)
 

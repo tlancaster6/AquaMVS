@@ -295,7 +295,7 @@ def test_end_to_end_reconstruction(synthetic_scene):
     assert sparse_path.exists()
     sparse_cloud = torch.load(sparse_path, weights_only=True)
     assert "points_3d" in sparse_cloud
-    n_sparse = sparse_cloud["points_3d"].shape[0]
+    sparse_cloud["points_3d"].shape[0]
 
     # --- Verify depth maps ---
     depth_files = list((frame_dir / "depth_maps").glob("*.npz"))
@@ -382,6 +382,6 @@ def test_end_to_end_with_evaluation(synthetic_scene):
 
         # Self-reprojection error should be very small (< 1 pixel)
         if not np.isnan(result["mean_error"]):
-            assert (
-                result["mean_error"] < 1.0
-            ), f"Self-reprojection error too high: {result['mean_error']:.4f}px"
+            assert result["mean_error"] < 1.0, (
+                f"Self-reprojection error too high: {result['mean_error']:.4f}px"
+            )

@@ -4,7 +4,6 @@ import logging
 from pathlib import Path
 
 import cv2
-import matplotlib
 import matplotlib.pyplot as plt
 import numpy as np
 import open3d as o3d
@@ -95,7 +94,9 @@ def render_config_outputs(
     # Handle empty sparse cloud
     n_points = sparse_cloud["points_3d"].shape[0]
     if n_points == 0:
-        logger.warning("  Empty sparse cloud for config %s - skipping PLY and renders", config_name)
+        logger.warning(
+            "  Empty sparse cloud for config %s - skipping PLY and renders", config_name
+        )
         return
 
     # Convert sparse cloud to Open3D with colors and normals

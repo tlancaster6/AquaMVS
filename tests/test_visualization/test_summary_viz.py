@@ -2,8 +2,6 @@
 
 import matplotlib
 import numpy as np
-import pytest
-from pathlib import Path
 from PIL import Image
 
 from aquamvs.visualization.summary import (
@@ -16,7 +14,9 @@ from aquamvs.visualization.summary import (
 
 def test_matplotlib_backend():
     """Verify matplotlib is configured for headless rendering."""
-    assert matplotlib.get_backend() == "Agg", "Expected Agg backend for headless rendering"
+    assert matplotlib.get_backend() == "Agg", (
+        "Expected Agg backend for headless rendering"
+    )
 
 
 def test_render_error_histogram(tmp_path):

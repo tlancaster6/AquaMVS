@@ -74,7 +74,7 @@ class TestBackprojectDepthMap:
         # Set specific pixels with known depths
         # Use pixels that will be extracted in a predictable order
         depth_map[6, 10] = 0.8  # row=6, col=10 -> u=10, v=6
-        depth_map[8, 8] = 0.5   # row=8, col=8 -> u=8, v=8
+        depth_map[8, 8] = 0.5  # row=8, col=8 -> u=8, v=8
 
         # Create a dummy image
         image = torch.zeros((H, W, 3), dtype=torch.uint8, device=device)
@@ -114,9 +114,15 @@ class TestBackprojectDepthMap:
 
         # Create an image with distinct BGR colors at those pixels
         image = torch.zeros((H, W, 3), dtype=torch.uint8, device=device)
-        image[4, 4] = torch.tensor([255, 0, 0], dtype=torch.uint8, device=device)  # Blue
-        image[8, 8] = torch.tensor([0, 255, 0], dtype=torch.uint8, device=device)  # Green
-        image[12, 12] = torch.tensor([0, 0, 255], dtype=torch.uint8, device=device)  # Red
+        image[4, 4] = torch.tensor(
+            [255, 0, 0], dtype=torch.uint8, device=device
+        )  # Blue
+        image[8, 8] = torch.tensor(
+            [0, 255, 0], dtype=torch.uint8, device=device
+        )  # Green
+        image[12, 12] = torch.tensor(
+            [0, 0, 255], dtype=torch.uint8, device=device
+        )  # Red
 
         # Back-project
         result = backproject_depth_map(reference_camera, depth_map, image)
@@ -402,7 +408,6 @@ class TestPointCloudIO:
 
     def test_save_load_roundtrip(self, reference_camera, device):
         """Test saving and loading a point cloud preserves data."""
-        import open3d as o3d
 
         # Create a simple point cloud
         H, W = 16, 16

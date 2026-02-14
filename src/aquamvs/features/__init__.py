@@ -17,8 +17,8 @@ from .matching import (
 from .pairs import select_pairs
 from .roma import (
     create_roma_matcher,
-    match_pair_roma,
     match_all_pairs_roma,
+    match_pair_roma,
     run_roma_all_pairs,
 )
 

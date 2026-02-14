@@ -83,66 +83,66 @@ def pipeline_config(tmp_path):
 
 def test_setup_pipeline_structure(pipeline_config, mock_calibration_data, tmp_path):
     """Test that setup_pipeline creates PipelineContext with correct structure."""
-    with patch(
-        "aquamvs.pipeline.load_calibration_data", return_value=mock_calibration_data
+    with (
+        patch(
+            "aquamvs.pipeline.load_calibration_data", return_value=mock_calibration_data
+        ),
+        patch("aquamvs.pipeline.select_pairs") as mock_select_pairs,
     ):
-        with patch("aquamvs.pipeline.select_pairs") as mock_select_pairs:
-            # Mock select_pairs to return simple pair structure
-            mock_select_pairs.return_value = {
-                "cam0": ["cam1", "cam2"],
-                "cam1": ["cam0", "cam2"],
-            }
+        # Mock select_pairs to return simple pair structure
+        mock_select_pairs.return_value = {
+            "cam0": ["cam1", "cam2"],
+            "cam1": ["cam0", "cam2"],
+        }
 
-            ctx = setup_pipeline(pipeline_config)
+        ctx = setup_pipeline(pipeline_config)
 
-            # Verify context structure
-            assert isinstance(ctx, PipelineContext)
-            assert ctx.config == pipeline_config
-            assert ctx.calibration == mock_calibration_data
-            assert len(ctx.undistortion_maps) == 3
-            assert len(ctx.projection_models) == 3
-            assert len(ctx.ring_cameras) == 2  # cam0, cam1
-            assert len(ctx.auxiliary_cameras) == 1  # cam2
-            assert ctx.device == "cpu"
+        # Verify context structure
+        assert isinstance(ctx, PipelineContext)
+        assert ctx.config == pipeline_config
+        assert ctx.calibration == mock_calibration_data
+        assert len(ctx.undistortion_maps) == 3
+        assert len(ctx.projection_models) == 3
+        assert len(ctx.ring_cameras) == 2  # cam0, cam1
+        assert len(ctx.auxiliary_cameras) == 1  # cam2
+        assert ctx.device == "cpu"
 
-            # Verify config copy was saved
-            config_path = Path(pipeline_config.output_dir) / "config.yaml"
-            assert config_path.exists()
+        # Verify config copy was saved
+        config_path = Path(pipeline_config.output_dir) / "config.yaml"
+        assert config_path.exists()
 
 
 def test_setup_pipeline_uses_undistorted_k(pipeline_config, mock_calibration_data):
     """Test that projection models use K_new from undistortion, not original K."""
-    with patch(
-        "aquamvs.pipeline.load_calibration_data", return_value=mock_calibration_data
+    with (
+        patch(
+            "aquamvs.pipeline.load_calibration_data", return_value=mock_calibration_data
+        ),
+        patch("aquamvs.pipeline.select_pairs") as mock_select_pairs,
     ):
-        with patch("aquamvs.pipeline.select_pairs") as mock_select_pairs:
-            mock_select_pairs.return_value = {"cam0": ["cam1"]}
+        mock_select_pairs.return_value = {"cam0": ["cam1"]}
 
-            with patch(
-                "aquamvs.pipeline.compute_undistortion_maps"
-            ) as mock_compute_undist:
-                # Mock undistortion to return a different K_new
-                def make_undist_data(cam):
-                    K_new = cam.K + 0.1  # Make K_new different from K
-                    return UndistortionData(
-                        K_new=K_new,
-                        map_x=np.zeros((480, 640), dtype=np.float32),
-                        map_y=np.zeros((480, 640), dtype=np.float32),
-                    )
+        with patch("aquamvs.pipeline.compute_undistortion_maps") as mock_compute_undist:
+            # Mock undistortion to return a different K_new
+            def make_undist_data(cam):
+                K_new = cam.K + 0.1  # Make K_new different from K
+                return UndistortionData(
+                    K_new=K_new,
+                    map_x=np.zeros((480, 640), dtype=np.float32),
+                    map_y=np.zeros((480, 640), dtype=np.float32),
+                )
 
-                mock_compute_undist.side_effect = make_undist_data
+            mock_compute_undist.side_effect = make_undist_data
 
-                with patch(
-                    "aquamvs.pipeline.RefractiveProjectionModel"
-                ) as mock_proj_model:
-                    ctx = setup_pipeline(pipeline_config)
+            with patch("aquamvs.pipeline.RefractiveProjectionModel") as mock_proj_model:
+                setup_pipeline(pipeline_config)
 
-                    # Verify RefractiveProjectionModel was called with K_new
-                    assert mock_proj_model.call_count == 3
-                    for call in mock_proj_model.call_args_list:
-                        K_used = call[1]["K"]
-                        # K_new should be different from original K
-                        assert not torch.allclose(K_used, torch.eye(3))
+                # Verify RefractiveProjectionModel was called with K_new
+                assert mock_proj_model.call_count == 3
+                for call in mock_proj_model.call_args_list:
+                    K_used = call[1]["K"]
+                    # K_new should be different from original K
+                    assert not torch.allclose(K_used, torch.eye(3))
 
 
 def test_process_frame_directory_structure(
@@ -372,28 +372,30 @@ def test_run_pipeline_handles_frame_failure(pipeline_config, caplog):
 
 def test_pipeline_context_fields(pipeline_config, mock_calibration_data):
     """Test that PipelineContext has all required fields populated."""
-    with patch(
-        "aquamvs.pipeline.load_calibration_data", return_value=mock_calibration_data
+    with (
+        patch(
+            "aquamvs.pipeline.load_calibration_data", return_value=mock_calibration_data
+        ),
+        patch("aquamvs.pipeline.select_pairs") as mock_select_pairs,
     ):
-        with patch("aquamvs.pipeline.select_pairs") as mock_select_pairs:
-            mock_select_pairs.return_value = {"cam0": ["cam1"]}
+        mock_select_pairs.return_value = {"cam0": ["cam1"]}
 
-            ctx = setup_pipeline(pipeline_config)
+        ctx = setup_pipeline(pipeline_config)
 
-            # Verify all fields are present and correct types
-            assert isinstance(ctx.config, PipelineConfig)
-            assert isinstance(ctx.calibration, CalibrationData)
-            assert isinstance(ctx.undistortion_maps, dict)
-            assert isinstance(ctx.projection_models, dict)
-            assert isinstance(ctx.pairs, dict)
-            assert isinstance(ctx.ring_cameras, list)
-            assert isinstance(ctx.auxiliary_cameras, list)
-            assert isinstance(ctx.device, str)
+        # Verify all fields are present and correct types
+        assert isinstance(ctx.config, PipelineConfig)
+        assert isinstance(ctx.calibration, CalibrationData)
+        assert isinstance(ctx.undistortion_maps, dict)
+        assert isinstance(ctx.projection_models, dict)
+        assert isinstance(ctx.pairs, dict)
+        assert isinstance(ctx.ring_cameras, list)
+        assert isinstance(ctx.auxiliary_cameras, list)
+        assert isinstance(ctx.device, str)
 
-            # Verify camera categorization
-            assert "cam0" in ctx.ring_cameras
-            assert "cam1" in ctx.ring_cameras
-            assert "cam2" in ctx.auxiliary_cameras
+        # Verify camera categorization
+        assert "cam0" in ctx.ring_cameras
+        assert "cam1" in ctx.ring_cameras
+        assert "cam2" in ctx.auxiliary_cameras
 
 
 # ---------------------------------------------------------------------------
@@ -425,7 +427,6 @@ def _mock_pipeline_stages():
         patch("aquamvs.pipeline.save_point_cloud") as m_save_pcd,
         patch("aquamvs.pipeline.save_mesh") as m_save_mesh,
     ):
-
         m_undist.side_effect = lambda img, _: img  # Pass through
         m_extract.return_value = {
             "cam0": {
@@ -639,23 +640,19 @@ class TestVizIntegration:
 
         ctx = _make_ctx(config, mock_calibration_data)
 
-        with _mock_pipeline_stages():
-            with (
-                patch(
-                    "aquamvs.visualization.features.render_all_features"
-                ) as m_feat_viz,
-                patch(
-                    "aquamvs.visualization.depth.render_all_depth_maps"
-                ) as m_depth_viz,
-                patch("aquamvs.visualization.scene.render_all_scenes") as m_scene_viz,
-                patch("aquamvs.visualization.rig.render_rig_diagram") as m_rig_viz,
-            ):
-                process_frame(0, _RAW_IMAGES.copy(), ctx)
+        with (
+            _mock_pipeline_stages(),
+            patch("aquamvs.visualization.features.render_all_features") as m_feat_viz,
+            patch("aquamvs.visualization.depth.render_all_depth_maps") as m_depth_viz,
+            patch("aquamvs.visualization.scene.render_all_scenes") as m_scene_viz,
+            patch("aquamvs.visualization.rig.render_rig_diagram") as m_rig_viz,
+        ):
+            process_frame(0, _RAW_IMAGES.copy(), ctx)
 
-                assert m_feat_viz.called, "render_all_features should be called"
-                assert m_depth_viz.called, "render_all_depth_maps should be called"
-                assert m_scene_viz.called, "render_all_scenes should be called"
-                assert m_rig_viz.called, "render_rig_diagram should be called"
+            assert m_feat_viz.called, "render_all_features should be called"
+            assert m_depth_viz.called, "render_all_depth_maps should be called"
+            assert m_scene_viz.called, "render_all_scenes should be called"
+            assert m_rig_viz.called, "render_rig_diagram should be called"
 
         # viz directory should exist
         frame_dir = Path(config.output_dir) / "frame_000000"
@@ -673,23 +670,19 @@ class TestVizIntegration:
 
         ctx = _make_ctx(config, mock_calibration_data)
 
-        with _mock_pipeline_stages():
-            with (
-                patch(
-                    "aquamvs.visualization.features.render_all_features"
-                ) as m_feat_viz,
-                patch(
-                    "aquamvs.visualization.depth.render_all_depth_maps"
-                ) as m_depth_viz,
-                patch("aquamvs.visualization.scene.render_all_scenes") as m_scene_viz,
-                patch("aquamvs.visualization.rig.render_rig_diagram") as m_rig_viz,
-            ):
-                process_frame(0, _RAW_IMAGES.copy(), ctx)
+        with (
+            _mock_pipeline_stages(),
+            patch("aquamvs.visualization.features.render_all_features") as m_feat_viz,
+            patch("aquamvs.visualization.depth.render_all_depth_maps") as m_depth_viz,
+            patch("aquamvs.visualization.scene.render_all_scenes") as m_scene_viz,
+            patch("aquamvs.visualization.rig.render_rig_diagram") as m_rig_viz,
+        ):
+            process_frame(0, _RAW_IMAGES.copy(), ctx)
 
-                assert m_depth_viz.called, "render_all_depth_maps should be called"
-                assert not m_feat_viz.called, "render_all_features should NOT be called"
-                assert not m_scene_viz.called, "render_all_scenes should NOT be called"
-                assert not m_rig_viz.called, "render_rig_diagram should NOT be called"
+            assert m_depth_viz.called, "render_all_depth_maps should be called"
+            assert not m_feat_viz.called, "render_all_features should NOT be called"
+            assert not m_scene_viz.called, "render_all_scenes should NOT be called"
+            assert not m_rig_viz.called, "render_rig_diagram should NOT be called"
 
     def test_viz_error_does_not_crash_pipeline(
         self, tmp_path, mock_calibration_data, caplog
@@ -705,14 +698,16 @@ class TestVizIntegration:
 
         ctx = _make_ctx(config, mock_calibration_data)
 
-        with _mock_pipeline_stages():
-            with patch(
+        with (
+            _mock_pipeline_stages(),
+            patch(
                 "aquamvs.visualization.depth.render_all_depth_maps",
                 side_effect=RuntimeError("Viz explosion"),
-            ):
-                with caplog.at_level(logging.INFO):
-                    # Should NOT raise
-                    process_frame(0, _RAW_IMAGES.copy(), ctx)
+            ),
+            caplog.at_level(logging.INFO),
+        ):
+            # Should NOT raise
+            process_frame(0, _RAW_IMAGES.copy(), ctx)
 
         # Pipeline should have completed
         assert "depth visualization failed" in caplog.text
@@ -740,15 +735,15 @@ class TestOutputConfig:
 
         ctx = _make_ctx(config, mock_calibration_data)
 
-        with _mock_pipeline_stages():
-            with (
-                patch("aquamvs.features.save_features") as m_sf,
-                patch("aquamvs.features.save_matches") as m_sm,
-            ):
-                process_frame(0, _RAW_IMAGES.copy(), ctx)
+        with (
+            _mock_pipeline_stages(),
+            patch("aquamvs.features.save_features") as m_sf,
+            patch("aquamvs.features.save_matches") as m_sm,
+        ):
+            process_frame(0, _RAW_IMAGES.copy(), ctx)
 
-                assert m_sf.called, "save_features should be called"
-                assert m_sm.called, "save_matches should be called"
+            assert m_sf.called, "save_features should be called"
+            assert m_sm.called, "save_matches should be called"
 
     def test_save_features_disabled(self, tmp_path, mock_calibration_data):
         """save_features=False (default) means no feature files saved."""
@@ -864,9 +859,9 @@ class TestOutputConfig:
 
         with _mock_pipeline_stages() as mocks:
             process_frame(0, _RAW_IMAGES.copy(), ctx)
-            assert mocks[
-                "save_sparse"
-            ].called, "save_sparse_cloud should always be called"
+            assert mocks["save_sparse"].called, (
+                "save_sparse_cloud should always be called"
+            )
 
 
 # ---------------------------------------------------------------------------
@@ -898,20 +893,22 @@ class TestSummaryViz:
                 mock_videos.iterate_frames.return_value = []  # No frames
                 mock_videoset.return_value = mock_videos
 
-                with patch("aquamvs.pipeline.process_frame"):
-                    with patch(
+                with (
+                    patch("aquamvs.pipeline.process_frame"),
+                    patch(
                         "aquamvs.pipeline._collect_height_maps",
                         return_value=[
                             (0, np.zeros((10, 10)), np.arange(10), np.arange(10)),
                         ],
-                    ) as m_collect:
-                        with patch(
-                            "aquamvs.visualization.summary.render_timeseries_gallery"
-                        ) as m_gallery:
-                            run_pipeline(config)
+                    ) as m_collect,
+                    patch(
+                        "aquamvs.visualization.summary.render_timeseries_gallery"
+                    ) as m_gallery,
+                ):
+                    run_pipeline(config)
 
-                            assert m_collect.called
-                            assert m_gallery.called
+                    assert m_collect.called
+                    assert m_gallery.called
 
     def test_summary_viz_not_called_when_disabled(self, tmp_path):
         """Summary viz is not called when viz is disabled."""
@@ -1342,9 +1339,7 @@ class TestSparseMode:
             # sparse_to_o3d should NOT be called in full mode
             assert not mocks["sparse_to_o3d"].called
 
-    def test_sparse_mode_logs_completion(
-        self, tmp_path, mock_calibration_data, caplog
-    ):
+    def test_sparse_mode_logs_completion(self, tmp_path, mock_calibration_data, caplog):
         """Sparse mode logs 'complete (sparse mode)' at end."""
         config = PipelineConfig(
             calibration_path="dummy.json",
@@ -1382,29 +1377,34 @@ class TestMaskIntegration:
             device=DeviceConfig(device="cpu"),
         )
 
-        with patch(
-            "aquamvs.pipeline.load_calibration_data", return_value=mock_calibration_data
+        with (
+            patch(
+                "aquamvs.pipeline.load_calibration_data",
+                return_value=mock_calibration_data,
+            ),
+            patch("aquamvs.pipeline.select_pairs") as mock_select_pairs,
         ):
-            with patch("aquamvs.pipeline.select_pairs") as mock_select_pairs:
-                mock_select_pairs.return_value = {"cam0": ["cam1"]}
+            mock_select_pairs.return_value = {"cam0": ["cam1"]}
 
-                with patch("aquamvs.masks.load_all_masks") as mock_load_masks:
-                    mock_load_masks.return_value = {"cam0": np.ones((480, 640), dtype=np.uint8)}
+            with patch("aquamvs.masks.load_all_masks") as mock_load_masks:
+                mock_load_masks.return_value = {
+                    "cam0": np.ones((480, 640), dtype=np.uint8)
+                }
 
-                    ctx = setup_pipeline(config)
+                ctx = setup_pipeline(config)
 
-                    # Verify load_all_masks was called with correct args
-                    assert mock_load_masks.called
-                    call_args = mock_load_masks.call_args
-                    assert call_args[0][0] == config.mask_dir
-                    assert call_args[0][1] == mock_calibration_data.cameras
+                # Verify load_all_masks was called with correct args
+                assert mock_load_masks.called
+                call_args = mock_load_masks.call_args
+                assert call_args[0][0] == config.mask_dir
+                assert call_args[0][1] == mock_calibration_data.cameras
 
-                    # Verify result is stored in ctx
-                    assert "cam0" in ctx.masks
-                    assert np.array_equal(
-                        ctx.masks["cam0"],
-                        np.ones((480, 640), dtype=np.uint8),
-                    )
+                # Verify result is stored in ctx
+                assert "cam0" in ctx.masks
+                assert np.array_equal(
+                    ctx.masks["cam0"],
+                    np.ones((480, 640), dtype=np.uint8),
+                )
 
     def test_masks_filter_features(self, tmp_path, mock_calibration_data, caplog):
         """Masks filter features before matching in process_frame."""

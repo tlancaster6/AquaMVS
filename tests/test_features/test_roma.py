@@ -470,7 +470,9 @@ class TestRunRomaRefactor:
             img_ref = torch.randint(0, 255, (100, 100, 3), dtype=torch.uint8)
             img_src = torch.randint(0, 255, (100, 100, 3), dtype=torch.uint8)
 
-            config = DenseMatchingConfig(certainty_threshold=0.5, max_correspondences=10000)
+            config = DenseMatchingConfig(
+                certainty_threshold=0.5, max_correspondences=10000
+            )
 
             result = match_pair_roma(img_ref, img_src, config)
 
@@ -533,6 +535,6 @@ class TestRunRomaRefactor:
             assert ("cam2", "cam1") in result
 
             # Each result should have raw warp dict structure
-            for key, warp_dict in result.items():
+            for _key, warp_dict in result.items():
                 assert "warp_AB" in warp_dict
                 assert "overlap_AB" in warp_dict

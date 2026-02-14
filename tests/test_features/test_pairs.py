@@ -2,7 +2,6 @@
 
 import math
 
-import pytest
 import torch
 
 from aquamvs.config import PairSelectionConfig

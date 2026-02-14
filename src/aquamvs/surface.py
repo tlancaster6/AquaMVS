@@ -128,9 +128,15 @@ def reconstruct_heightfield(
     )  # (Ny, Nx)
 
     # Step 3: Interpolate colors onto the grid (per-channel)
-    gc_r = griddata(points[:, :2], colors[:, 0], (gx, gy), method="linear", fill_value=0)
-    gc_g = griddata(points[:, :2], colors[:, 1], (gx, gy), method="linear", fill_value=0)
-    gc_b = griddata(points[:, :2], colors[:, 2], (gx, gy), method="linear", fill_value=0)
+    gc_r = griddata(
+        points[:, :2], colors[:, 0], (gx, gy), method="linear", fill_value=0
+    )
+    gc_g = griddata(
+        points[:, :2], colors[:, 1], (gx, gy), method="linear", fill_value=0
+    )
+    gc_b = griddata(
+        points[:, :2], colors[:, 2], (gx, gy), method="linear", fill_value=0
+    )
 
     # Step 4: Build mesh from the grid
     Ny, Nx = gz.shape

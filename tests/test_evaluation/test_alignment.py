@@ -2,7 +2,6 @@
 
 import numpy as np
 import open3d as o3d
-import pytest
 
 from aquamvs.config import EvaluationConfig
 from aquamvs.evaluation import icp_align
@@ -83,8 +82,8 @@ def test_icp_known_transform():
     result = icp_align(source, target, config)
 
     # Apply the recovered transformation to source
-    aligned_points = np.asarray(result["aligned"].points)
-    target_points = np.asarray(target.points)
+    np.asarray(result["aligned"].points)
+    np.asarray(target.points)
 
     # After alignment, points should be close to target
     # (This is an indirect check - the transformation should approximately invert the applied one)
@@ -134,6 +133,7 @@ def test_icp_with_init_transform():
 
     # Apply a translation (need to copy the cloud first as transform() is in-place)
     import copy
+
     source = copy.deepcopy(target)
     translation = np.eye(4)
     translation[:3, 3] = [0.01, 0.01, 0.0]

@@ -1,11 +1,9 @@
 """Tests for feature and match overlay rendering."""
 
 import sys
-from pathlib import Path
 
 import cv2
 import numpy as np
-import pytest
 
 from aquamvs.visualization.features import (
     render_all_features,
@@ -80,7 +78,9 @@ def test_render_matches_basic(tmp_path):
 
     # Render
     output_path = tmp_path / "matches.png"
-    result = render_matches(image_ref, image_src, ref_keypoints, src_keypoints, output_path=output_path)
+    result = render_matches(
+        image_ref, image_src, ref_keypoints, src_keypoints, output_path=output_path
+    )
 
     # Check output - should be side-by-side
     assert result.shape == (120, 320, 3)  # width doubled
@@ -103,7 +103,9 @@ def test_render_matches_with_scores(tmp_path):
     scores = np.array([0.9, 0.3], dtype=np.float32)
 
     output_path = tmp_path / "matches_scored.png"
-    result = render_matches(image_ref, image_src, ref_keypoints, src_keypoints, scores, output_path)
+    result = render_matches(
+        image_ref, image_src, ref_keypoints, src_keypoints, scores, output_path
+    )
 
     # Check output
     assert result.shape == (120, 320, 3)
@@ -170,7 +172,9 @@ def test_render_sparse_overlay_with_errors(tmp_path):
     errors = np.array([0.5, 2.0, 8.0], dtype=np.float32)  # Low, medium, high errors
 
     output_path = tmp_path / "sparse_overlay_errors.png"
-    result = render_sparse_overlay(image, projected_points, errors, output_path, error_threshold=5.0)
+    result = render_sparse_overlay(
+        image, projected_points, errors, output_path, error_threshold=5.0
+    )
 
     # Check output
     assert result.shape == (120, 160, 3)
@@ -297,14 +301,21 @@ def test_render_all_features_creates_output_dir(tmp_path):
 def test_no_torch_dependency():
     """Verify that the module does not import torch."""
     # Check if torch was imported when we imported the features module
-    assert "torch" not in sys.modules or "aquamvs.visualization.features" not in sys.modules.get("torch", []).__dict__
+    assert (
+        "torch" not in sys.modules
+        or "aquamvs.visualization.features" not in sys.modules.get("torch", []).__dict__
+    )
 
     # More direct check: verify torch is not in the features module namespace
     import aquamvs.visualization.features as features_mod
 
     # Get all imported modules used by this module
     module_globals = vars(features_mod)
-    imported_modules = [v.__name__ for v in module_globals.values() if hasattr(v, "__name__") and hasattr(v, "__file__")]
+    imported_modules = [
+        v.__name__
+        for v in module_globals.values()
+        if hasattr(v, "__name__") and hasattr(v, "__file__")
+    ]
 
     assert "torch" not in imported_modules
 
@@ -331,8 +342,12 @@ def test_line_thickness_customization(tmp_path):
     src_keypoints = np.array([[150, 110]], dtype=np.float32)
 
     # Render with different line thicknesses
-    result_thin = render_matches(image_ref, image_src, ref_keypoints, src_keypoints, line_thickness=1)
-    result_thick = render_matches(image_ref, image_src, ref_keypoints, src_keypoints, line_thickness=3)
+    result_thin = render_matches(
+        image_ref, image_src, ref_keypoints, src_keypoints, line_thickness=1
+    )
+    result_thick = render_matches(
+        image_ref, image_src, ref_keypoints, src_keypoints, line_thickness=3
+    )
 
     # Thicker line should modify more pixels
     assert result_thick.sum() > result_thin.sum()

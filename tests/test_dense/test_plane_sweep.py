@@ -1,6 +1,5 @@
 """Tests for plane-sweep stereo."""
 
-import numpy as np
 import pytest
 import torch
 
@@ -19,7 +18,18 @@ from aquamvs.projection.refractive import RefractiveProjectionModel
 class TestGenerateDepthHypotheses:
     """Tests for generate_depth_hypotheses()."""
 
-    @pytest.mark.parametrize("device", ["cpu", pytest.param("cuda", marks=pytest.mark.skipif(not torch.cuda.is_available(), reason="CUDA not available"))])
+    @pytest.mark.parametrize(
+        "device",
+        [
+            "cpu",
+            pytest.param(
+                "cuda",
+                marks=pytest.mark.skipif(
+                    not torch.cuda.is_available(), reason="CUDA not available"
+                ),
+            ),
+        ],
+    )
     def test_basic(self, device):
         """Test basic depth hypothesis generation."""
         d_min, d_max, num_depths = 1.0, 2.0, 11
@@ -106,7 +116,18 @@ class TestBgrToGray:
 class TestMakePixelGrid:
     """Tests for _make_pixel_grid()."""
 
-    @pytest.mark.parametrize("device", ["cpu", pytest.param("cuda", marks=pytest.mark.skipif(not torch.cuda.is_available(), reason="CUDA not available"))])
+    @pytest.mark.parametrize(
+        "device",
+        [
+            "cpu",
+            pytest.param(
+                "cuda",
+                marks=pytest.mark.skipif(
+                    not torch.cuda.is_available(), reason="CUDA not available"
+                ),
+            ),
+        ],
+    )
     def test_basic(self, device):
         """Test basic pixel grid generation."""
         height, width = 3, 4
@@ -150,7 +171,18 @@ class TestMakePixelGrid:
 class TestWarpSourceImage:
     """Tests for warp_source_image()."""
 
-    @pytest.mark.parametrize("device", ["cpu", pytest.param("cuda", marks=pytest.mark.skipif(not torch.cuda.is_available(), reason="CUDA not available"))])
+    @pytest.mark.parametrize(
+        "device",
+        [
+            "cpu",
+            pytest.param(
+                "cuda",
+                marks=pytest.mark.skipif(
+                    not torch.cuda.is_available(), reason="CUDA not available"
+                ),
+            ),
+        ],
+    )
     def test_identity_warp(self, device):
         """Test warping with identical camera models (identity warp)."""
         # Create a simple projection model (pinhole approximation for testing)
@@ -220,8 +252,12 @@ class TestWarpSourceImage:
         n_air = 1.0
         n_water = 1.333
 
-        ref_model = RefractiveProjectionModel(K, R_ref, t_ref, water_z, normal, n_air, n_water)
-        src_model = RefractiveProjectionModel(K, R_src, t_src, water_z, normal, n_air, n_water)
+        ref_model = RefractiveProjectionModel(
+            K, R_ref, t_ref, water_z, normal, n_air, n_water
+        )
+        src_model = RefractiveProjectionModel(
+            K, R_src, t_src, water_z, normal, n_air, n_water
+        )
 
         # Create a small test image
         H, W = 32, 32
@@ -295,7 +331,9 @@ class TestBuildCostVolume:
         # (but not zero due to border effects and interpolation)
         # Check interior region
         interior_cost = cost_volume[10:-10, 10:-10, :]
-        assert interior_cost.mean() < 0.2  # NCC cost should be near 0 for identical images
+        assert (
+            interior_cost.mean() < 0.2
+        )  # NCC cost should be near 0 for identical images
 
     def test_cost_volume_shape(self):
         """Test that cost volume has correct shape with multiple sources."""
@@ -340,7 +378,18 @@ class TestBuildCostVolume:
 class TestPlaneSweepStereo:
     """Tests for plane_sweep_stereo()."""
 
-    @pytest.mark.parametrize("device", ["cpu", pytest.param("cuda", marks=pytest.mark.skipif(not torch.cuda.is_available(), reason="CUDA not available"))])
+    @pytest.mark.parametrize(
+        "device",
+        [
+            "cpu",
+            pytest.param(
+                "cuda",
+                marks=pytest.mark.skipif(
+                    not torch.cuda.is_available(), reason="CUDA not available"
+                ),
+            ),
+        ],
+    )
     def test_end_to_end_structure(self, device):
         """Test end-to-end plane sweep stereo structure."""
         # Simple projection model
@@ -363,8 +412,12 @@ class TestPlaneSweepStereo:
         src_models = {}
         src_names = ["cam1", "cam2"]
         for i, name in enumerate(src_names):
-            t_src = torch.tensor([0.1 * (i + 1), 0.0, 0.0], dtype=torch.float32, device=device)
-            src_models[name] = RefractiveProjectionModel(K, R, t_src, water_z, normal, n_air, n_water)
+            t_src = torch.tensor(
+                [0.1 * (i + 1), 0.0, 0.0], dtype=torch.float32, device=device
+            )
+            src_models[name] = RefractiveProjectionModel(
+                K, R, t_src, water_z, normal, n_air, n_water
+            )
 
         # Create test images (BGR format)
         H, W = 32, 32
@@ -400,8 +453,12 @@ class TestPlaneSweepStereo:
         assert result["depths"].device.type == device
 
         # Check depth range
-        assert torch.allclose(result["depths"][0], torch.tensor(depth_range[0], device=device))
-        assert torch.allclose(result["depths"][-1], torch.tensor(depth_range[1], device=device))
+        assert torch.allclose(
+            result["depths"][0], torch.tensor(depth_range[0], device=device)
+        )
+        assert torch.allclose(
+            result["depths"][-1], torch.tensor(depth_range[1], device=device)
+        )
 
     def test_uint8_image_input(self):
         """Test that uint8 images are handled correctly."""

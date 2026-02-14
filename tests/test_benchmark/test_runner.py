@@ -1,13 +1,13 @@
 """Tests for benchmark runner sweep logic."""
 
+from unittest.mock import MagicMock, patch
+
+import numpy as np
 import pytest
 import torch
-import numpy as np
-from pathlib import Path
-from unittest.mock import MagicMock, patch, call
 
 from aquamvs.benchmark.runner import run_benchmark
-from aquamvs.config import BenchmarkConfig, PipelineConfig
+from aquamvs.config import PipelineConfig
 
 
 @pytest.fixture
@@ -29,9 +29,7 @@ def mock_pipeline_context():
     """Create a mock PipelineContext."""
     ctx = MagicMock()
     ctx.calibration.water_z = 1.0
-    ctx.calibration.cameras = {
-        "cam0": MagicMock(image_size=(640, 480))
-    }
+    ctx.calibration.cameras = {"cam0": MagicMock(image_size=(640, 480))}
     ctx.undistortion_maps = {"cam0": MagicMock()}
     ctx.projection_models = {"cam0": MagicMock()}
     ctx.pairs = {"cam0": []}
@@ -41,14 +39,15 @@ def mock_pipeline_context():
 
 def test_sweep_cross_product(mock_config, mock_pipeline_context):
     """Test that sweep generates cross product of extractors x clahe."""
-    with patch("aquamvs.benchmark.runner.setup_pipeline") as mock_setup, \
-         patch("aquamvs.benchmark.runner.VideoSet") as mock_videoset, \
-         patch("aquamvs.benchmark.runner.extract_features_batch") as mock_extract, \
-         patch("aquamvs.benchmark.runner.match_all_pairs") as mock_match, \
-         patch("aquamvs.benchmark.runner.triangulate_all_pairs") as mock_triangulate, \
-         patch("aquamvs.benchmark.runner.filter_sparse_cloud") as mock_filter, \
-         patch("aquamvs.benchmark.runner.render_config_outputs") as mock_render:
-
+    with (
+        patch("aquamvs.benchmark.runner.setup_pipeline") as mock_setup,
+        patch("aquamvs.benchmark.runner.VideoSet") as mock_videoset,
+        patch("aquamvs.benchmark.runner.extract_features_batch") as mock_extract,
+        patch("aquamvs.benchmark.runner.match_all_pairs") as mock_match,
+        patch("aquamvs.benchmark.runner.triangulate_all_pairs") as mock_triangulate,
+        patch("aquamvs.benchmark.runner.filter_sparse_cloud") as mock_filter,
+        patch("aquamvs.benchmark.runner.render_config_outputs"),
+    ):
         # Setup mocks
         mock_setup.return_value = mock_pipeline_context
 
@@ -56,7 +55,9 @@ def test_sweep_cross_product(mock_config, mock_pipeline_context):
         mock_vs_instance = MagicMock()
         mock_vs_instance.__enter__.return_value = mock_vs_instance
         mock_vs_instance.__exit__.return_value = None
-        mock_vs_instance.iterate_frames.return_value = iter([(0, {"cam0": np.zeros((480, 640, 3), dtype=np.uint8)})])
+        mock_vs_instance.iterate_frames.return_value = iter(
+            [(0, {"cam0": np.zeros((480, 640, 3), dtype=np.uint8)})]
+        )
         mock_videoset.return_value = mock_vs_instance
 
         # Mock undistort_image
@@ -107,21 +108,24 @@ def test_sweep_cross_product(mock_config, mock_pipeline_context):
 
 def test_timing_is_recorded(mock_config, mock_pipeline_context):
     """Test that timing is recorded for all stages."""
-    with patch("aquamvs.benchmark.runner.setup_pipeline") as mock_setup, \
-         patch("aquamvs.benchmark.runner.VideoSet") as mock_videoset, \
-         patch("aquamvs.benchmark.runner.extract_features_batch") as mock_extract, \
-         patch("aquamvs.benchmark.runner.match_all_pairs") as mock_match, \
-         patch("aquamvs.benchmark.runner.triangulate_all_pairs") as mock_triangulate, \
-         patch("aquamvs.benchmark.runner.filter_sparse_cloud") as mock_filter, \
-         patch("aquamvs.benchmark.runner.undistort_image") as mock_undistort, \
-         patch("aquamvs.benchmark.runner.render_config_outputs") as mock_render:
-
+    with (
+        patch("aquamvs.benchmark.runner.setup_pipeline") as mock_setup,
+        patch("aquamvs.benchmark.runner.VideoSet") as mock_videoset,
+        patch("aquamvs.benchmark.runner.extract_features_batch") as mock_extract,
+        patch("aquamvs.benchmark.runner.match_all_pairs") as mock_match,
+        patch("aquamvs.benchmark.runner.triangulate_all_pairs") as mock_triangulate,
+        patch("aquamvs.benchmark.runner.filter_sparse_cloud") as mock_filter,
+        patch("aquamvs.benchmark.runner.undistort_image") as mock_undistort,
+        patch("aquamvs.benchmark.runner.render_config_outputs"),
+    ):
         # Setup mocks
         mock_setup.return_value = mock_pipeline_context
         mock_vs_instance = MagicMock()
         mock_vs_instance.__enter__.return_value = mock_vs_instance
         mock_vs_instance.__exit__.return_value = None
-        mock_vs_instance.iterate_frames.return_value = iter([(0, {"cam0": np.zeros((480, 640, 3), dtype=np.uint8)})])
+        mock_vs_instance.iterate_frames.return_value = iter(
+            [(0, {"cam0": np.zeros((480, 640, 3), dtype=np.uint8)})]
+        )
         mock_videoset.return_value = mock_vs_instance
         mock_undistort.return_value = np.zeros((480, 640, 3), dtype=np.uint8)
 
@@ -150,26 +154,34 @@ def test_timing_is_recorded(mock_config, mock_pipeline_context):
             assert result.extraction_time > 0
             assert result.matching_time >= 0  # Can be 0 if mocked fast enough
             assert result.triangulation_time >= 0
-            assert result.total_time >= result.extraction_time + result.matching_time + result.triangulation_time
+            assert (
+                result.total_time
+                >= result.extraction_time
+                + result.matching_time
+                + result.triangulation_time
+            )
 
 
 def test_metrics_collected(mock_config, mock_pipeline_context):
     """Test that metrics are collected from pipeline outputs."""
-    with patch("aquamvs.benchmark.runner.setup_pipeline") as mock_setup, \
-         patch("aquamvs.benchmark.runner.VideoSet") as mock_videoset, \
-         patch("aquamvs.benchmark.runner.extract_features_batch") as mock_extract, \
-         patch("aquamvs.benchmark.runner.match_all_pairs") as mock_match, \
-         patch("aquamvs.benchmark.runner.triangulate_all_pairs") as mock_triangulate, \
-         patch("aquamvs.benchmark.runner.filter_sparse_cloud") as mock_filter, \
-         patch("aquamvs.benchmark.runner.undistort_image") as mock_undistort, \
-         patch("aquamvs.benchmark.runner.render_config_outputs") as mock_render:
-
+    with (
+        patch("aquamvs.benchmark.runner.setup_pipeline") as mock_setup,
+        patch("aquamvs.benchmark.runner.VideoSet") as mock_videoset,
+        patch("aquamvs.benchmark.runner.extract_features_batch") as mock_extract,
+        patch("aquamvs.benchmark.runner.match_all_pairs") as mock_match,
+        patch("aquamvs.benchmark.runner.triangulate_all_pairs") as mock_triangulate,
+        patch("aquamvs.benchmark.runner.filter_sparse_cloud") as mock_filter,
+        patch("aquamvs.benchmark.runner.undistort_image") as mock_undistort,
+        patch("aquamvs.benchmark.runner.render_config_outputs"),
+    ):
         # Setup mocks
         mock_setup.return_value = mock_pipeline_context
         mock_vs_instance = MagicMock()
         mock_vs_instance.__enter__.return_value = mock_vs_instance
         mock_vs_instance.__exit__.return_value = None
-        mock_vs_instance.iterate_frames.return_value = iter([(0, {"cam0": np.zeros((480, 640, 3), dtype=np.uint8)})])
+        mock_vs_instance.iterate_frames.return_value = iter(
+            [(0, {"cam0": np.zeros((480, 640, 3), dtype=np.uint8)})]
+        )
         mock_videoset.return_value = mock_vs_instance
         mock_undistort.return_value = np.zeros((480, 640, 3), dtype=np.uint8)
 
@@ -211,22 +223,25 @@ def test_masks_propagate(mock_config, mock_pipeline_context):
     # Add a mask to the context
     mock_pipeline_context.masks = {"cam0": np.ones((480, 640), dtype=np.uint8) * 255}
 
-    with patch("aquamvs.benchmark.runner.setup_pipeline") as mock_setup, \
-         patch("aquamvs.benchmark.runner.VideoSet") as mock_videoset, \
-         patch("aquamvs.benchmark.runner.extract_features_batch") as mock_extract, \
-         patch("aquamvs.benchmark.runner.match_all_pairs") as mock_match, \
-         patch("aquamvs.benchmark.runner.triangulate_all_pairs") as mock_triangulate, \
-         patch("aquamvs.benchmark.runner.filter_sparse_cloud") as mock_filter, \
-         patch("aquamvs.benchmark.runner.undistort_image") as mock_undistort, \
-         patch("aquamvs.benchmark.runner.apply_mask_to_features") as mock_apply_mask, \
-         patch("aquamvs.benchmark.runner.render_config_outputs") as mock_render:
-
+    with (
+        patch("aquamvs.benchmark.runner.setup_pipeline") as mock_setup,
+        patch("aquamvs.benchmark.runner.VideoSet") as mock_videoset,
+        patch("aquamvs.benchmark.runner.extract_features_batch") as mock_extract,
+        patch("aquamvs.benchmark.runner.match_all_pairs") as mock_match,
+        patch("aquamvs.benchmark.runner.triangulate_all_pairs") as mock_triangulate,
+        patch("aquamvs.benchmark.runner.filter_sparse_cloud") as mock_filter,
+        patch("aquamvs.benchmark.runner.undistort_image") as mock_undistort,
+        patch("aquamvs.benchmark.runner.apply_mask_to_features") as mock_apply_mask,
+        patch("aquamvs.benchmark.runner.render_config_outputs"),
+    ):
         # Setup mocks
         mock_setup.return_value = mock_pipeline_context
         mock_vs_instance = MagicMock()
         mock_vs_instance.__enter__.return_value = mock_vs_instance
         mock_vs_instance.__exit__.return_value = None
-        mock_vs_instance.iterate_frames.return_value = iter([(0, {"cam0": np.zeros((480, 640, 3), dtype=np.uint8)})])
+        mock_vs_instance.iterate_frames.return_value = iter(
+            [(0, {"cam0": np.zeros((480, 640, 3), dtype=np.uint8)})]
+        )
         mock_videoset.return_value = mock_vs_instance
         mock_undistort.return_value = np.zeros((480, 640, 3), dtype=np.uint8)
 
@@ -254,7 +269,7 @@ def test_masks_propagate(mock_config, mock_pipeline_context):
         }
 
         # Run benchmark
-        results = run_benchmark(mock_config, frame=0)
+        run_benchmark(mock_config, frame=0)
 
         # Check that apply_mask_to_features was called
         # Should be called once per config (4 configs)
@@ -267,21 +282,24 @@ def test_single_config_sweep(mock_config, mock_pipeline_context):
     mock_config.benchmark.extractors = ["superpoint"]
     mock_config.benchmark.clahe = [False]
 
-    with patch("aquamvs.benchmark.runner.setup_pipeline") as mock_setup, \
-         patch("aquamvs.benchmark.runner.VideoSet") as mock_videoset, \
-         patch("aquamvs.benchmark.runner.extract_features_batch") as mock_extract, \
-         patch("aquamvs.benchmark.runner.match_all_pairs") as mock_match, \
-         patch("aquamvs.benchmark.runner.triangulate_all_pairs") as mock_triangulate, \
-         patch("aquamvs.benchmark.runner.filter_sparse_cloud") as mock_filter, \
-         patch("aquamvs.benchmark.runner.undistort_image") as mock_undistort, \
-         patch("aquamvs.benchmark.runner.render_config_outputs") as mock_render:
-
+    with (
+        patch("aquamvs.benchmark.runner.setup_pipeline") as mock_setup,
+        patch("aquamvs.benchmark.runner.VideoSet") as mock_videoset,
+        patch("aquamvs.benchmark.runner.extract_features_batch") as mock_extract,
+        patch("aquamvs.benchmark.runner.match_all_pairs") as mock_match,
+        patch("aquamvs.benchmark.runner.triangulate_all_pairs") as mock_triangulate,
+        patch("aquamvs.benchmark.runner.filter_sparse_cloud") as mock_filter,
+        patch("aquamvs.benchmark.runner.undistort_image") as mock_undistort,
+        patch("aquamvs.benchmark.runner.render_config_outputs"),
+    ):
         # Setup mocks
         mock_setup.return_value = mock_pipeline_context
         mock_vs_instance = MagicMock()
         mock_vs_instance.__enter__.return_value = mock_vs_instance
         mock_vs_instance.__exit__.return_value = None
-        mock_vs_instance.iterate_frames.return_value = iter([(0, {"cam0": np.zeros((480, 640, 3), dtype=np.uint8)})])
+        mock_vs_instance.iterate_frames.return_value = iter(
+            [(0, {"cam0": np.zeros((480, 640, 3), dtype=np.uint8)})]
+        )
         mock_videoset.return_value = mock_vs_instance
         mock_undistort.return_value = np.zeros((480, 640, 3), dtype=np.uint8)
 

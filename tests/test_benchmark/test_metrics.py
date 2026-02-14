@@ -1,7 +1,5 @@
 """Tests for benchmark metrics and helper functions."""
 
-import pytest
-
 from aquamvs.benchmark.metrics import (
     ConfigResult,
     config_name,

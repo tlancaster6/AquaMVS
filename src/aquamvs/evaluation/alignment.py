@@ -64,6 +64,7 @@ def icp_align(
 
     # Apply transformation to a copy of source (transform is in-place)
     import copy
+
     aligned = copy.deepcopy(source)
     aligned.transform(result.transformation)
 

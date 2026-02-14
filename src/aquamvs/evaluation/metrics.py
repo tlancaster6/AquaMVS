@@ -92,8 +92,12 @@ def height_map_difference(
     gx, gy = np.meshgrid(grid_x, grid_y)
 
     # Interpolate Z for each cloud
-    z_a = griddata(pts_a[:, :2], pts_a[:, 2], (gx, gy), method="linear", fill_value=np.nan)
-    z_b = griddata(pts_b[:, :2], pts_b[:, 2], (gx, gy), method="linear", fill_value=np.nan)
+    z_a = griddata(
+        pts_a[:, :2], pts_a[:, 2], (gx, gy), method="linear", fill_value=np.nan
+    )
+    z_b = griddata(
+        pts_b[:, :2], pts_b[:, 2], (gx, gy), method="linear", fill_value=np.nan
+    )
 
     # Difference (only where both clouds have data)
     diff = z_a - z_b

@@ -78,8 +78,10 @@ def best_view_colors(
 
         # Check image bounds: reject pixels outside [0, W) x [0, H)
         in_bounds = (
-            (pixels_np[:, 0] >= 0) & (pixels_np[:, 0] < W) &
-            (pixels_np[:, 1] >= 0) & (pixels_np[:, 1] < H)
+            (pixels_np[:, 0] >= 0)
+            & (pixels_np[:, 0] < W)
+            & (pixels_np[:, 1] >= 0)
+            & (pixels_np[:, 1] < H)
         )
 
         # Find points where this camera is better than current best
@@ -123,8 +125,7 @@ def normalize_colors(
     """
     if method not in ["gain", "histogram"]:
         raise ValueError(
-            f"Invalid normalization method: {method!r}. "
-            "Must be 'gain' or 'histogram'."
+            f"Invalid normalization method: {method!r}. Must be 'gain' or 'histogram'."
         )
 
     if not images:
@@ -172,7 +173,6 @@ def _normalize_colors_histogram(images: dict[str, np.ndarray]) -> dict[str, np.n
     Returns:
         Normalized images with per-channel histogram matching applied.
     """
-    num_cameras = len(images)
     num_bins = 256
 
     # 1. Compute per-channel histograms for all cameras

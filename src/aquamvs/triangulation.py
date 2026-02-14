@@ -48,8 +48,8 @@ def triangulate_rays(
     # Solve A_sum @ P = b_sum
     try:
         P = torch.linalg.solve(A_sum, b_sum)
-    except torch.linalg.LinAlgError:
-        raise ValueError("Degenerate ray configuration")
+    except torch.linalg.LinAlgError as err:
+        raise ValueError("Degenerate ray configuration") from err
 
     return P
 
@@ -88,10 +88,10 @@ def _triangulate_two_rays_batch(
     ddT_a = torch.einsum("mi,mj->mij", dirs_a, dirs_a)
     ddT_b = torch.einsum("mi,mj->mij", dirs_b, dirs_b)
 
-    I = torch.eye(3, device=device, dtype=dtype).unsqueeze(0)  # (1, 3, 3)
+    identity = torch.eye(3, device=device, dtype=dtype).unsqueeze(0)  # (1, 3, 3)
 
-    A_a = I - ddT_a  # (M, 3, 3)
-    A_b = I - ddT_b  # (M, 3, 3)
+    A_a = identity - ddT_a  # (M, 3, 3)
+    A_b = identity - ddT_b  # (M, 3, 3)
 
     A_sum = A_a + A_b  # (M, 3, 3)
 
@@ -361,7 +361,7 @@ def compute_depth_ranges(
 
     if N == 0:
         # Empty cloud - return fallback for all cameras
-        return {name: FALLBACK_RANGE for name in projection_models.keys()}
+        return {name: FALLBACK_RANGE for name in projection_models}
 
     for cam_name, model in projection_models.items():
         # Project all 3D points to this camera

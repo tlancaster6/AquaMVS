@@ -39,7 +39,7 @@ class TestComputeCanonicalViewpoints:
 
         viewpoints = compute_canonical_viewpoints(bbox_min, bbox_max)
 
-        for name, params in viewpoints.items():
+        for _name, params in viewpoints.items():
             assert isinstance(params, dict)
             assert set(params.keys()) == {"eye", "center", "up"}
             assert params["eye"].shape == (3,)

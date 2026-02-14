@@ -42,7 +42,10 @@ dependencies = [
 dev = [
     "pytest",
     "pytest-cov",
-    "black",
+    "ruff",
+    "pre-commit",
+    "sphinx",
+    "sphinx-rtd-theme",
     "mypy",
     "python-semantic-release",
     "build",
@@ -75,3 +78,15 @@ patch_tags = ["fix", "perf"]
 markers = [
     "slow: marks tests as slow (deselect with '-m \"not slow\"')",
 ]
+
+[tool.ruff]
+target-version = "py310"
+line-length = 88
+src = ["src", "tests"]
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "UP", "B", "SIM"]
+ignore = ["E501", "SIM105", "SIM108", "SIM117", "SIM118"]
+
+[tool.ruff.lint.isort]
+known-first-party = ["aquamvs"]

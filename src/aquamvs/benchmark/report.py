@@ -82,7 +82,9 @@ def _generate_charts(results: BenchmarkResults, output_dir: Path) -> None:
         "aliked": "#ff7f0e",
         "disk": "#2ca02c",
     }
-    colors = [extractor_colors.get(r.extractor_type, "#7f7f7f") for r in results.results]
+    colors = [
+        extractor_colors.get(r.extractor_type, "#7f7f7f") for r in results.results
+    ]
 
     # Chart 1: Keypoint counts
     fig, ax = plt.subplots(figsize=(10, 6))
@@ -116,7 +118,7 @@ def _generate_charts(results: BenchmarkResults, output_dir: Path) -> None:
         label="Matching",
         color="#ff7f0e",
     )
-    bottom_tri = [e + m for e, m in zip(extraction_times, matching_times)]
+    bottom_tri = [e + m for e, m in zip(extraction_times, matching_times, strict=True)]
     ax.bar(
         config_names,
         triangulation_times,
@@ -194,10 +196,7 @@ def _write_markdown(results: BenchmarkResults, output_path: Path) -> None:
     for cam_name in results.camera_names:
         row = f"| {cam_name} | "
         row += " | ".join(
-            [
-                str(r.keypoint_counts.get(cam_name, 0))
-                for r in results.results
-            ]
+            [str(r.keypoint_counts.get(cam_name, 0)) for r in results.results]
         )
         row += " |"
         lines.append(row)

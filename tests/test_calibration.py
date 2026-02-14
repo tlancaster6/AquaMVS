@@ -1,12 +1,8 @@
 """Tests for calibration module."""
 
-import tempfile
-from pathlib import Path
 from unittest.mock import patch
 
-import cv2
 import numpy as np
-import pytest
 import torch
 from aquacal.config.schema import (
     CalibrationResult,

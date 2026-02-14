@@ -90,7 +90,10 @@ def render_matches(
     m = len(ref_keypoints)
     for i in range(m):
         ru, rv = int(round(ref_keypoints[i, 0])), int(round(ref_keypoints[i, 1]))
-        su, sv = int(round(src_keypoints[i, 0])) + w_ref, int(round(src_keypoints[i, 1]))
+        su, sv = (
+            int(round(src_keypoints[i, 0])) + w_ref,
+            int(round(src_keypoints[i, 1])),
+        )
 
         if scores is not None:
             s = float(scores[i])
@@ -98,7 +101,9 @@ def render_matches(
         else:
             color = (0, 255, 0)
 
-        cv2.line(canvas, (ru, rv), (su, sv), color, line_thickness, lineType=cv2.LINE_AA)
+        cv2.line(
+            canvas, (ru, rv), (su, sv), color, line_thickness, lineType=cv2.LINE_AA
+        )
         cv2.circle(canvas, (ru, rv), marker_size, color, -1, lineType=cv2.LINE_AA)
         cv2.circle(canvas, (su, sv), marker_size, color, -1, lineType=cv2.LINE_AA)
 

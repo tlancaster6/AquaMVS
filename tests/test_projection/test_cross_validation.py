@@ -5,7 +5,6 @@ import math
 import numpy as np
 import pytest
 import torch
-
 from aquacal.config.schema import CameraExtrinsics, CameraIntrinsics
 from aquacal.core.camera import Camera
 from aquacal.core.interface_model import Interface
@@ -176,7 +175,7 @@ class TestCastRayCrossValidation:
                 pixels_list.append([u, v])
 
         pixels_np = np.array(pixels_list, dtype=np.float64)
-        N = len(pixels_list)
+        len(pixels_list)
 
         # Call AquaCal for each pixel (single-pixel API)
         origins_aquacal = []
@@ -211,12 +210,12 @@ class TestCastRayCrossValidation:
                 device=device,
             )
 
-            assert torch.allclose(
-                origins_pt[idx], origin_aquacal, atol=1e-5
-            ), f"Origin mismatch at pixel {pixels_np[idx]}: PyTorch={origins_pt[idx].cpu().numpy()}, AquaCal={origin_aquacal.cpu().numpy()}"
-            assert torch.allclose(
-                directions_pt[idx], direction_aquacal, atol=1e-5
-            ), f"Direction mismatch at pixel {pixels_np[idx]}: PyTorch={directions_pt[idx].cpu().numpy()}, AquaCal={direction_aquacal.cpu().numpy()}"
+            assert torch.allclose(origins_pt[idx], origin_aquacal, atol=1e-5), (
+                f"Origin mismatch at pixel {pixels_np[idx]}: PyTorch={origins_pt[idx].cpu().numpy()}, AquaCal={origin_aquacal.cpu().numpy()}"
+            )
+            assert torch.allclose(directions_pt[idx], direction_aquacal, atol=1e-5), (
+                f"Direction mismatch at pixel {pixels_np[idx]}: PyTorch={directions_pt[idx].cpu().numpy()}, AquaCal={direction_aquacal.cpu().numpy()}"
+            )
 
     def test_cast_ray_principal_point(
         self, aquacal_camera_and_interface, aquamvs_model, device
@@ -270,12 +269,12 @@ class TestCastRayCrossValidation:
                 result_np[1], dtype=torch.float32, device=device
             )
 
-            assert torch.allclose(
-                origins_pt[0], origin_aquacal, atol=1e-5
-            ), f"Origin mismatch at corner {corner}"
-            assert torch.allclose(
-                directions_pt[0], direction_aquacal, atol=1e-5
-            ), f"Direction mismatch at corner {corner}"
+            assert torch.allclose(origins_pt[0], origin_aquacal, atol=1e-5), (
+                f"Origin mismatch at corner {corner}"
+            )
+            assert torch.allclose(directions_pt[0], direction_aquacal, atol=1e-5), (
+                f"Direction mismatch at corner {corner}"
+            )
 
 
 class TestProjectCrossValidation:
@@ -306,7 +305,7 @@ class TestProjectCrossValidation:
                     points_list.append([x, y, z])
 
         points_np = np.array(points_list, dtype=np.float64)
-        N = len(points_list)
+        len(points_list)
 
         # Call AquaCal for each point
         pixels_aquacal = []
@@ -333,12 +332,12 @@ class TestProjectCrossValidation:
                 device=device,
             )
 
-            assert valid_pt[
-                idx
-            ].item(), f"PyTorch marked point {points_np[idx]} as invalid, but AquaCal succeeded"
-            assert torch.allclose(
-                pixels_pt[idx], pixel_aquacal, atol=1e-5
-            ), f"Pixel mismatch for point {points_np[idx]}: PyTorch={pixels_pt[idx].cpu().numpy()}, AquaCal={pixel_aquacal.cpu().numpy()}"
+            assert valid_pt[idx].item(), (
+                f"PyTorch marked point {points_np[idx]} as invalid, but AquaCal succeeded"
+            )
+            assert torch.allclose(pixels_pt[idx], pixel_aquacal, atol=1e-5), (
+                f"Pixel mismatch for point {points_np[idx]}: PyTorch={pixels_pt[idx].cpu().numpy()}, AquaCal={pixel_aquacal.cpu().numpy()}"
+            )
 
     def test_project_point_below_camera(
         self,
@@ -568,6 +567,6 @@ class TestRoundtripCrossValidation:
         reconstructed_points = origins + depths.unsqueeze(-1) * directions
 
         # Compare
-        assert torch.allclose(
-            reconstructed_points, valid_points, atol=1e-4
-        ), "Roundtrip reconstruction failed"
+        assert torch.allclose(reconstructed_points, valid_points, atol=1e-4), (
+            "Roundtrip reconstruction failed"
+        )

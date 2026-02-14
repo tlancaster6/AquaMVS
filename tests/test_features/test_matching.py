@@ -7,7 +7,10 @@ import pytest
 import torch
 
 from aquamvs.config import MatchingConfig
+
+# Import the private helper for testing
 from aquamvs.features.matching import (
+    _prepare_lightglue_input,
     create_matcher,
     load_matches,
     match_all_pairs,
@@ -15,16 +18,17 @@ from aquamvs.features.matching import (
     save_matches,
 )
 
-# Import the private helper for testing
-from aquamvs.features.matching import _prepare_lightglue_input
-
 
 def test_save_load_roundtrip():
     """Test saving and loading matches dict."""
     # Create synthetic matches dict
     matches = {
-        "ref_keypoints": torch.tensor([[10.5, 20.3], [50.1, 60.8]], dtype=torch.float32),
-        "src_keypoints": torch.tensor([[15.2, 25.7], [55.3, 65.9]], dtype=torch.float32),
+        "ref_keypoints": torch.tensor(
+            [[10.5, 20.3], [50.1, 60.8]], dtype=torch.float32
+        ),
+        "src_keypoints": torch.tensor(
+            [[15.2, 25.7], [55.3, 65.9]], dtype=torch.float32
+        ),
         "scores": torch.tensor([0.95, 0.87], dtype=torch.float32),
     }
 
@@ -47,12 +51,25 @@ def test_save_load_roundtrip():
         assert torch.allclose(loaded["scores"], matches["scores"])
 
 
-@pytest.mark.parametrize("device", ["cpu", pytest.param("cuda", marks=pytest.mark.skipif(not torch.cuda.is_available(), reason="CUDA not available"))])
+@pytest.mark.parametrize(
+    "device",
+    [
+        "cpu",
+        pytest.param(
+            "cuda",
+            marks=pytest.mark.skipif(
+                not torch.cuda.is_available(), reason="CUDA not available"
+            ),
+        ),
+    ],
+)
 def test_prepare_lightglue_input(device):
     """Test preparing features for LightGlue input format."""
     # Synthetic features
     feats = {
-        "keypoints": torch.tensor([[10.0, 20.0], [30.0, 40.0], [50.0, 60.0]], dtype=torch.float32),
+        "keypoints": torch.tensor(
+            [[10.0, 20.0], [30.0, 40.0], [50.0, 60.0]], dtype=torch.float32
+        ),
         "descriptors": torch.randn(3, 256, dtype=torch.float32),
         "scores": torch.tensor([0.9, 0.8, 0.7], dtype=torch.float32),
     }
@@ -63,7 +80,12 @@ def test_prepare_lightglue_input(device):
     result = _prepare_lightglue_input(feats, image_size, device)
 
     # Check keys
-    assert set(result.keys()) == {"keypoints", "descriptors", "keypoint_scores", "image_size"}
+    assert set(result.keys()) == {
+        "keypoints",
+        "descriptors",
+        "keypoint_scores",
+        "image_size",
+    }
 
     # Check shapes (batch dimension added)
     assert result["keypoints"].shape == (1, 3, 2)
@@ -83,8 +105,12 @@ def test_prepare_lightglue_input(device):
 
     # Check values (batch dimension added, but values preserved)
     assert torch.allclose(result["keypoints"].squeeze(0), feats["keypoints"].to(device))
-    assert torch.allclose(result["descriptors"].squeeze(0), feats["descriptors"].to(device))
-    assert torch.allclose(result["keypoint_scores"].squeeze(0), feats["scores"].to(device))
+    assert torch.allclose(
+        result["descriptors"].squeeze(0), feats["descriptors"].to(device)
+    )
+    assert torch.allclose(
+        result["keypoint_scores"].squeeze(0), feats["scores"].to(device)
+    )
 
 
 def test_filter_logic_all_pass():
@@ -101,20 +127,26 @@ def test_filter_logic_all_pass():
     scores0 = torch.tensor([0.95, 0.0, 0.87, 0.92, 0.0], dtype=torch.float32)
 
     # Create features
-    ref_kpts = torch.tensor([
-        [10.0, 20.0],
-        [30.0, 40.0],
-        [50.0, 60.0],
-        [70.0, 80.0],
-        [90.0, 100.0],
-    ], dtype=torch.float32)
+    ref_kpts = torch.tensor(
+        [
+            [10.0, 20.0],
+            [30.0, 40.0],
+            [50.0, 60.0],
+            [70.0, 80.0],
+            [90.0, 100.0],
+        ],
+        dtype=torch.float32,
+    )
 
-    src_kpts = torch.tensor([
-        [15.0, 25.0],
-        [35.0, 45.0],
-        [55.0, 65.0],
-        [75.0, 85.0],
-    ], dtype=torch.float32)
+    src_kpts = torch.tensor(
+        [
+            [15.0, 25.0],
+            [35.0, 45.0],
+            [55.0, 65.0],
+            [75.0, 85.0],
+        ],
+        dtype=torch.float32,
+    )
 
     # Filter with threshold 0.8
     threshold = 0.8
@@ -122,7 +154,9 @@ def test_filter_logic_all_pass():
 
     # Expected: ref[0], ref[2], ref[3] pass (indices 0, 2, 3)
     expected_ref_indices = torch.tensor([0, 2, 3], dtype=torch.int64)
-    expected_src_indices = torch.tensor([1, 2, 0], dtype=torch.int64)  # matches0[matched_mask]
+    expected_src_indices = torch.tensor(
+        [1, 2, 0], dtype=torch.int64
+    )  # matches0[matched_mask]
     expected_scores = torch.tensor([0.95, 0.87, 0.92], dtype=torch.float32)
 
     # Apply filter
@@ -181,13 +215,13 @@ def test_empty_features():
         "scores": torch.empty((0,), dtype=torch.float32),
     }
 
-    feats_src = {
+    {
         "keypoints": torch.empty((0, 2), dtype=torch.float32),
         "descriptors": torch.empty((0, 256), dtype=torch.float32),
         "scores": torch.empty((0,), dtype=torch.float32),
     }
 
-    config = MatchingConfig(filter_threshold=0.1)
+    MatchingConfig(filter_threshold=0.1)
     image_size = (1600, 1200)
 
     # Should not crash, return empty tensors
@@ -202,6 +236,7 @@ def test_empty_features():
 
 def test_match_all_pairs_structure():
     """Test match_all_pairs returns correct structure with synthetic inputs."""
+
     # Create synthetic features for 3 cameras
     def make_features(n_keypoints):
         return {
@@ -210,7 +245,7 @@ def test_match_all_pairs_structure():
             "scores": torch.rand(n_keypoints),
         }
 
-    all_features = {
+    {
         "cam0": make_features(10),
         "cam1": make_features(12),
         "cam2": make_features(8),
@@ -224,10 +259,6 @@ def test_match_all_pairs_structure():
     }
 
     # After deduplication, expect only unique pairs in canonical order
-    expected_keys = {
-        ("cam0", "cam1"),  # deduplicated from both directions
-        ("cam0", "cam2"),
-    }
 
     # Verify the pairs dict would produce duplicate keys before dedup
     raw_pairs = set()
@@ -244,7 +275,18 @@ def test_match_all_pairs_structure():
 
 
 @pytest.mark.slow
-@pytest.mark.parametrize("device", ["cpu", pytest.param("cuda", marks=pytest.mark.skipif(not torch.cuda.is_available(), reason="CUDA not available"))])
+@pytest.mark.parametrize(
+    "device",
+    [
+        "cpu",
+        pytest.param(
+            "cuda",
+            marks=pytest.mark.skipif(
+                not torch.cuda.is_available(), reason="CUDA not available"
+            ),
+        ),
+    ],
+)
 def test_integration_with_lightglue(device):
     """Integration test with actual LightGlue model."""
     pytest.importorskip("lightglue")
@@ -338,9 +380,15 @@ def test_matcher_reuse():
 
     # Use it multiple times
     try:
-        result1 = match_pair(feats1, feats2, image_size, config, matcher=matcher, device="cpu")
-        result2 = match_pair(feats2, feats3, image_size, config, matcher=matcher, device="cpu")
-        result3 = match_pair(feats1, feats3, image_size, config, matcher=matcher, device="cpu")
+        result1 = match_pair(
+            feats1, feats2, image_size, config, matcher=matcher, device="cpu"
+        )
+        result2 = match_pair(
+            feats2, feats3, image_size, config, matcher=matcher, device="cpu"
+        )
+        result3 = match_pair(
+            feats1, feats3, image_size, config, matcher=matcher, device="cpu"
+        )
     except Exception as e:
         pytest.skip(f"LightGlue matching failed: {e}")
 
@@ -375,13 +423,17 @@ def test_threshold_filtering():
     # Match with low threshold
     config_low = MatchingConfig(filter_threshold=0.0)
     try:
-        result_low = match_pair(feats_ref, feats_src, image_size, config_low, device="cpu")
+        result_low = match_pair(
+            feats_ref, feats_src, image_size, config_low, device="cpu"
+        )
     except Exception as e:
         pytest.skip(f"LightGlue not available: {e}")
 
     # Match with high threshold
     config_high = MatchingConfig(filter_threshold=0.5)
-    result_high = match_pair(feats_ref, feats_src, image_size, config_high, device="cpu")
+    result_high = match_pair(
+        feats_ref, feats_src, image_size, config_high, device="cpu"
+    )
 
     # High threshold should have fewer or equal matches
     n_low = len(result_low["scores"])
@@ -486,6 +538,7 @@ def test_match_all_pairs_canonical_order():
 
 def test_match_all_pairs_no_self_pairs():
     """Test that match_all_pairs handles self-pairs correctly."""
+
     # Create synthetic features
     def make_features(n_keypoints):
         return {
@@ -494,16 +547,13 @@ def test_match_all_pairs_no_self_pairs():
             "scores": torch.rand(n_keypoints),
         }
 
-    all_features = {
+    {
         "cam0": make_features(10),
         "cam1": make_features(10),
     }
 
     # Edge case: camera listed as its own source
     # This shouldn't happen in practice, but the function should handle it
-    pairs = {
-        "cam0": ["cam0", "cam1"],
-    }
 
     # We can't run actual matching without LightGlue, but we can verify
     # the canonical pair logic would handle this correctly

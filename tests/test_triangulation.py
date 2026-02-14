@@ -151,7 +151,6 @@ class TestTriangulateTwoRaysBatch:
 
     def test_degenerate_pairs(self, device):
         """Test that degenerate pairs are marked as invalid."""
-        M = 5
 
         # First 3 pairs are valid, last 2 are parallel (degenerate)
         targets = torch.rand(3, 3, device=device, dtype=torch.float32) * 5.0
@@ -164,10 +163,14 @@ class TestTriangulateTwoRaysBatch:
         )
 
         dirs_a_valid = targets - origins_a_valid
-        dirs_a_valid = dirs_a_valid / torch.linalg.norm(dirs_a_valid, dim=-1, keepdim=True)
+        dirs_a_valid = dirs_a_valid / torch.linalg.norm(
+            dirs_a_valid, dim=-1, keepdim=True
+        )
 
         dirs_b_valid = targets - origins_b_valid
-        dirs_b_valid = dirs_b_valid / torch.linalg.norm(dirs_b_valid, dim=-1, keepdim=True)
+        dirs_b_valid = dirs_b_valid / torch.linalg.norm(
+            dirs_b_valid, dim=-1, keepdim=True
+        )
 
         # Degenerate pairs: parallel directions
         direction_parallel = (
@@ -188,7 +191,9 @@ class TestTriangulateTwoRaysBatch:
         dirs_a = torch.cat([dirs_a_valid, direction_parallel], dim=0)
         dirs_b = torch.cat([dirs_b_valid, direction_parallel], dim=0)
 
-        points, valid = _triangulate_two_rays_batch(origins_a, dirs_a, origins_b, dirs_b)
+        points, valid = _triangulate_two_rays_batch(
+            origins_a, dirs_a, origins_b, dirs_b
+        )
 
         # First 3 should be valid, last 2 invalid
         assert valid[0] and valid[1] and valid[2]
@@ -308,9 +313,7 @@ class TestTriangulatePair:
         model2 = RefractiveProjectionModel(K, R, t2, water_z, normal, n_air, n_water)
 
         # Create a point far away (3m depth) - will make rays nearly parallel
-        point_3d = torch.tensor(
-            [[0.005, 0.0, 3.0]], device=device, dtype=torch.float32
-        )
+        point_3d = torch.tensor([[0.005, 0.0, 3.0]], device=device, dtype=torch.float32)
 
         # Project through both models
         pixels1, valid1 = model1.project(point_3d)
@@ -359,7 +362,9 @@ class TestTriangulatePair:
         result = triangulate_pair(model1, model2, matches)
 
         # All points should be valid (good angle with 0.635m baseline)
-        assert result["valid"].all(), "Points with good intersection angle should be accepted"
+        assert result["valid"].all(), (
+            "Points with good intersection angle should be accepted"
+        )
 
     def test_triangulate_pair_rejects_bad_reproj(self, device):
         """Test that points with high reprojection error are rejected.
@@ -371,7 +376,9 @@ class TestTriangulatePair:
 
         # Create two DIFFERENT 3D points
         point_3d_1 = torch.tensor([[0.3, 0.2, 1.5]], device=device, dtype=torch.float32)
-        point_3d_2 = torch.tensor([[0.1, -0.1, 1.3]], device=device, dtype=torch.float32)
+        point_3d_2 = torch.tensor(
+            [[0.1, -0.1, 1.3]], device=device, dtype=torch.float32
+        )
 
         # Project first point through model1, second point through model2
         # This creates inconsistent matches (rays point to different locations)
@@ -392,7 +399,9 @@ class TestTriangulatePair:
 
         # The point should be marked invalid due to high reprojection error
         # (the triangulated point is a compromise and won't reproject well to either)
-        assert not result["valid"][0], "Inconsistent matches should produce high reprojection error"
+        assert not result["valid"][0], (
+            "Inconsistent matches should produce high reprojection error"
+        )
 
     def test_triangulate_pair_rejects_negative_depth(self, device):
         """Test that points behind ray origins (negative depth) are rejected."""
@@ -438,7 +447,7 @@ class TestTriangulatePair:
             "scores": torch.ones(1, device=device, dtype=torch.float32),
         }
 
-        result = triangulate_pair(model1, model2, matches)
+        triangulate_pair(model1, model2, matches)
 
         # If the triangulation produces negative depth, it should be rejected
         # (This test may need adjustment based on actual geometry)
@@ -465,9 +474,7 @@ class TestTriangulatePair:
         model2 = RefractiveProjectionModel(K, R, t2, water_z, normal, n_air, n_water)
 
         # Point far away (nearly parallel rays)
-        point_3d = torch.tensor(
-            [[0.005, 0.0, 3.0]], device=device, dtype=torch.float32
-        )
+        point_3d = torch.tensor([[0.005, 0.0, 3.0]], device=device, dtype=torch.float32)
 
         pixels1, valid1 = model1.project(point_3d)
         pixels2, valid2 = model2.project(point_3d)
@@ -482,11 +489,15 @@ class TestTriangulatePair:
 
         # With min_angle=0.0 (disabled), should pass
         result_permissive = triangulate_pair(model1, model2, matches, min_angle=0.0)
-        assert result_permissive["valid"][0], "min_angle=0.0 should accept nearly parallel rays"
+        assert result_permissive["valid"][0], (
+            "min_angle=0.0 should accept nearly parallel rays"
+        )
 
         # With min_angle=10.0 (strict), should fail
         result_strict = triangulate_pair(model1, model2, matches, min_angle=10.0)
-        assert not result_strict["valid"][0], "min_angle=10.0 should reject nearly parallel rays"
+        assert not result_strict["valid"][0], (
+            "min_angle=10.0 should reject nearly parallel rays"
+        )
 
     def test_triangulate_pair_max_reproj_parameter(self, device):
         """Test that max_reproj_error parameter correctly controls reprojection filtering."""
@@ -494,7 +505,9 @@ class TestTriangulatePair:
 
         # Create two different 3D points to produce inconsistent matches
         point_3d_1 = torch.tensor([[0.3, 0.2, 1.5]], device=device, dtype=torch.float32)
-        point_3d_2 = torch.tensor([[0.15, 0.0, 1.4]], device=device, dtype=torch.float32)
+        point_3d_2 = torch.tensor(
+            [[0.15, 0.0, 1.4]], device=device, dtype=torch.float32
+        )
 
         # Project different points through each camera
         pixels1, valid1 = model1.project(point_3d_1)
@@ -512,13 +525,15 @@ class TestTriangulatePair:
         result_permissive = triangulate_pair(
             model1, model2, matches, max_reproj_error=100.0
         )
-        assert result_permissive["valid"][0], "Large max_reproj_error should accept inconsistent matches"
+        assert result_permissive["valid"][0], (
+            "Large max_reproj_error should accept inconsistent matches"
+        )
 
         # With max_reproj_error=0.5 (strict), should fail
-        result_strict = triangulate_pair(
-            model1, model2, matches, max_reproj_error=0.5
+        result_strict = triangulate_pair(model1, model2, matches, max_reproj_error=0.5)
+        assert not result_strict["valid"][0], (
+            "Small max_reproj_error should reject inconsistent matches"
         )
-        assert not result_strict["valid"][0], "Small max_reproj_error should reject inconsistent matches"
 
 
 class TestTriangulateAllPairs:
@@ -541,7 +556,9 @@ class TestTriangulateAllPairs:
         models = {}
         for i, x_offset in enumerate([0.0, 0.3, 0.6]):
             t = torch.tensor([x_offset, 0.0, 0.0], device=device, dtype=torch.float32)
-            models[f"cam{i}"] = RefractiveProjectionModel(K, R, t, water_z, normal, n_air, n_water)
+            models[f"cam{i}"] = RefractiveProjectionModel(
+                K, R, t, water_z, normal, n_air, n_water
+            )
 
         return models
 
@@ -710,7 +727,9 @@ class TestFilterSparseCloud:
         assert filtered["scores"].shape[0] == 3
 
         # Check that the scores match the kept points
-        expected_scores = torch.tensor([0.8, 0.9, 0.7], device=device, dtype=torch.float32)
+        expected_scores = torch.tensor(
+            [0.8, 0.9, 0.7], device=device, dtype=torch.float32
+        )
         torch.testing.assert_close(filtered["scores"], expected_scores)
 
     def test_filter_sparse_cloud_empty(self, device):
@@ -771,7 +790,9 @@ class TestComputeDepthRanges:
         models = {}
         for i, x_offset in enumerate([0.0, 0.3]):
             t = torch.tensor([x_offset, 0.0, 0.0], device=device, dtype=torch.float32)
-            models[f"cam{i}"] = RefractiveProjectionModel(K, R, t, water_z, normal, n_air, n_water)
+            models[f"cam{i}"] = RefractiveProjectionModel(
+                K, R, t, water_z, normal, n_air, n_water
+            )
 
         return models
 

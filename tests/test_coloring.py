@@ -66,7 +66,9 @@ def test_frontal_preferred():
     }
 
     # Create test images with distinct colors
-    img1 = torch.full((480, 640, 3), 255, dtype=torch.uint8)  # White (B=255, G=255, R=255)
+    img1 = torch.full(
+        (480, 640, 3), 255, dtype=torch.uint8
+    )  # White (B=255, G=255, R=255)
     img1[:, :, :] = torch.tensor([0, 0, 255], dtype=torch.uint8)  # Red in BGR
 
     img2 = torch.full((480, 640, 3), 255, dtype=torch.uint8)

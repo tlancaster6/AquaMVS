@@ -618,9 +618,19 @@ def process_frame(
                 from .coloring import best_view_colors
 
                 # Filter to ring cameras only (exclude auxiliary cameras)
-                ring_models = {n: m for n, m in ctx.projection_models.items() if n in ctx.ring_cameras}
-                ring_images = {n: img for n, img in undistorted_tensors.items() if n in ctx.ring_cameras}
-                ring_centers = {n: c for n, c in camera_centers.items() if n in ctx.ring_cameras}
+                ring_models = {
+                    n: m
+                    for n, m in ctx.projection_models.items()
+                    if n in ctx.ring_cameras
+                }
+                ring_images = {
+                    n: img
+                    for n, img in undistorted_tensors.items()
+                    if n in ctx.ring_cameras
+                }
+                ring_centers = {
+                    n: c for n, c in camera_centers.items() if n in ctx.ring_cameras
+                }
 
                 mesh.compute_vertex_normals()
                 vertex_colors = best_view_colors(
@@ -851,9 +861,17 @@ def process_frame(
             from .coloring import best_view_colors
 
             # Filter to ring cameras only (exclude auxiliary cameras)
-            ring_models = {n: m for n, m in ctx.projection_models.items() if n in ctx.ring_cameras}
-            ring_images = {n: img for n, img in undistorted_tensors.items() if n in ctx.ring_cameras}
-            ring_centers = {n: c for n, c in camera_centers.items() if n in ctx.ring_cameras}
+            ring_models = {
+                n: m for n, m in ctx.projection_models.items() if n in ctx.ring_cameras
+            }
+            ring_images = {
+                n: img
+                for n, img in undistorted_tensors.items()
+                if n in ctx.ring_cameras
+            }
+            ring_centers = {
+                n: c for n, c in camera_centers.items() if n in ctx.ring_cameras
+            }
 
             mesh.compute_vertex_normals()
             vertex_colors = best_view_colors(
@@ -897,8 +915,9 @@ def process_frame(
     # --- [viz] Camera rig diagram ---
     if _should_viz(config, "rig"):
         try:
-            from .visualization.rig import render_rig_diagram
             import numpy as _np
+
+            from .visualization.rig import render_rig_diagram
 
             logger.info("Frame %d: rendering rig diagram", frame_idx)
             viz_dir = frame_dir / "viz"

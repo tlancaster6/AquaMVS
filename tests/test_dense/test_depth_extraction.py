@@ -96,7 +96,7 @@ def test_parabola_clamp(device):
     """Test that the parabola offset is clamped to [-0.5, 0.5]."""
     H, W, D = 2, 2, 8
     depths = torch.linspace(0.5, 1.5, D, device=device)
-    depth_step = depths[1] - depths[0]
+    depths[1] - depths[0]
 
     # Create a skewed cost profile where the parabola formula would give |offset| > 0.5
     cost_volume = torch.ones(H, W, D, device=device)

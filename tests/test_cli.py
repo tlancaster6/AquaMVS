@@ -539,7 +539,7 @@ def test_main_run_argument_parsing(tmp_path: Path):
 
 def test_export_refs_creates_images(tmp_path: Path, calibration_json: Path):
     """Test export-refs creates undistorted images for all cameras."""
-    from unittest.mock import MagicMock, call, patch
+    from unittest.mock import patch
 
     import numpy as np
 
@@ -602,7 +602,7 @@ def test_export_refs_creates_images(tmp_path: Path, calibration_json: Path):
 
 def test_export_refs_includes_center_camera(tmp_path: Path):
     """Test export-refs includes auxiliary (center) cameras."""
-    from unittest.mock import MagicMock, patch
+    from unittest.mock import patch
 
     import numpy as np
 

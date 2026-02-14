@@ -9,7 +9,7 @@ import torch
 from aquacal.io.video import VideoSet
 
 from ..calibration import undistort_image
-from ..config import FeatureExtractionConfig, PipelineConfig
+from ..config import PipelineConfig
 from ..features.extraction import extract_features_batch
 from ..features.matching import match_all_pairs
 from ..masks import apply_mask_to_features
@@ -49,7 +49,7 @@ def run_benchmark(
     with VideoSet(config.camera_video_map) as videos:
         # Read the specified frame
         frame_found = False
-        for frame_idx, raw_images in videos.iterate_frames(
+        for frame_idx, raw_images in videos.iterate_frames(  # noqa: B007
             start=frame, stop=frame + 1, step=1
         ):
             if frame_idx == frame:

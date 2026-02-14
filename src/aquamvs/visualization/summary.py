@@ -4,9 +4,10 @@ import matplotlib
 
 matplotlib.use("Agg")
 
+from pathlib import Path
+
 import matplotlib.pyplot as plt
 import numpy as np
-from pathlib import Path
 
 
 def render_error_histogram(

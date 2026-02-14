@@ -98,7 +98,7 @@ def init_config(
         sys.exit(1)
 
     try:
-        with open(calibration_path, "r") as f:
+        with open(calibration_path) as f:
             calibration_data = json.load(f)
     except json.JSONDecodeError as e:
         print(f"Error: Invalid JSON in calibration file: {e}", file=sys.stderr)
@@ -116,9 +116,9 @@ def init_config(
     cameras_without_video = calibration_cameras - set(video_camera_map.keys())
 
     # 5. Report
-    print(f"\n{'='*70}")
+    print(f"\n{'=' * 70}")
     print("Configuration Initialization Summary")
-    print(f"{'='*70}\n")
+    print(f"{'=' * 70}\n")
 
     if matched_cameras:
         print(f"[OK] Matched {len(matched_cameras)} camera(s):")
@@ -171,7 +171,7 @@ def init_config(
     # 7. Save
     config.to_yaml(config_path)
     print(f"[OK] Configuration saved to: {config_path}")
-    print(f"{'='*70}\n")
+    print(f"{'=' * 70}\n")
 
     return config
 
@@ -230,7 +230,7 @@ def export_refs_command(
         with VideoSet(config.camera_video_map) as videos:
             # Read the specified frame
             frame_found = False
-            for frame_idx, raw_images in videos.iterate_frames(
+            for frame_idx, raw_images in videos.iterate_frames(  # noqa: B007
                 start=frame, stop=frame + 1, step=1
             ):
                 if frame_idx == frame:
@@ -245,9 +245,7 @@ def export_refs_command(
                 sys.exit(1)
 
             # Filter out None images (cameras that failed to read)
-            images = {
-                name: img for name, img in raw_images.items() if img is not None
-            }
+            images = {name: img for name, img in raw_images.items() if img is not None}
             if not images:
                 print(f"Error: Frame {frame} has no valid images", file=sys.stderr)
                 sys.exit(1)
@@ -271,13 +269,9 @@ def export_refs_command(
             # 7. Print summary
             print(f"\nExported {exported_count} reference image(s) to:")
             print(f"  {output_dir}")
-            print(
-                f"\nUse these images to draw ROI masks in an external image editor."
-            )
-            print(f"Save masks as {{camera_name}}.png in a dedicated mask directory,")
-            print(
-                f"then add 'mask_dir: /path/to/masks' to your config YAML.\n"
-            )
+            print("\nUse these images to draw ROI masks in an external image editor.")
+            print("Save masks as {camera_name}.png in a dedicated mask directory,")
+            print("then add 'mask_dir: /path/to/masks' to your config YAML.\n")
 
     except Exception as e:
         print(f"Error: Failed to export reference images: {e}", file=sys.stderr)
@@ -287,7 +281,9 @@ def export_refs_command(
         sys.exit(1)
 
 
-def run_command(config_path: Path, verbose: bool = False, device: str | None = None) -> None:
+def run_command(
+    config_path: Path, verbose: bool = False, device: str | None = None
+) -> None:
     """Execute the reconstruction pipeline from a config file.
 
     Args:
@@ -331,6 +327,7 @@ def run_command(config_path: Path, verbose: bool = False, device: str | None = N
 
     # 5. Run pipeline
     from aquamvs.pipeline import run_pipeline
+
     run_pipeline(config)
 
 
@@ -378,7 +375,7 @@ def benchmark_command(config_path: Path, frame: int = 0) -> None:
         report_path = generate_report(results, Path(config.output_dir))
 
         # 5. Print summary
-        print(f"\nBenchmark complete!")
+        print("\nBenchmark complete!")
         print(f"Tested {len(results.results)} configuration(s) on frame {frame}")
         print(f"Report: {report_path}\n")
 
@@ -445,7 +442,8 @@ def main() -> None:
         help="Path to pipeline config YAML file",
     )
     run_parser.add_argument(
-        "-v", "--verbose",
+        "-v",
+        "--verbose",
         action="store_true",
         help="Enable verbose (DEBUG) logging",
     )

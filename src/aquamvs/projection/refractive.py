@@ -151,7 +151,6 @@ class RefractiveProjectionModel:
                 water surface (Z <= water_z) or when interface point is behind
                 camera.
         """
-        N = points.shape[0]
         device = points.device
         dtype = points.dtype
 

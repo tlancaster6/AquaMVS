@@ -226,7 +226,7 @@ class TestHeightfieldReconstruction:
         # Verify mesh has reasonable bounds
         vertices = np.asarray(mesh.vertices)
         assert vertices[:, 0].min() < -0.05  # Left cluster
-        assert vertices[:, 0].max() > 0.05   # Right cluster
+        assert vertices[:, 0].max() > 0.05  # Right cluster
 
     def test_empty_point_cloud(self):
         """Test that empty point cloud returns empty mesh."""
@@ -307,7 +307,6 @@ class TestBPAReconstruction:
         # Verify we got a mesh
         assert len(mesh.vertices) > 0
         assert len(mesh.triangles) > 0
-
 
 
 class TestReconstructSurface:

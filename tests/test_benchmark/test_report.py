@@ -1,7 +1,6 @@
 """Tests for benchmark report generation."""
 
 import pytest
-from pathlib import Path
 
 from aquamvs.benchmark.metrics import BenchmarkResults, ConfigResult
 from aquamvs.benchmark.report import generate_report

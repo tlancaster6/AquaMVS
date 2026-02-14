@@ -607,7 +607,7 @@ device:
             config.to_yaml(temp_path)
 
             # Read the raw YAML
-            with open(temp_path, "r") as f:
+            with open(temp_path) as f:
                 content = f.read()
 
             # Check no Python object tags
@@ -642,7 +642,7 @@ device:
             config.to_yaml(temp_path)
 
             # Check YAML contains null
-            with open(temp_path, "r") as f:
+            with open(temp_path) as f:
                 content = f.read()
             assert "null" in content or "~" in content  # YAML null representations
 
@@ -983,6 +983,8 @@ class TestImports:
         """Test that configs can be imported from the package."""
         from aquamvs import (
             DenseStereoConfig as DenseStereoConfig2,
+        )
+        from aquamvs import (
             PipelineConfig as PipelineConfig2,
         )
 

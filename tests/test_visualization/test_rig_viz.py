@@ -4,7 +4,6 @@ import tempfile
 from pathlib import Path
 
 import numpy as np
-import pytest
 from PIL import Image
 
 from aquamvs.visualization.rig import render_rig_diagram
@@ -33,9 +32,7 @@ class TestRenderRigDiagram:
 
         with tempfile.TemporaryDirectory() as tmpdir:
             output_path = Path(tmpdir) / "rig.png"
-            render_rig_diagram(
-                camera_positions, camera_rotations, water_z, output_path
-            )
+            render_rig_diagram(camera_positions, camera_rotations, water_z, output_path)
 
             # Verify PNG exists and is loadable
             assert output_path.exists()
@@ -62,9 +59,7 @@ class TestRenderRigDiagram:
 
         with tempfile.TemporaryDirectory() as tmpdir:
             output_path = Path(tmpdir) / "rig.png"
-            render_rig_diagram(
-                camera_positions, camera_rotations, water_z, output_path
-            )
+            render_rig_diagram(camera_positions, camera_rotations, water_z, output_path)
 
             assert output_path.exists()
 
@@ -164,9 +159,7 @@ class TestRenderRigDiagram:
 
         with tempfile.TemporaryDirectory() as tmpdir:
             output_path = Path(tmpdir) / "rig.png"
-            render_rig_diagram(
-                camera_positions, camera_rotations, water_z, output_path
-            )
+            render_rig_diagram(camera_positions, camera_rotations, water_z, output_path)
 
             assert output_path.exists()
 
@@ -247,9 +240,7 @@ class TestRenderRigDiagram:
 
         with tempfile.TemporaryDirectory() as tmpdir:
             output_path = Path(tmpdir) / "rig.png"
-            render_rig_diagram(
-                camera_positions, camera_rotations, water_z, output_path
-            )
+            render_rig_diagram(camera_positions, camera_rotations, water_z, output_path)
 
             assert output_path.exists()
 
@@ -270,9 +261,7 @@ class TestRenderRigDiagram:
         with tempfile.TemporaryDirectory() as tmpdir:
             output_path = Path(tmpdir) / "rig.png"
             # Should not crash, cam2 just won't have a frustum
-            render_rig_diagram(
-                camera_positions, camera_rotations, water_z, output_path
-            )
+            render_rig_diagram(camera_positions, camera_rotations, water_z, output_path)
 
             assert output_path.exists()
 

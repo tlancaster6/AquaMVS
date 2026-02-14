@@ -312,7 +312,7 @@ class TestSuperPointExtraction:
 
         # Verify structure
         assert set(batch_results.keys()) == {"cam1", "cam2", "cam3"}
-        for cam_name, feats in batch_results.items():
+        for _cam_name, feats in batch_results.items():
             assert set(feats.keys()) == {"keypoints", "descriptors", "scores"}
             assert feats["keypoints"].shape[0] > 0  # Should find some features
 
@@ -325,7 +325,7 @@ class TestSuperPointExtraction:
             )
 
         # Results should be identical (same extractor, same images)
-        for cam_name in images.keys():
+        for cam_name in images:
             batch_kp = batch_results[cam_name]["keypoints"]
             indiv_kp = individual_results[cam_name]["keypoints"]
             assert torch.allclose(batch_kp, indiv_kp)
@@ -421,7 +421,7 @@ class TestIntegration:
                 loaded_features[cam_name] = load_features(path)
 
             # Verify
-            for cam_name in images.keys():
+            for cam_name in images:
                 orig = batch_features[cam_name]
                 loaded = loaded_features[cam_name]
                 assert torch.allclose(loaded["keypoints"], orig["keypoints"])
@@ -565,12 +565,8 @@ class TestCLAHEIntegration:
         # Add subtle pattern
         image[::20, :] = 130
 
-        config_low = FeatureExtractionConfig(
-            clahe_enabled=True, clahe_clip_limit=1.0
-        )
-        config_high = FeatureExtractionConfig(
-            clahe_enabled=True, clahe_clip_limit=4.0
-        )
+        config_low = FeatureExtractionConfig(clahe_enabled=True, clahe_clip_limit=1.0)
+        config_high = FeatureExtractionConfig(clahe_enabled=True, clahe_clip_limit=4.0)
 
         result_low = extract_features(image, config_low, device="cpu")
         result_high = extract_features(image, config_high, device="cpu")

@@ -9,8 +9,6 @@ constructor accepts an optional Cfg parameter and can be called with no argument
 to use default settings (though weight loading would happen on instantiation).
 """
 
-import pytest
-
 
 def test_romav2_import():
     """Test that romav2 package can be imported."""

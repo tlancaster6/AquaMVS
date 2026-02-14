@@ -8,7 +8,9 @@ from lightglue import LightGlue
 from ..config import MatchingConfig
 
 
-def create_matcher(extractor_type: str = "superpoint", device: str = "cpu") -> LightGlue:
+def create_matcher(
+    extractor_type: str = "superpoint", device: str = "cpu"
+) -> LightGlue:
     """Create and initialize a LightGlue feature matcher.
 
     Args:

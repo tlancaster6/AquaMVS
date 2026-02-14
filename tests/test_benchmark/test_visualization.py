@@ -1,12 +1,15 @@
 """Tests for benchmark visualization functions."""
 
+from unittest.mock import MagicMock, patch
+
 import numpy as np
 import pytest
 import torch
-from pathlib import Path
-from unittest.mock import MagicMock, patch
 
-from aquamvs.benchmark.visualization import render_comparison_grids, render_config_outputs
+from aquamvs.benchmark.visualization import (
+    render_comparison_grids,
+    render_config_outputs,
+)
 from aquamvs.config import SurfaceConfig
 
 
@@ -75,15 +78,24 @@ def mock_camera_centers():
     }
 
 
-def test_render_config_outputs_creates_keypoints(tmp_path, mock_images, mock_features, mock_matches, mock_sparse_cloud, mock_projection_models, mock_camera_centers):
+def test_render_config_outputs_creates_keypoints(
+    tmp_path,
+    mock_images,
+    mock_features,
+    mock_matches,
+    mock_sparse_cloud,
+    mock_projection_models,
+    mock_camera_centers,
+):
     """Test that keypoint overlays are created for each camera."""
-    with patch("aquamvs.benchmark.visualization.render_keypoints") as mock_render_kpts, \
-         patch("aquamvs.benchmark.visualization.render_matches"), \
-         patch("aquamvs.benchmark.visualization._sparse_cloud_to_open3d"), \
-         patch("aquamvs.benchmark.visualization.render_scene"), \
-         patch("aquamvs.benchmark.visualization.reconstruct_surface"), \
-         patch("aquamvs.benchmark.visualization.o3d"):
-
+    with (
+        patch("aquamvs.benchmark.visualization.render_keypoints") as mock_render_kpts,
+        patch("aquamvs.benchmark.visualization.render_matches"),
+        patch("aquamvs.benchmark.visualization._sparse_cloud_to_open3d"),
+        patch("aquamvs.benchmark.visualization.render_scene"),
+        patch("aquamvs.benchmark.visualization.reconstruct_surface"),
+        patch("aquamvs.benchmark.visualization.o3d"),
+    ):
         undistorted_tensors = {
             name: torch.from_numpy(img) for name, img in mock_images.items()
         }
@@ -108,15 +120,24 @@ def test_render_config_outputs_creates_keypoints(tmp_path, mock_images, mock_fea
         assert config_dir.exists()
 
 
-def test_render_config_outputs_creates_matches(tmp_path, mock_images, mock_features, mock_matches, mock_sparse_cloud, mock_projection_models, mock_camera_centers):
+def test_render_config_outputs_creates_matches(
+    tmp_path,
+    mock_images,
+    mock_features,
+    mock_matches,
+    mock_sparse_cloud,
+    mock_projection_models,
+    mock_camera_centers,
+):
     """Test that match overlays are created for each pair."""
-    with patch("aquamvs.benchmark.visualization.render_keypoints"), \
-         patch("aquamvs.benchmark.visualization.render_matches") as mock_render_matches, \
-         patch("aquamvs.benchmark.visualization._sparse_cloud_to_open3d"), \
-         patch("aquamvs.benchmark.visualization.render_scene"), \
-         patch("aquamvs.benchmark.visualization.reconstruct_surface"), \
-         patch("aquamvs.benchmark.visualization.o3d"):
-
+    with (
+        patch("aquamvs.benchmark.visualization.render_keypoints"),
+        patch("aquamvs.benchmark.visualization.render_matches") as mock_render_matches,
+        patch("aquamvs.benchmark.visualization._sparse_cloud_to_open3d"),
+        patch("aquamvs.benchmark.visualization.render_scene"),
+        patch("aquamvs.benchmark.visualization.reconstruct_surface"),
+        patch("aquamvs.benchmark.visualization.o3d"),
+    ):
         undistorted_tensors = {
             name: torch.from_numpy(img) for name, img in mock_images.items()
         }
@@ -139,15 +160,24 @@ def test_render_config_outputs_creates_matches(tmp_path, mock_images, mock_featu
         assert mock_render_matches.call_count == 1
 
 
-def test_render_config_outputs_creates_sparse_ply(tmp_path, mock_images, mock_features, mock_matches, mock_sparse_cloud, mock_projection_models, mock_camera_centers):
+def test_render_config_outputs_creates_sparse_ply(
+    tmp_path,
+    mock_images,
+    mock_features,
+    mock_matches,
+    mock_sparse_cloud,
+    mock_projection_models,
+    mock_camera_centers,
+):
     """Test that sparse PLY is created with colors and normals."""
-    with patch("aquamvs.benchmark.visualization.render_keypoints"), \
-         patch("aquamvs.benchmark.visualization.render_matches"), \
-         patch("aquamvs.benchmark.visualization._sparse_cloud_to_open3d") as mock_to_o3d, \
-         patch("aquamvs.benchmark.visualization.render_scene"), \
-         patch("aquamvs.benchmark.visualization.reconstruct_surface"), \
-         patch("aquamvs.benchmark.visualization.o3d") as mock_o3d:
-
+    with (
+        patch("aquamvs.benchmark.visualization.render_keypoints"),
+        patch("aquamvs.benchmark.visualization.render_matches"),
+        patch("aquamvs.benchmark.visualization._sparse_cloud_to_open3d") as mock_to_o3d,
+        patch("aquamvs.benchmark.visualization.render_scene"),
+        patch("aquamvs.benchmark.visualization.reconstruct_surface"),
+        patch("aquamvs.benchmark.visualization.o3d") as mock_o3d,
+    ):
         # Mock Open3D PointCloud
         mock_pcd = MagicMock()
         mock_to_o3d.return_value = mock_pcd
@@ -177,15 +207,26 @@ def test_render_config_outputs_creates_sparse_ply(tmp_path, mock_images, mock_fe
         mock_o3d.io.write_point_cloud.assert_called_once()
 
 
-def test_render_config_outputs_creates_3d_renders(tmp_path, mock_images, mock_features, mock_matches, mock_sparse_cloud, mock_projection_models, mock_camera_centers):
+def test_render_config_outputs_creates_3d_renders(
+    tmp_path,
+    mock_images,
+    mock_features,
+    mock_matches,
+    mock_sparse_cloud,
+    mock_projection_models,
+    mock_camera_centers,
+):
     """Test that 3D renders are created from canonical viewpoints."""
-    with patch("aquamvs.benchmark.visualization.render_keypoints"), \
-         patch("aquamvs.benchmark.visualization.render_matches"), \
-         patch("aquamvs.benchmark.visualization._sparse_cloud_to_open3d") as mock_to_o3d, \
-         patch("aquamvs.benchmark.visualization.render_scene") as mock_render_scene, \
-         patch("aquamvs.benchmark.visualization.reconstruct_surface") as mock_reconstruct, \
-         patch("aquamvs.benchmark.visualization.o3d"):
-
+    with (
+        patch("aquamvs.benchmark.visualization.render_keypoints"),
+        patch("aquamvs.benchmark.visualization.render_matches"),
+        patch("aquamvs.benchmark.visualization._sparse_cloud_to_open3d") as mock_to_o3d,
+        patch("aquamvs.benchmark.visualization.render_scene") as mock_render_scene,
+        patch(
+            "aquamvs.benchmark.visualization.reconstruct_surface"
+        ) as mock_reconstruct,
+        patch("aquamvs.benchmark.visualization.o3d"),
+    ):
         # Mock Open3D PointCloud and Mesh
         mock_pcd = MagicMock()
         mock_to_o3d.return_value = mock_pcd
@@ -222,20 +263,30 @@ def test_render_config_outputs_creates_3d_renders(tmp_path, mock_images, mock_fe
         assert call_args[1]["prefix"] == "mesh"
 
 
-def test_render_config_outputs_empty_sparse_cloud(tmp_path, mock_images, mock_features, mock_matches, mock_projection_models, mock_camera_centers):
+def test_render_config_outputs_empty_sparse_cloud(
+    tmp_path,
+    mock_images,
+    mock_features,
+    mock_matches,
+    mock_projection_models,
+    mock_camera_centers,
+):
     """Test that empty sparse cloud is handled gracefully."""
     empty_cloud = {
         "points_3d": torch.zeros((0, 3)),
         "scores": torch.zeros(0),
     }
 
-    with patch("aquamvs.benchmark.visualization.render_keypoints"), \
-         patch("aquamvs.benchmark.visualization.render_matches"), \
-         patch("aquamvs.benchmark.visualization._sparse_cloud_to_open3d") as mock_to_o3d, \
-         patch("aquamvs.benchmark.visualization.render_scene") as mock_render_scene, \
-         patch("aquamvs.benchmark.visualization.reconstruct_surface") as mock_reconstruct, \
-         patch("aquamvs.benchmark.visualization.o3d"):
-
+    with (
+        patch("aquamvs.benchmark.visualization.render_keypoints"),
+        patch("aquamvs.benchmark.visualization.render_matches"),
+        patch("aquamvs.benchmark.visualization._sparse_cloud_to_open3d") as mock_to_o3d,
+        patch("aquamvs.benchmark.visualization.render_scene") as mock_render_scene,
+        patch(
+            "aquamvs.benchmark.visualization.reconstruct_surface"
+        ) as mock_reconstruct,
+        patch("aquamvs.benchmark.visualization.o3d"),
+    ):
         undistorted_tensors = {
             name: torch.from_numpy(img) for name, img in mock_images.items()
         }
@@ -260,15 +311,26 @@ def test_render_config_outputs_empty_sparse_cloud(tmp_path, mock_images, mock_fe
         mock_reconstruct.assert_not_called()
 
 
-def test_render_config_outputs_creates_mesh_ply(tmp_path, mock_images, mock_features, mock_matches, mock_sparse_cloud, mock_projection_models, mock_camera_centers):
+def test_render_config_outputs_creates_mesh_ply(
+    tmp_path,
+    mock_images,
+    mock_features,
+    mock_matches,
+    mock_sparse_cloud,
+    mock_projection_models,
+    mock_camera_centers,
+):
     """Test that mesh PLY is created with colors and faces."""
-    with patch("aquamvs.benchmark.visualization.render_keypoints"), \
-         patch("aquamvs.benchmark.visualization.render_matches"), \
-         patch("aquamvs.benchmark.visualization._sparse_cloud_to_open3d") as mock_to_o3d, \
-         patch("aquamvs.benchmark.visualization.render_scene"), \
-         patch("aquamvs.benchmark.visualization.reconstruct_surface") as mock_reconstruct, \
-         patch("aquamvs.benchmark.visualization.o3d") as mock_o3d:
-
+    with (
+        patch("aquamvs.benchmark.visualization.render_keypoints"),
+        patch("aquamvs.benchmark.visualization.render_matches"),
+        patch("aquamvs.benchmark.visualization._sparse_cloud_to_open3d") as mock_to_o3d,
+        patch("aquamvs.benchmark.visualization.render_scene"),
+        patch(
+            "aquamvs.benchmark.visualization.reconstruct_surface"
+        ) as mock_reconstruct,
+        patch("aquamvs.benchmark.visualization.o3d") as mock_o3d,
+    ):
         # Mock Open3D PointCloud and Mesh
         mock_pcd = MagicMock()
         mock_to_o3d.return_value = mock_pcd
@@ -300,15 +362,26 @@ def test_render_config_outputs_creates_mesh_ply(tmp_path, mock_images, mock_feat
         mock_o3d.io.write_triangle_mesh.assert_called_once()
 
 
-def test_render_config_outputs_mesh_failure_graceful(tmp_path, mock_images, mock_features, mock_matches, mock_sparse_cloud, mock_projection_models, mock_camera_centers):
+def test_render_config_outputs_mesh_failure_graceful(
+    tmp_path,
+    mock_images,
+    mock_features,
+    mock_matches,
+    mock_sparse_cloud,
+    mock_projection_models,
+    mock_camera_centers,
+):
     """Test that mesh reconstruction failure does not crash the benchmark."""
-    with patch("aquamvs.benchmark.visualization.render_keypoints"), \
-         patch("aquamvs.benchmark.visualization.render_matches"), \
-         patch("aquamvs.benchmark.visualization._sparse_cloud_to_open3d") as mock_to_o3d, \
-         patch("aquamvs.benchmark.visualization.render_scene") as mock_render_scene, \
-         patch("aquamvs.benchmark.visualization.reconstruct_surface") as mock_reconstruct, \
-         patch("aquamvs.benchmark.visualization.o3d") as mock_o3d:
-
+    with (
+        patch("aquamvs.benchmark.visualization.render_keypoints"),
+        patch("aquamvs.benchmark.visualization.render_matches"),
+        patch("aquamvs.benchmark.visualization._sparse_cloud_to_open3d") as mock_to_o3d,
+        patch("aquamvs.benchmark.visualization.render_scene") as mock_render_scene,
+        patch(
+            "aquamvs.benchmark.visualization.reconstruct_surface"
+        ) as mock_reconstruct,
+        patch("aquamvs.benchmark.visualization.o3d") as mock_o3d,
+    ):
         # Mock Open3D PointCloud
         mock_pcd = MagicMock()
         mock_to_o3d.return_value = mock_pcd
@@ -357,6 +430,7 @@ def test_render_comparison_grids_keypoints(tmp_path):
         for cam_name in camera_names:
             # Create a real dummy image using cv2
             import cv2
+
             img = np.zeros((100, 100, 3), dtype=np.uint8)
             img_path = config_dir / f"keypoints_{cam_name}.png"
             cv2.imwrite(str(img_path), img)
@@ -381,6 +455,7 @@ def test_render_comparison_grids_sparse_renders(tmp_path):
         for viewpoint in viewpoints:
             # Create a real dummy image using matplotlib
             import matplotlib.pyplot as plt_local
+
             fig, ax = plt_local.subplots(figsize=(2, 2))
             ax.axis("off")
             img_path = config_dir / f"sparse_{viewpoint}.png"
@@ -407,6 +482,7 @@ def test_render_comparison_grids_mesh_grid(tmp_path):
         for viewpoint in viewpoints:
             # Create a real dummy image using matplotlib
             import matplotlib.pyplot as plt_local
+
             fig, ax = plt_local.subplots(figsize=(2, 2))
             ax.axis("off")
             img_path = config_dir / f"mesh_{viewpoint}.png"
@@ -447,6 +523,7 @@ def test_render_comparison_grids_single_config(tmp_path):
 
     # Create a real image
     import cv2
+
     img = np.zeros((100, 100, 3), dtype=np.uint8)
     cv2.imwrite(str(config_dir / "keypoints_cam0.png"), img)
 

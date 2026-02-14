@@ -1,14 +1,14 @@
 """Multi-view stereo reconstruction of underwater surfaces with refractive modeling."""
 
-try:
-    import torch
-except ImportError:
+from importlib.util import find_spec
+
+if find_spec("torch") is None:
     raise ImportError(
         "PyTorch is required but not installed. "
         "Install it from https://pytorch.org/get-started/locally/ "
         "choosing the appropriate CUDA version for your system. "
         "Example: pip install torch torchvision --index-url https://download.pytorch.org/whl/cu121"
-    ) from None
+    )
 
 from .calibration import (
     CalibrationData,
@@ -34,6 +34,12 @@ from .config import (
     PipelineConfig,
     SurfaceConfig,
 )
+from .evaluation import (
+    cloud_to_cloud_distance,
+    height_map_difference,
+    icp_align,
+    reprojection_error,
+)
 from .fusion import (
     backproject_depth_map,
     filter_all_depth_maps,
@@ -47,6 +53,12 @@ from .masks import (
     apply_mask_to_features,
     load_all_masks,
     load_mask,
+)
+from .pipeline import (
+    PipelineContext,
+    process_frame,
+    run_pipeline,
+    setup_pipeline,
 )
 from .surface import (
     load_mesh,
@@ -64,18 +76,6 @@ from .triangulation import (
     triangulate_all_pairs,
     triangulate_pair,
     triangulate_rays,
-)
-from .evaluation import (
-    cloud_to_cloud_distance,
-    height_map_difference,
-    icp_align,
-    reprojection_error,
-)
-from .pipeline import (
-    PipelineContext,
-    process_frame,
-    run_pipeline,
-    setup_pipeline,
 )
 
 __version__ = "0.1.0"

@@ -1,6 +1,6 @@
 """Configuration management for AquaMVS pipeline."""
 
-from dataclasses import dataclass, field, asdict
+from dataclasses import asdict, dataclass, field
 from pathlib import Path
 from typing import Any
 
@@ -388,7 +388,7 @@ class PipelineConfig:
             yaml.YAMLError: If the file is not valid YAML.
         """
         path = Path(path)
-        with open(path, "r") as f:
+        with open(path) as f:
             data = yaml.safe_load(f)
 
         if data is None:
@@ -421,7 +421,7 @@ class PipelineConfig:
             calibration_path=data.get("calibration_path", ""),
             output_dir=data.get("output_dir", ""),
             camera_video_map=data.get("camera_video_map", {}),
-            mask_dir=data.get("mask_dir", None),
+            mask_dir=data.get("mask_dir"),
             pipeline_mode=data.get("pipeline_mode", "full"),
             matcher_type=data.get("matcher_type", "lightglue"),
             color_norm=_build_dataclass(ColorNormConfig, color_norm),

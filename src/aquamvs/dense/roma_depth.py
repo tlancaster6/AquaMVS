@@ -53,7 +53,6 @@ def warp_to_pairwise_depth(
     )
     u_warp = u_grid.reshape(-1).float()  # (N,)
     v_warp = v_grid.reshape(-1).float()  # (N,)
-    N = u_warp.shape[0]
 
     # Convert warp grid coords to ref image pixel coords
     # warp grid [0, W_warp) -> normalized [-1, 1] -> image [0, W_ref)

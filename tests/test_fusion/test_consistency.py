@@ -1,7 +1,5 @@
 """Tests for geometric consistency filtering."""
 
-import math
-
 import pytest
 import torch
 
@@ -125,9 +123,13 @@ class TestSampleDepthMap:
 class TestFilterDepthMap:
     """Tests for filter_depth_map consistency filtering."""
 
-    def test_perfect_consistency_single_target(self, reference_camera, offset_camera, device):
+    def test_perfect_consistency_single_target(
+        self, reference_camera, offset_camera, device
+    ):
         """Test that identical depth at a 3D point passes consistency."""
-        config = FusionConfig(min_consistent_views=1, depth_tolerance=0.01)  # 10mm tolerance
+        config = FusionConfig(
+            min_consistent_views=1, depth_tolerance=0.01
+        )  # 10mm tolerance
 
         H, W = 32, 32
 
@@ -199,7 +201,9 @@ class TestFilterDepthMap:
 
     def test_min_consistent_views_threshold(self, device):
         """Test that min_consistent_views threshold works correctly."""
-        config = FusionConfig(min_consistent_views=2, depth_tolerance=0.01)  # 10mm tolerance
+        config = FusionConfig(
+            min_consistent_views=2, depth_tolerance=0.01
+        )  # 10mm tolerance
 
         # Create 3 cameras at different positions with small offsets for overlap
         cameras = {}
@@ -266,13 +270,15 @@ class TestFilterDepthMap:
 
     def test_confidence_threshold(self, reference_camera, offset_camera, device):
         """Test that pixels below min_confidence are excluded."""
-        config = FusionConfig(min_confidence=0.5, min_consistent_views=1, depth_tolerance=0.01)
+        config = FusionConfig(
+            min_confidence=0.5, min_consistent_views=1, depth_tolerance=0.01
+        )
 
         H, W = 8, 8
         ref_depth = torch.full((H, W), 2.0, dtype=torch.float32, device=device)
         # Half the pixels have low confidence
         ref_confidence = torch.ones(H, W, dtype=torch.float32, device=device)
-        ref_confidence[:, :W // 2] = 0.3  # Low confidence in left half
+        ref_confidence[:, : W // 2] = 0.3  # Low confidence in left half
 
         offset_depth = torch.full((H, W), 2.0, dtype=torch.float32, device=device)
 
@@ -289,11 +295,13 @@ class TestFilterDepthMap:
         )
 
         # Low confidence pixels should have count = 0 (not processed)
-        assert (count[:, :W // 2] == 0).all()
+        assert (count[:, : W // 2] == 0).all()
         # Low confidence pixels should be NaN
-        assert torch.all(torch.isnan(filtered_depth[:, :W // 2]))
+        assert torch.all(torch.isnan(filtered_depth[:, : W // 2]))
 
-    def test_nan_propagation_in_reference(self, reference_camera, offset_camera, device):
+    def test_nan_propagation_in_reference(
+        self, reference_camera, offset_camera, device
+    ):
         """Test that NaN in reference depth map propagates correctly."""
         config = FusionConfig(min_consistent_views=1, depth_tolerance=0.01)
 
@@ -402,7 +410,9 @@ class TestFilterAllDepthMaps:
             cameras[name] = RefractiveProjectionModel(
                 K, R, t, 1.0, torch.tensor([0.0, 0.0, -1.0], device=device), 1.0, 1.333
             )
-            depth_maps[name] = torch.full((H, W), 2.0, dtype=torch.float32, device=device)
+            depth_maps[name] = torch.full(
+                (H, W), 2.0, dtype=torch.float32, device=device
+            )
             confidence_maps[name] = torch.ones(H, W, dtype=torch.float32, device=device)
 
         # Filter all
@@ -416,7 +426,7 @@ class TestFilterAllDepthMaps:
 
         # Check structure
         assert len(results) == 3
-        for name in cameras.keys():
+        for name in cameras:
             assert name in results
             filtered_depth, filtered_conf, count = results[name]
             assert filtered_depth.shape == (H, W)
@@ -425,7 +435,9 @@ class TestFilterAllDepthMaps:
 
     def test_each_camera_filtered_against_others(self, device):
         """Test that each camera is filtered against all others."""
-        config = FusionConfig(min_consistent_views=1, depth_tolerance=0.01)  # 10mm tolerance
+        config = FusionConfig(
+            min_consistent_views=1, depth_tolerance=0.01
+        )  # 10mm tolerance
 
         # Create 3 cameras with small offsets for overlap
         cameras = {}
@@ -462,7 +474,7 @@ class TestFilterAllDepthMaps:
         )
 
         # Each camera should have results
-        for name in cameras.keys():
+        for name in cameras:
             assert name in results
             # Consistency counts should be computed
             _, _, count = results[name]

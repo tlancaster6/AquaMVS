@@ -1,8 +1,6 @@
 """Tests for depth and confidence map rendering."""
 
 import numpy as np
-import pytest
-from pathlib import Path
 from PIL import Image
 
 from aquamvs.visualization.depth import (

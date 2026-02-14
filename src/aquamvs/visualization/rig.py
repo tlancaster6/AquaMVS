@@ -103,10 +103,7 @@ def _draw_frustum(
         image_size: (width, height) for aspect ratio.
     """
     # Determine aspect ratio
-    if K is not None and image_size is not None:
-        width, height = image_size
-        aspect = width / height
-    elif image_size is not None:
+    if K is not None and image_size is not None or image_size is not None:
         width, height = image_size
         aspect = width / height
     else:
