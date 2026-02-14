@@ -58,12 +58,18 @@ from .masks import (
     load_all_masks,
     load_mask,
 )
-from .pipeline import (
-    PipelineContext,
-    process_frame,
-    run_pipeline,
-    setup_pipeline,
-)
+from .pipeline import PipelineContext
+
+# NOTE: Temporarily commented out during pipeline refactoring (Phase 03)
+# These functions will be restored in subsequent plans:
+# - setup_pipeline (Plan 03-01, Task 2)
+# - process_frame (Plan 03-02)
+# - run_pipeline (Plan 03-03)
+# from .pipeline import (
+#     process_frame,
+#     run_pipeline,
+#     setup_pipeline,
+# )
 from .surface import (
     export_mesh,
     load_mesh,
@@ -142,7 +148,8 @@ __all__ = [
     "height_map_difference",
     "reprojection_error",
     "PipelineContext",
-    "setup_pipeline",
-    "process_frame",
-    "run_pipeline",
+    # NOTE: Temporarily removed during pipeline refactoring (Phase 03)
+    # "setup_pipeline",
+    # "process_frame",
+    # "run_pipeline",
 ]
