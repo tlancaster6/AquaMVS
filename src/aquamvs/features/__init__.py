@@ -15,6 +15,12 @@ from .matching import (
     save_matches,
 )
 from .pairs import select_pairs
+from .roma import (
+    create_roma_matcher,
+    match_pair_roma,
+    match_all_pairs_roma,
+    run_roma_all_pairs,
+)
 
 __all__ = [
     "create_extractor",
@@ -28,4 +34,8 @@ __all__ = [
     "match_all_pairs",
     "save_matches",
     "load_matches",
+    "create_roma_matcher",
+    "match_pair_roma",
+    "match_all_pairs_roma",
+    "run_roma_all_pairs",
 ]

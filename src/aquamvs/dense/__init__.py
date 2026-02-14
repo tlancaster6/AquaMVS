@@ -10,6 +10,11 @@ from .plane_sweep import (
     save_depth_map,
     warp_source_image,
 )
+from .roma_depth import (
+    aggregate_pairwise_depths,
+    roma_warps_to_depth_maps,
+    warp_to_pairwise_depth,
+)
 
 __all__ = [
     "compute_ncc",
@@ -23,4 +28,7 @@ __all__ = [
     "extract_depth",
     "save_depth_map",
     "load_depth_map",
+    "warp_to_pairwise_depth",
+    "aggregate_pairwise_depths",
+    "roma_warps_to_depth_maps",
 ]

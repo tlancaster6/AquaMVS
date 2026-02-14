@@ -76,6 +76,12 @@ def run_benchmark(
         name: torch.from_numpy(img) for name, img in undistorted.items()
     }
 
+    # Compute camera centers once (shared across all configs)
+    camera_centers = {
+        name: pos.cpu().numpy()
+        for name, pos in ctx.calibration.camera_positions().items()
+    }
+
     # Get image size for matching
     image_size = list(ctx.calibration.cameras.values())[0].image_size
 
@@ -174,6 +180,7 @@ def run_benchmark(
             voxel_size=config.fusion.voxel_size,
             surface_config=config.surface,
             output_dir=Path(config.output_dir) / "benchmark",
+            camera_centers=camera_centers,
         )
 
         # --- Build ConfigResult ---

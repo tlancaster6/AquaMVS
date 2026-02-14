@@ -238,6 +238,7 @@ def build_synthetic_scene(tmp_path):
         ring_cameras=calibration.ring_cameras,
         auxiliary_cameras=[],
         device="cpu",
+        masks=None,
     )
 
     # Render synthetic checkerboard images

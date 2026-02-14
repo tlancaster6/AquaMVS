@@ -10,6 +10,7 @@ import pytest
 from aquamvs.config import SurfaceConfig
 from aquamvs.surface import (
     load_mesh,
+    reconstruct_bpa,
     reconstruct_heightfield,
     reconstruct_poisson,
     reconstruct_surface,
@@ -236,6 +237,77 @@ class TestHeightfieldReconstruction:
         # Should raise ValueError for < 4 points
         with pytest.raises(ValueError):
             reconstruct_heightfield(pcd, config)
+
+
+class TestBPAReconstruction:
+    """Tests for Ball Pivoting Algorithm surface reconstruction."""
+
+    def test_basic_reconstruction(self):
+        """Test that BPA reconstruction produces a valid mesh."""
+        pcd = create_flat_plane_cloud(z=1.5, n_points=100)
+        config = SurfaceConfig(method="bpa", bpa_radii=[0.01, 0.02, 0.04])
+
+        mesh = reconstruct_bpa(pcd, config)
+
+        # Verify mesh has vertices and triangles
+        assert len(mesh.vertices) > 0
+        assert len(mesh.triangles) > 0
+
+        # Verify mesh has colors
+        assert len(mesh.vertex_colors) == len(mesh.vertices)
+
+        # Verify vertices are near Z = 1.5
+        vertices = np.asarray(mesh.vertices)
+        z_vals = vertices[:, 2]
+        assert np.abs(z_vals.mean() - 1.5) < 0.1
+
+    def test_requires_normals(self):
+        """Test that BPA raises ValueError without normals."""
+        pcd = o3d.geometry.PointCloud()
+        pcd.points = o3d.utility.Vector3dVector(np.random.rand(100, 3))
+        # No normals set
+
+        config = SurfaceConfig(method="bpa")
+
+        with pytest.raises(ValueError, match="normals"):
+            reconstruct_bpa(pcd, config)
+
+    def test_auto_radii(self):
+        """Test that BPA auto-estimates radii when bpa_radii=None."""
+        pcd = create_flat_plane_cloud(z=1.5, n_points=100)
+        config = SurfaceConfig(method="bpa", bpa_radii=None)
+
+        mesh = reconstruct_bpa(pcd, config)
+
+        # Verify mesh has vertices and triangles
+        assert len(mesh.vertices) > 0
+        assert len(mesh.triangles) > 0
+
+        # Verify mesh has colors
+        assert len(mesh.vertex_colors) == len(mesh.vertices)
+
+    def test_explicit_radii(self):
+        """Test BPA with explicit radii."""
+        pcd = create_flat_plane_cloud(z=1.5, n_points=100)
+        config = SurfaceConfig(method="bpa", bpa_radii=[0.01, 0.02, 0.04])
+
+        mesh = reconstruct_bpa(pcd, config)
+
+        # Verify mesh has vertices and triangles
+        assert len(mesh.vertices) > 0
+        assert len(mesh.triangles) > 0
+
+    def test_dispatch_bpa(self):
+        """Test that reconstruct_surface dispatches correctly for method='bpa'."""
+        pcd = create_flat_plane_cloud(z=1.5, n_points=100)
+        config = SurfaceConfig(method="bpa", bpa_radii=[0.01, 0.02, 0.04])
+
+        mesh = reconstruct_surface(pcd, config)
+
+        # Verify we got a mesh
+        assert len(mesh.vertices) > 0
+        assert len(mesh.triangles) > 0
+
 
 
 class TestReconstructSurface:

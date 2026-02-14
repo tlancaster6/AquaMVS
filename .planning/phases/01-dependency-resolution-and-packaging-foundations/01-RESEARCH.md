@@ -322,6 +322,8 @@ dependencies = [
 - ImportError mentioning dataclasses version mismatch
 **Verification needed:** Test if `pip install romav2` works without --no-deps on Python 3.10-3.12 in clean venv (may be fixed in romav2 2.0.0).
 
+**UPDATE (2026-02-14):** User has created a fork at https://github.com/tlancaster6/RoMaV2/ with pyproject.toml fixed. PR submitted upstream. This provides a direct fix path: use the fork until upstream merges.
+
 ### Pitfall 3: AquaCal as Local Editable Dependency
 **What goes wrong:** PyPI upload fails because dependencies can't include local file paths like `"aquacal @ file:///c/Users/tucke/PycharmProjects/AquaCal"`.
 **Why it happens:** Development workflow uses `pip install -e ../AquaCal`, but distributed packages must reference PyPI-resolvable dependencies.

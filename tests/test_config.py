@@ -8,6 +8,8 @@ import yaml
 
 from aquamvs.config import (
     BenchmarkConfig,
+    ColorNormConfig,
+    DenseMatchingConfig,
     DenseStereoConfig,
     DeviceConfig,
     EvaluationConfig,
@@ -21,6 +23,31 @@ from aquamvs.config import (
     SurfaceConfig,
     VizConfig,
 )
+
+
+class TestColorNormConfig:
+    """Tests for ColorNormConfig."""
+
+    def test_defaults(self):
+        """Test default values."""
+        config = ColorNormConfig()
+        assert config.enabled is False
+        assert config.method == "gain"
+
+    def test_custom_values(self):
+        """Test custom values."""
+        config = ColorNormConfig(enabled=True, method="histogram")
+        assert config.enabled is True
+        assert config.method == "histogram"
+
+    def test_invalid_method_raises(self):
+        """Test that invalid method is caught during validation."""
+        config = ColorNormConfig(method="invalid")
+        # Method validation happens in PipelineConfig.validate()
+        pipeline = PipelineConfig()
+        pipeline.color_norm = config
+        with pytest.raises(ValueError, match="Invalid color_norm method"):
+            pipeline.validate()
 
 
 class TestFrameSamplingConfig:
@@ -100,6 +127,22 @@ class TestMatchingConfig:
         """Test custom values."""
         config = MatchingConfig(filter_threshold=0.2)
         assert config.filter_threshold == 0.2
+
+
+class TestDenseMatchingConfig:
+    """Tests for DenseMatchingConfig."""
+
+    def test_defaults(self):
+        """Test default values."""
+        config = DenseMatchingConfig()
+        assert config.certainty_threshold == 0.5
+        assert config.max_correspondences == 100000
+
+    def test_custom_values(self):
+        """Test custom values."""
+        config = DenseMatchingConfig(certainty_threshold=0.7, max_correspondences=5000)
+        assert config.certainty_threshold == 0.7
+        assert config.max_correspondences == 5000
 
 
 class TestDenseStereoConfig:
@@ -395,6 +438,25 @@ class TestPipelineConfig:
         config = PipelineConfig()
         config.benchmark.extractors = ["superpoint", "aliked", "disk"]
         config.validate()  # Should not raise
+
+    def test_validation_valid_matcher_types(self):
+        """Test validation passes for valid matcher types."""
+        for matcher_type in ["lightglue", "roma"]:
+            config = PipelineConfig()
+            config.matcher_type = matcher_type
+            config.validate()  # Should not raise
+
+    def test_validation_invalid_matcher_type(self):
+        """Test validation catches invalid matcher_type."""
+        config = PipelineConfig()
+        config.matcher_type = "invalid"
+        with pytest.raises(ValueError, match="Invalid matcher_type"):
+            config.validate()
+
+    def test_matcher_type_default(self):
+        """Test that matcher_type defaults to lightglue."""
+        config = PipelineConfig()
+        assert config.matcher_type == "lightglue"
 
 
 class TestYAMLRoundTrip:
@@ -765,6 +827,137 @@ camera_video_map:
         finally:
             temp_path.unlink()
 
+    def test_matcher_type_yaml_roundtrip(self):
+        """Test that matcher_type survives YAML round-trip."""
+        original = PipelineConfig(
+            calibration_path="/path/to/calibration.json",
+            output_dir="/path/to/output",
+            camera_video_map={"cam1": "/video1.mp4"},
+            matcher_type="roma",
+        )
+
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".yaml", delete=False) as f:
+            temp_path = Path(f.name)
+
+        try:
+            original.to_yaml(temp_path)
+            loaded = PipelineConfig.from_yaml(temp_path)
+
+            assert loaded.matcher_type == "roma"
+        finally:
+            temp_path.unlink()
+
+    def test_backward_compat_no_matcher_type(self):
+        """Test that YAML without matcher_type defaults to lightglue."""
+        yaml_content = """
+calibration_path: /path/to/calibration.json
+output_dir: /path/to/output
+camera_video_map:
+  cam1: /video1.mp4
+"""
+
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".yaml", delete=False) as f:
+            f.write(yaml_content)
+            temp_path = Path(f.name)
+
+        try:
+            loaded = PipelineConfig.from_yaml(temp_path)
+
+            # Missing matcher_type should default to lightglue
+            assert loaded.matcher_type == "lightglue"
+        finally:
+            temp_path.unlink()
+
+    def test_dense_matching_config_yaml_roundtrip(self):
+        """Test that dense_matching config survives YAML round-trip."""
+        original = PipelineConfig(
+            calibration_path="/path/to/calibration.json",
+            output_dir="/path/to/output",
+            camera_video_map={"cam1": "/video1.mp4"},
+            dense_matching=DenseMatchingConfig(
+                certainty_threshold=0.7, max_correspondences=5000
+            ),
+        )
+
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".yaml", delete=False) as f:
+            temp_path = Path(f.name)
+
+        try:
+            original.to_yaml(temp_path)
+            loaded = PipelineConfig.from_yaml(temp_path)
+
+            assert loaded.dense_matching.certainty_threshold == 0.7
+            assert loaded.dense_matching.max_correspondences == 5000
+        finally:
+            temp_path.unlink()
+
+    def test_backward_compat_no_dense_matching(self):
+        """Test that YAML without dense_matching section loads with defaults."""
+        yaml_content = """
+calibration_path: /path/to/calibration.json
+output_dir: /path/to/output
+camera_video_map:
+  cam1: /video1.mp4
+"""
+
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".yaml", delete=False) as f:
+            f.write(yaml_content)
+            temp_path = Path(f.name)
+
+        try:
+            loaded = PipelineConfig.from_yaml(temp_path)
+
+            # Missing dense_matching should use defaults
+            assert loaded.dense_matching == DenseMatchingConfig()
+            assert loaded.dense_matching.certainty_threshold == 0.5
+            assert loaded.dense_matching.max_correspondences == 100000
+        finally:
+            temp_path.unlink()
+
+    def test_color_norm_yaml_roundtrip(self):
+        """Test that color_norm config survives YAML round-trip."""
+        original = PipelineConfig(
+            calibration_path="/path/to/calibration.json",
+            output_dir="/path/to/output",
+            camera_video_map={"cam1": "/video1.mp4"},
+            color_norm=ColorNormConfig(enabled=True, method="histogram"),
+        )
+
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".yaml", delete=False) as f:
+            temp_path = Path(f.name)
+
+        try:
+            original.to_yaml(temp_path)
+            loaded = PipelineConfig.from_yaml(temp_path)
+
+            assert loaded.color_norm.enabled is True
+            assert loaded.color_norm.method == "histogram"
+        finally:
+            temp_path.unlink()
+
+    def test_backward_compat_no_color_norm(self):
+        """Test that YAML without color_norm section loads with defaults."""
+        yaml_content = """
+calibration_path: /path/to/calibration.json
+output_dir: /path/to/output
+camera_video_map:
+  cam1: /video1.mp4
+"""
+
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".yaml", delete=False) as f:
+            f.write(yaml_content)
+            temp_path = Path(f.name)
+
+        try:
+            loaded = PipelineConfig.from_yaml(temp_path)
+
+            # Missing color_norm should use defaults
+            assert loaded.color_norm == ColorNormConfig()
+            assert loaded.color_norm.enabled is False
+            assert loaded.color_norm.method == "gain"
+        finally:
+            temp_path.unlink()
+
 
 class TestImports:
     """Test that all config classes can be imported individually."""
@@ -772,6 +965,7 @@ class TestImports:
     def test_import_individual_configs(self):
         """Test that sub-configs can be imported individually."""
         # This test verifies the imports work (already done at top of file)
+        assert ColorNormConfig is not None
         assert FrameSamplingConfig is not None
         assert FeatureExtractionConfig is not None
         assert PairSelectionConfig is not None

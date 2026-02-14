@@ -186,6 +186,60 @@ def reconstruct_heightfield(
     return mesh
 
 
+def reconstruct_bpa(
+    pcd: o3d.geometry.PointCloud,
+    config: SurfaceConfig,
+) -> o3d.geometry.TriangleMesh:
+    """Reconstruct a surface mesh using the Ball Pivoting Algorithm.
+
+    Rolls a ball of varying radii over the point cloud surface, creating
+    triangles where the ball touches three points without enclosing others.
+    Best for incomplete point clouds where Poisson would hallucinate beyond
+    the data extent.
+
+    Args:
+        pcd: Fused point cloud with points, colors, and normals.
+        config: Surface configuration.
+
+    Returns:
+        Triangle mesh with vertex colors.
+
+    Raises:
+        ValueError: If the point cloud has no normals.
+    """
+    if not pcd.has_normals():
+        raise ValueError("Point cloud must have normals for BPA reconstruction.")
+
+    # Handle empty point clouds gracefully
+    if len(pcd.points) == 0:
+        return o3d.geometry.TriangleMesh()
+
+    # Determine ball radii
+    if config.bpa_radii is None:
+        # Auto-estimate from nearest-neighbor distance
+        distances = pcd.compute_nearest_neighbor_distance()
+        avg_dist = np.mean(distances)
+        radii = [1.0 * avg_dist, 2.0 * avg_dist, 4.0 * avg_dist]
+    else:
+        radii = config.bpa_radii
+
+    # Create a DoubleVector for Open3D
+    radii_vec = o3d.utility.DoubleVector(radii)
+
+    # Run Ball Pivoting Algorithm
+    mesh = o3d.geometry.TriangleMesh.create_from_point_cloud_ball_pivoting(
+        pcd, radii_vec
+    )
+
+    # Transfer colors from point cloud to mesh vertices
+    mesh = _transfer_colors(pcd, mesh)
+
+    # Compute vertex normals
+    mesh.compute_vertex_normals()
+
+    return mesh
+
+
 def reconstruct_surface(
     pcd: o3d.geometry.PointCloud,
     config: SurfaceConfig,
@@ -202,17 +256,19 @@ def reconstruct_surface(
         Triangle mesh with vertex colors.
 
     Raises:
-        ValueError: If config.method is not "poisson" or "heightfield".
+        ValueError: If config.method is not "poisson", "heightfield", or "bpa".
     """
     match config.method:
         case "poisson":
             return reconstruct_poisson(pcd, config)
         case "heightfield":
             return reconstruct_heightfield(pcd, config)
+        case "bpa":
+            return reconstruct_bpa(pcd, config)
         case _:
             raise ValueError(
                 f"Unknown surface method: {config.method!r}. "
-                "Expected 'poisson' or 'heightfield'."
+                "Expected 'poisson', 'heightfield', or 'bpa'."
             )
 
 

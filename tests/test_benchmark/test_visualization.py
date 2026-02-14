@@ -66,7 +66,16 @@ def mock_projection_models():
     }
 
 
-def test_render_config_outputs_creates_keypoints(tmp_path, mock_images, mock_features, mock_matches, mock_sparse_cloud, mock_projection_models):
+@pytest.fixture
+def mock_camera_centers():
+    """Create mock camera centers."""
+    return {
+        "cam0": np.array([0.0, 0.0, 0.0], dtype=np.float64),
+        "cam1": np.array([1.0, 0.0, 0.0], dtype=np.float64),
+    }
+
+
+def test_render_config_outputs_creates_keypoints(tmp_path, mock_images, mock_features, mock_matches, mock_sparse_cloud, mock_projection_models, mock_camera_centers):
     """Test that keypoint overlays are created for each camera."""
     with patch("aquamvs.benchmark.visualization.render_keypoints") as mock_render_kpts, \
          patch("aquamvs.benchmark.visualization.render_matches"), \
@@ -90,6 +99,7 @@ def test_render_config_outputs_creates_keypoints(tmp_path, mock_images, mock_fea
             voxel_size=0.01,
             surface_config=SurfaceConfig(),
             output_dir=tmp_path,
+            camera_centers=mock_camera_centers,
         )
 
         # Check that render_keypoints was called for each camera
@@ -98,7 +108,7 @@ def test_render_config_outputs_creates_keypoints(tmp_path, mock_images, mock_fea
         assert config_dir.exists()
 
 
-def test_render_config_outputs_creates_matches(tmp_path, mock_images, mock_features, mock_matches, mock_sparse_cloud, mock_projection_models):
+def test_render_config_outputs_creates_matches(tmp_path, mock_images, mock_features, mock_matches, mock_sparse_cloud, mock_projection_models, mock_camera_centers):
     """Test that match overlays are created for each pair."""
     with patch("aquamvs.benchmark.visualization.render_keypoints"), \
          patch("aquamvs.benchmark.visualization.render_matches") as mock_render_matches, \
@@ -122,13 +132,14 @@ def test_render_config_outputs_creates_matches(tmp_path, mock_images, mock_featu
             voxel_size=0.01,
             surface_config=SurfaceConfig(),
             output_dir=tmp_path,
+            camera_centers=mock_camera_centers,
         )
 
         # Check that render_matches was called for each pair
         assert mock_render_matches.call_count == 1
 
 
-def test_render_config_outputs_creates_sparse_ply(tmp_path, mock_images, mock_features, mock_matches, mock_sparse_cloud, mock_projection_models):
+def test_render_config_outputs_creates_sparse_ply(tmp_path, mock_images, mock_features, mock_matches, mock_sparse_cloud, mock_projection_models, mock_camera_centers):
     """Test that sparse PLY is created with colors and normals."""
     with patch("aquamvs.benchmark.visualization.render_keypoints"), \
          patch("aquamvs.benchmark.visualization.render_matches"), \
@@ -156,6 +167,7 @@ def test_render_config_outputs_creates_sparse_ply(tmp_path, mock_images, mock_fe
             voxel_size=0.01,
             surface_config=SurfaceConfig(),
             output_dir=tmp_path,
+            camera_centers=mock_camera_centers,
         )
 
         # Check that _sparse_cloud_to_open3d was called
@@ -165,7 +177,7 @@ def test_render_config_outputs_creates_sparse_ply(tmp_path, mock_images, mock_fe
         mock_o3d.io.write_point_cloud.assert_called_once()
 
 
-def test_render_config_outputs_creates_3d_renders(tmp_path, mock_images, mock_features, mock_matches, mock_sparse_cloud, mock_projection_models):
+def test_render_config_outputs_creates_3d_renders(tmp_path, mock_images, mock_features, mock_matches, mock_sparse_cloud, mock_projection_models, mock_camera_centers):
     """Test that 3D renders are created from canonical viewpoints."""
     with patch("aquamvs.benchmark.visualization.render_keypoints"), \
          patch("aquamvs.benchmark.visualization.render_matches"), \
@@ -195,6 +207,7 @@ def test_render_config_outputs_creates_3d_renders(tmp_path, mock_images, mock_fe
             voxel_size=0.01,
             surface_config=SurfaceConfig(),
             output_dir=tmp_path,
+            camera_centers=mock_camera_centers,
         )
 
         # Check that render_scene was called twice (sparse and mesh)
@@ -209,7 +222,7 @@ def test_render_config_outputs_creates_3d_renders(tmp_path, mock_images, mock_fe
         assert call_args[1]["prefix"] == "mesh"
 
 
-def test_render_config_outputs_empty_sparse_cloud(tmp_path, mock_images, mock_features, mock_matches, mock_projection_models):
+def test_render_config_outputs_empty_sparse_cloud(tmp_path, mock_images, mock_features, mock_matches, mock_projection_models, mock_camera_centers):
     """Test that empty sparse cloud is handled gracefully."""
     empty_cloud = {
         "points_3d": torch.zeros((0, 3)),
@@ -238,6 +251,7 @@ def test_render_config_outputs_empty_sparse_cloud(tmp_path, mock_images, mock_fe
             voxel_size=0.01,
             surface_config=SurfaceConfig(),
             output_dir=tmp_path,
+            camera_centers=mock_camera_centers,
         )
 
         # Empty cloud should skip PLY, render_scene, and mesh reconstruction
@@ -246,7 +260,7 @@ def test_render_config_outputs_empty_sparse_cloud(tmp_path, mock_images, mock_fe
         mock_reconstruct.assert_not_called()
 
 
-def test_render_config_outputs_creates_mesh_ply(tmp_path, mock_images, mock_features, mock_matches, mock_sparse_cloud, mock_projection_models):
+def test_render_config_outputs_creates_mesh_ply(tmp_path, mock_images, mock_features, mock_matches, mock_sparse_cloud, mock_projection_models, mock_camera_centers):
     """Test that mesh PLY is created with colors and faces."""
     with patch("aquamvs.benchmark.visualization.render_keypoints"), \
          patch("aquamvs.benchmark.visualization.render_matches"), \
@@ -276,6 +290,7 @@ def test_render_config_outputs_creates_mesh_ply(tmp_path, mock_images, mock_feat
             voxel_size=0.01,
             surface_config=SurfaceConfig(),
             output_dir=tmp_path,
+            camera_centers=mock_camera_centers,
         )
 
         # Check that reconstruct_surface was called after _sparse_cloud_to_open3d
@@ -285,7 +300,7 @@ def test_render_config_outputs_creates_mesh_ply(tmp_path, mock_images, mock_feat
         mock_o3d.io.write_triangle_mesh.assert_called_once()
 
 
-def test_render_config_outputs_mesh_failure_graceful(tmp_path, mock_images, mock_features, mock_matches, mock_sparse_cloud, mock_projection_models):
+def test_render_config_outputs_mesh_failure_graceful(tmp_path, mock_images, mock_features, mock_matches, mock_sparse_cloud, mock_projection_models, mock_camera_centers):
     """Test that mesh reconstruction failure does not crash the benchmark."""
     with patch("aquamvs.benchmark.visualization.render_keypoints"), \
          patch("aquamvs.benchmark.visualization.render_matches"), \
@@ -317,6 +332,7 @@ def test_render_config_outputs_mesh_failure_graceful(tmp_path, mock_images, mock
             voxel_size=0.01,
             surface_config=SurfaceConfig(),
             output_dir=tmp_path,
+            camera_centers=mock_camera_centers,
         )
 
         # Sparse PLY and renders should still be produced

@@ -30,6 +30,7 @@ def render_config_outputs(
     voxel_size: float,
     surface_config: SurfaceConfig,
     output_dir: Path,
+    camera_centers: dict[str, np.ndarray],
 ) -> None:
     """Render per-configuration visual artifacts.
 
@@ -52,6 +53,7 @@ def render_config_outputs(
         voxel_size: Voxel size for downsampling (meters).
         surface_config: Surface reconstruction configuration.
         output_dir: Benchmark root directory (e.g., "output/benchmark").
+        camera_centers: Camera centers in world frame, shape (3,) float64 per camera.
     """
     # Create config directory
     config_dir = Path(output_dir) / config_name
@@ -103,6 +105,7 @@ def render_config_outputs(
         projection_models,
         undistorted_tensors,
         voxel_size,
+        camera_centers,
     )
 
     # Save colored+normal'd PLY

@@ -8,6 +8,26 @@ import yaml
 
 
 @dataclass
+class ColorNormConfig:
+    """Configuration for cross-camera color normalization.
+
+    When enabled, undistorted images are normalized across cameras before
+    any color sampling. This corrects white balance and exposure differences
+    between cameras.
+
+    Attributes:
+        enabled: Enable cross-camera color normalization.
+        method: Normalization method.
+            "gain": Per-channel multiplicative gain to match cross-camera mean.
+            "histogram": Per-channel histogram matching to the cross-camera
+                aggregate histogram.
+    """
+
+    enabled: bool = False
+    method: str = "gain"
+
+
+@dataclass
 class FrameSamplingConfig:
     """Configuration for frame sampling from video sequences.
 
@@ -66,6 +86,19 @@ class MatchingConfig:
 
 
 @dataclass
+class DenseMatchingConfig:
+    """Configuration for RoMa v2 dense matching.
+
+    Attributes:
+        certainty_threshold: Minimum overlap certainty for correspondence extraction.
+        max_correspondences: Maximum number of correspondences to keep per pair.
+    """
+
+    certainty_threshold: float = 0.5
+    max_correspondences: int = 100000
+
+
+@dataclass
 class DenseStereoConfig:
     """Configuration for plane-sweep dense stereo.
 
@@ -89,12 +122,18 @@ class FusionConfig:
     Attributes:
         min_consistent_views: Minimum number of views that must agree for a point to survive.
         depth_tolerance: Maximum depth disagreement for consistency (meters).
+            Used by plane-sweep geometric consistency filtering.
+        roma_depth_tolerance: Maximum depth disagreement for RoMa pairwise depth
+            aggregation (meters). RoMa operates at ~560px warp resolution, so
+            triangulated depths have coarser quantization than plane-sweep.
+            Defaults to 0.02m (4x the plane-sweep tolerance). (B.16)
         voxel_size: Voxel grid cell size for deduplication (meters).
         min_confidence: Minimum confidence threshold to consider a depth pixel.
     """
 
     min_consistent_views: int = 3
     depth_tolerance: float = 0.005
+    roma_depth_tolerance: float = 0.02
     voxel_size: float = 0.001
     min_confidence: float = 0.1
 
@@ -104,14 +143,17 @@ class SurfaceConfig:
     """Configuration for surface reconstruction from point clouds.
 
     Attributes:
-        method: Surface reconstruction method ("poisson" or "heightfield").
+        method: Surface reconstruction method ("poisson", "heightfield", or "bpa").
         poisson_depth: Octree depth for Poisson reconstruction.
         grid_resolution: Grid cell size for height-field interpolation (meters).
+        bpa_radii: List of ball radii for Ball Pivoting Algorithm (meters),
+            or None to auto-estimate from point spacing.
     """
 
     method: str = "poisson"
     poisson_depth: int = 9
     grid_resolution: float = 0.002
+    bpa_radii: list[float] | None = None
 
 
 @dataclass
@@ -156,8 +198,10 @@ class OutputConfig:
     keep_intermediates: bool = True
 
 
+VALID_COLOR_NORM_METHODS = ["gain", "histogram"]
 VALID_VIZ_STAGES = ["depth", "features", "scene", "rig", "summary"]
 VALID_EXTRACTORS = ["superpoint", "aliked", "disk"]
+VALID_MATCHERS = ["lightglue", "roma"]
 
 
 @dataclass
@@ -230,14 +274,17 @@ class PipelineConfig:
     camera_video_map: dict[str, str] = field(default_factory=dict)
     mask_dir: str | None = None
     pipeline_mode: str = "full"
+    matcher_type: str = "lightglue"
 
     # Stage configurations (all have defaults)
+    color_norm: ColorNormConfig = field(default_factory=ColorNormConfig)
     frame_sampling: FrameSamplingConfig = field(default_factory=FrameSamplingConfig)
     feature_extraction: FeatureExtractionConfig = field(
         default_factory=FeatureExtractionConfig
     )
     pair_selection: PairSelectionConfig = field(default_factory=PairSelectionConfig)
     matching: MatchingConfig = field(default_factory=MatchingConfig)
+    dense_matching: DenseMatchingConfig = field(default_factory=DenseMatchingConfig)
     dense_stereo: DenseStereoConfig = field(default_factory=DenseStereoConfig)
     fusion: FusionConfig = field(default_factory=FusionConfig)
     surface: SurfaceConfig = field(default_factory=SurfaceConfig)
@@ -253,6 +300,13 @@ class PipelineConfig:
         Raises:
             ValueError: If any configuration value is invalid.
         """
+        # Validate color normalization method
+        if self.color_norm.method not in VALID_COLOR_NORM_METHODS:
+            raise ValueError(
+                f"Invalid color_norm method: {self.color_norm.method!r}. "
+                f"Valid methods: {VALID_COLOR_NORM_METHODS}"
+            )
+
         # Validate pipeline mode
         if self.pipeline_mode not in ["sparse", "full"]:
             raise ValueError(
@@ -268,10 +322,10 @@ class PipelineConfig:
             )
 
         # Validate surface method
-        if self.surface.method not in ["poisson", "heightfield"]:
+        if self.surface.method not in ["poisson", "heightfield", "bpa"]:
             raise ValueError(
                 f"Invalid surface method: {self.surface.method}. "
-                "Must be 'poisson' or 'heightfield'."
+                "Must be 'poisson', 'heightfield', or 'bpa'."
             )
 
         # Validate window size (must be odd and positive)
@@ -292,6 +346,13 @@ class PipelineConfig:
             raise ValueError(
                 f"Invalid extractor_type: {self.feature_extraction.extractor_type!r}. "
                 f"Valid types: {VALID_EXTRACTORS}"
+            )
+
+        # Validate matcher type
+        if self.matcher_type not in VALID_MATCHERS:
+            raise ValueError(
+                f"Invalid matcher_type: {self.matcher_type!r}. "
+                f"Valid types: {VALID_MATCHERS}"
             )
 
         # Validate viz stages
@@ -340,10 +401,12 @@ class PipelineConfig:
             return cls_type(**data_dict)
 
         # Extract sub-config dicts
+        color_norm = data.pop("color_norm", None)
         frame_sampling = data.pop("frame_sampling", None)
         feature_extraction = data.pop("feature_extraction", None)
         pair_selection = data.pop("pair_selection", None)
         matching = data.pop("matching", None)
+        dense_matching = data.pop("dense_matching", None)
         dense_stereo = data.pop("dense_stereo", None)
         fusion = data.pop("fusion", None)
         surface = data.pop("surface", None)
@@ -360,12 +423,15 @@ class PipelineConfig:
             camera_video_map=data.get("camera_video_map", {}),
             mask_dir=data.get("mask_dir", None),
             pipeline_mode=data.get("pipeline_mode", "full"),
+            matcher_type=data.get("matcher_type", "lightglue"),
+            color_norm=_build_dataclass(ColorNormConfig, color_norm),
             frame_sampling=_build_dataclass(FrameSamplingConfig, frame_sampling),
             feature_extraction=_build_dataclass(
                 FeatureExtractionConfig, feature_extraction
             ),
             pair_selection=_build_dataclass(PairSelectionConfig, pair_selection),
             matching=_build_dataclass(MatchingConfig, matching),
+            dense_matching=_build_dataclass(DenseMatchingConfig, dense_matching),
             dense_stereo=_build_dataclass(DenseStereoConfig, dense_stereo),
             fusion=_build_dataclass(FusionConfig, fusion),
             surface=_build_dataclass(SurfaceConfig, surface),

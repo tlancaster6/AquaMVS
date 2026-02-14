@@ -17,8 +17,19 @@ from .calibration import (
     undistort_image,
 )
 from .config import PipelineConfig
-from .dense import extract_depth, plane_sweep_stereo, save_depth_map
-from .features import extract_features_batch, match_all_pairs, select_pairs
+from .dense import (
+    extract_depth,
+    plane_sweep_stereo,
+    roma_warps_to_depth_maps,
+    save_depth_map,
+)
+from .features import (
+    extract_features_batch,
+    match_all_pairs,
+    match_all_pairs_roma,
+    run_roma_all_pairs,
+    select_pairs,
+)
 from .fusion import filter_all_depth_maps, fuse_depth_maps, save_point_cloud
 from .projection.protocol import ProjectionModel
 from .projection.refractive import RefractiveProjectionModel
@@ -114,73 +125,42 @@ def _sparse_cloud_to_open3d(
     projection_models: dict[str, ProjectionModel],
     images: dict[str, torch.Tensor],
     voxel_size: float,
+    camera_centers: dict[str, np.ndarray],
+    ring_cameras: list[str],
 ) -> o3d.geometry.PointCloud:
     """Convert sparse triangulated cloud to Open3D PointCloud with colors and normals.
 
-    For each point, projects into all cameras and samples color from the camera
-    with the best viewing angle (closest to image center among valid projections).
-    Then voxel downsamples and estimates normals.
+    Builds point cloud, downsamples, estimates normals, then assigns colors using
+    the best viewing angle per point (most perpendicular to local surface normal).
 
     Args:
         sparse_cloud: Dict with "points_3d" (N, 3) and "scores" (N,) tensors.
         projection_models: Dict of ProjectionModel by camera name.
         images: Dict of undistorted BGR images (H, W, 3) uint8 tensors by camera name.
         voxel_size: Voxel size for downsampling (meters).
+        camera_centers: Dict of camera centers in world frame, shape (3,) float64 per camera.
+        ring_cameras: List of ring (non-auxiliary) camera names for color selection.
 
     Returns:
         Open3D PointCloud with points, colors, and normals.
     """
+    from .coloring import best_view_colors
+
     points_3d = sparse_cloud["points_3d"]  # (N, 3)
     N = points_3d.shape[0]
 
     if N == 0:
         return o3d.geometry.PointCloud()
 
-    # Prepare color array
-    colors_rgb = np.full((N, 3), 0.5, dtype=np.float64)  # Default gray
-
-    # For each camera, project all points and sample colors
-    for cam_name, model in projection_models.items():
-        if cam_name not in images:
-            continue
-
-        image = images[cam_name]  # (H, W, 3) uint8
-        H, W = image.shape[:2]
-
-        # Project all points into this camera
-        pixels, valid = model.project(points_3d)  # (N, 2), (N,)
-        pixels_np = pixels.cpu().numpy()
-        valid_np = valid.cpu().numpy()
-
-        # For each valid projection, sample color
-        for i in range(N):
-            if not valid_np[i]:
-                continue
-
-            u, v = pixels_np[i]
-            # Convert to integer indices with bounds checking
-            v_int = int(np.clip(np.round(v), 0, H - 1))
-            u_int = int(np.clip(np.round(u), 0, W - 1))
-
-            # Sample BGR pixel and convert to RGB [0, 1]
-            bgr = image[v_int, u_int].cpu().numpy()
-            rgb = bgr[[2, 1, 0]] / 255.0
-
-            # Simple heuristic: use first valid camera color
-            # (could be improved to pick camera with best viewing angle)
-            if np.allclose(colors_rgb[i], 0.5):  # Still default gray
-                colors_rgb[i] = rgb
-
-    # Convert to Open3D
+    # 1. Build uncolored point cloud
     pcd = o3d.geometry.PointCloud()
     pcd.points = o3d.utility.Vector3dVector(points_3d.cpu().numpy())
-    pcd.colors = o3d.utility.Vector3dVector(colors_rgb)
 
-    # Voxel downsample
+    # 2. Voxel downsample (reduces N significantly)
     if N > 0:
         pcd = pcd.voxel_down_sample(voxel_size)
 
-    # Estimate normals (same parameters as fusion)
+    # 3. Estimate normals (needed for best-view selection)
     if pcd.has_points():
         pcd.estimate_normals(
             search_param=o3d.geometry.KDTreeSearchParamHybrid(
@@ -189,6 +169,22 @@ def _sparse_cloud_to_open3d(
         )
         # Orient normals toward camera origin (0, 0, 0)
         pcd.orient_normals_towards_camera_location(np.array([0.0, 0.0, 0.0]))
+
+    # 4. Assign colors using best-view selection on DOWNSAMPLED points
+    if pcd.has_points():
+        # Filter to ring cameras only (exclude auxiliary cameras)
+        ring_models = {n: m for n, m in projection_models.items() if n in ring_cameras}
+        ring_images = {n: img for n, img in images.items() if n in ring_cameras}
+        ring_centers = {n: c for n, c in camera_centers.items() if n in ring_cameras}
+
+        colors = best_view_colors(
+            np.asarray(pcd.points),
+            np.asarray(pcd.normals),
+            ring_models,
+            ring_images,
+            ring_centers,
+        )
+        pcd.colors = o3d.utility.Vector3dVector(colors)
 
     return pcd
 
@@ -361,127 +357,233 @@ def process_frame(
         if name in ctx.undistortion_maps:
             undistorted[name] = undistort_image(img, ctx.undistortion_maps[name])
 
+    # --- Stage 1b: Color normalization (if enabled) ---
+    if config.color_norm.enabled:
+        from .coloring import normalize_colors
+
+        logger.info("Frame %d: normalizing colors across cameras", frame_idx)
+        undistorted = normalize_colors(undistorted, method=config.color_norm.method)
+
     # Convert to tensors for feature extraction
     undistorted_tensors = {
         name: torch.from_numpy(img) for name, img in undistorted.items()
     }
 
-    # --- Stage 2: Feature Extraction ---
-    logger.info("Frame %d: extracting features", frame_idx)
-    all_features = extract_features_batch(
-        undistorted_tensors,
-        config.feature_extraction,
-        device=device,
-    )
+    # Compute camera centers once for coloring (used by sparse cloud and mesh coloring)
+    camera_centers = {
+        name: pos.cpu().numpy()
+        for name, pos in ctx.calibration.camera_positions().items()
+    }
 
-    # --- Apply masks to features ---
-    if ctx.masks:
-        from .masks import apply_mask_to_features
-
-        for cam_name in list(all_features.keys()):
-            if cam_name in ctx.masks:
-                n_before = all_features[cam_name]["keypoints"].shape[0]
-                all_features[cam_name] = apply_mask_to_features(
-                    all_features[cam_name], ctx.masks[cam_name]
-                )
-                n_after = all_features[cam_name]["keypoints"].shape[0]
-                logger.debug(
-                    "Frame %d: %s mask filtered %d -> %d keypoints",
-                    frame_idx,
-                    cam_name,
-                    n_before,
-                    n_after,
-                )
-
-    # --- Stage 3: Feature Matching ---
-    logger.info("Frame %d: matching features", frame_idx)
-    all_matches = match_all_pairs(
-        all_features,
-        ctx.pairs,
-        image_size=list(ctx.calibration.cameras.values())[0].image_size,
-        config=config.matching,
-        device=device,
-        extractor_type=config.feature_extraction.extractor_type,
-    )
-
-    # --- [viz] Feature overlays ---
-    if _should_viz(config, "features"):
-        try:
-            from .visualization.features import render_all_features
-
-            logger.info("Frame %d: rendering feature visualizations", frame_idx)
-            viz_dir = frame_dir / "viz"
-            viz_dir.mkdir(exist_ok=True)
-
-            # Convert tensors to numpy for viz
-            np_images = {
-                name: img for name, img in undistorted.items()
-            }  # already numpy
-            np_features = {
-                name: {k: v.cpu().numpy() for k, v in feats.items()}
-                for name, feats in all_features.items()
-            }
-            np_matches = {
-                pair: {k: v.cpu().numpy() for k, v in match.items()}
-                for pair, match in all_matches.items()
-            }
-
-            render_all_features(
-                images=np_images,
-                all_features=np_features,
-                all_matches=np_matches,
-                sparse_cloud=None,  # Not available yet at this pipeline point
-                projection_models=None,
-                output_dir=viz_dir,
+    # --- Dispatch on matcher type ---
+    if config.matcher_type == "roma":
+        # --- RoMa path: branch on pipeline_mode ---
+        if config.pipeline_mode == "full":
+            # --- RoMa + full: warps -> depth maps -> fusion -> surface ---
+            logger.info(
+                "Frame %d: running RoMa v2 dense matching (full mode)", frame_idx
             )
-        except Exception:
-            logger.exception("Frame %d: feature visualization failed", frame_idx)
+            all_warps = run_roma_all_pairs(
+                undistorted_images=undistorted_tensors,
+                pairs=ctx.pairs,
+                config=config.dense_matching,
+                device=device,
+                masks=None,  # Masks applied after upsampling
+            )
 
-    # --- Save features (opt-in) ---
-    if config.output.save_features:
-        from .features import save_features, save_matches
+            logger.info("Frame %d: converting RoMa warps to depth maps", frame_idx)
+            depth_maps, confidence_maps = roma_warps_to_depth_maps(
+                ring_cameras=ctx.ring_cameras,
+                pairs=ctx.pairs,
+                all_warps=all_warps,
+                projection_models=ctx.projection_models,
+                dense_matching_config=config.dense_matching,
+                fusion_config=config.fusion,
+                image_size=list(ctx.calibration.cameras.values())[0].image_size,
+                masks=ctx.masks,
+            )
 
-        features_dir = frame_dir / "features"
-        features_dir.mkdir(exist_ok=True)
-        for name, feats in all_features.items():
-            save_features(feats, features_dir / f"{name}.pt")
-        for (ref, src), match in all_matches.items():
-            save_matches(match, features_dir / f"{ref}_{src}.pt")
+            # Save depth maps (opt-out)
+            if config.output.save_depth_maps:
+                depth_dir = frame_dir / "depth_maps"
+                depth_dir.mkdir(exist_ok=True)
+                for cam_name in depth_maps:
+                    save_depth_map(
+                        depth_maps[cam_name],
+                        confidence_maps[cam_name],
+                        depth_dir / f"{cam_name}.npz",
+                    )
+
+            # [viz] Depth map renders
+            if _should_viz(config, "depth"):
+                try:
+                    from .visualization.depth import render_all_depth_maps
+
+                    logger.info(
+                        "Frame %d: rendering depth map visualizations", frame_idx
+                    )
+                    viz_dir = frame_dir / "viz"
+                    viz_dir.mkdir(exist_ok=True)
+
+                    # Convert depth/confidence tensors to numpy
+                    np_depths = {
+                        name: dm.cpu().numpy() for name, dm in depth_maps.items()
+                    }
+                    np_confs = {
+                        name: cm.cpu().numpy() for name, cm in confidence_maps.items()
+                    }
+
+                    render_all_depth_maps(np_depths, np_confs, viz_dir)
+                except Exception:
+                    logger.exception("Frame %d: depth visualization failed", frame_idx)
+
+            # Jump to fusion (skip triangulation, depth ranges, plane sweep)
+            # Continue execution at geometric consistency filtering below
+
+        else:
+            # --- RoMa + sparse: correspondences -> triangulation -> sparse surface ---
+            logger.info("Frame %d: matching with RoMa v2 (sparse mode)", frame_idx)
+            all_matches = match_all_pairs_roma(
+                undistorted_images=undistorted_tensors,
+                pairs=ctx.pairs,
+                config=config.dense_matching,
+                device=device,
+                masks=ctx.masks,
+            )
+
+            # Save matches if requested
+            if config.output.save_features:
+                from .features import save_matches
+
+                features_dir = frame_dir / "features"
+                features_dir.mkdir(exist_ok=True)
+                for (ref, src), match in all_matches.items():
+                    save_matches(match, features_dir / f"{ref}_{src}.pt")
+
+            # Feature viz is skipped (no per-camera keypoints)
+
+    elif config.matcher_type == "lightglue":
+        # --- LightGlue path: extraction + matching ---
+        # --- Stage 2: Feature Extraction ---
+        logger.info("Frame %d: extracting features", frame_idx)
+        all_features = extract_features_batch(
+            undistorted_tensors,
+            config.feature_extraction,
+            device=device,
+        )
+
+        # --- Apply masks to features ---
+        if ctx.masks:
+            from .masks import apply_mask_to_features
+
+            for cam_name in list(all_features.keys()):
+                if cam_name in ctx.masks:
+                    n_before = all_features[cam_name]["keypoints"].shape[0]
+                    all_features[cam_name] = apply_mask_to_features(
+                        all_features[cam_name], ctx.masks[cam_name]
+                    )
+                    n_after = all_features[cam_name]["keypoints"].shape[0]
+                    logger.debug(
+                        "Frame %d: %s mask filtered %d -> %d keypoints",
+                        frame_idx,
+                        cam_name,
+                        n_before,
+                        n_after,
+                    )
+
+        # --- Stage 3: Feature Matching ---
+        logger.info("Frame %d: matching features", frame_idx)
+        all_matches = match_all_pairs(
+            all_features,
+            ctx.pairs,
+            image_size=list(ctx.calibration.cameras.values())[0].image_size,
+            config=config.matching,
+            device=device,
+            extractor_type=config.feature_extraction.extractor_type,
+        )
+
+        # --- [viz] Feature overlays ---
+        if _should_viz(config, "features"):
+            try:
+                from .visualization.features import render_all_features
+
+                logger.info("Frame %d: rendering feature visualizations", frame_idx)
+                viz_dir = frame_dir / "viz"
+                viz_dir.mkdir(exist_ok=True)
+
+                # Convert tensors to numpy for viz
+                np_images = {
+                    name: img for name, img in undistorted.items()
+                }  # already numpy
+                np_features = {
+                    name: {k: v.cpu().numpy() for k, v in feats.items()}
+                    for name, feats in all_features.items()
+                }
+                np_matches = {
+                    pair: {k: v.cpu().numpy() for k, v in match.items()}
+                    for pair, match in all_matches.items()
+                }
+
+                render_all_features(
+                    images=np_images,
+                    all_features=np_features,
+                    all_matches=np_matches,
+                    sparse_cloud=None,  # Not available yet at this pipeline point
+                    projection_models=None,
+                    output_dir=viz_dir,
+                )
+            except Exception:
+                logger.exception("Frame %d: feature visualization failed", frame_idx)
+
+        # --- Save features (opt-in) ---
+        if config.output.save_features:
+            from .features import save_features, save_matches
+
+            features_dir = frame_dir / "features"
+            features_dir.mkdir(exist_ok=True)
+            for name, feats in all_features.items():
+                save_features(feats, features_dir / f"{name}.pt")
+            for (ref, src), match in all_matches.items():
+                save_matches(match, features_dir / f"{ref}_{src}.pt")
 
     # --- Stage 4: Sparse Triangulation ---
-    logger.info("Frame %d: triangulating sparse points", frame_idx)
-    sparse_cloud = triangulate_all_pairs(ctx.projection_models, all_matches)
+    # Skip for roma+full (depth maps already generated)
+    skip_to_fusion = config.matcher_type == "roma" and config.pipeline_mode == "full"
 
-    # Save sparse cloud (always saved)
-    sparse_dir = frame_dir / "sparse"
-    sparse_dir.mkdir(exist_ok=True)
-    save_sparse_cloud(sparse_cloud, sparse_dir / "sparse_cloud.pt")
+    if not skip_to_fusion:
+        logger.info("Frame %d: triangulating sparse points", frame_idx)
+        sparse_cloud = triangulate_all_pairs(ctx.projection_models, all_matches)
 
-    # --- Stage 4b: Filter sparse cloud ---
-    n_before = sparse_cloud["points_3d"].shape[0]
-    sparse_cloud = filter_sparse_cloud(
-        sparse_cloud,
-        water_z=ctx.calibration.water_z,
-    )
-    n_after = sparse_cloud["points_3d"].shape[0]
-    logger.info(
-        "Frame %d: sparse cloud filtered %d -> %d points (%d removed)",
-        frame_idx,
-        n_before,
-        n_after,
-        n_before - n_after,
-    )
+        # Save sparse cloud (always saved)
+        sparse_dir = frame_dir / "sparse"
+        sparse_dir.mkdir(exist_ok=True)
+        save_sparse_cloud(sparse_cloud, sparse_dir / "sparse_cloud.pt")
 
-    # --- Stage 5: Depth Range Estimation ---
-    logger.info("Frame %d: estimating depth ranges", frame_idx)
-    depth_ranges = compute_depth_ranges(
-        ctx.projection_models,
-        sparse_cloud,
-        margin=config.dense_stereo.depth_margin,
-    )
+        # --- Stage 4b: Filter sparse cloud ---
+        n_before = sparse_cloud["points_3d"].shape[0]
+        sparse_cloud = filter_sparse_cloud(
+            sparse_cloud,
+            water_z=ctx.calibration.water_z,
+        )
+        n_after = sparse_cloud["points_3d"].shape[0]
+        logger.info(
+            "Frame %d: sparse cloud filtered %d -> %d points (%d removed)",
+            frame_idx,
+            n_before,
+            n_after,
+            n_before - n_after,
+        )
+
+        # --- Stage 5: Depth Range Estimation ---
+        logger.info("Frame %d: estimating depth ranges", frame_idx)
+        depth_ranges = compute_depth_ranges(
+            ctx.projection_models,
+            sparse_cloud,
+            margin=config.dense_stereo.depth_margin,
+        )
 
     # --- Sparse mode branch: convert sparse cloud to Open3D, surface, viz, done ---
-    if config.pipeline_mode == "sparse":
+    if config.pipeline_mode == "sparse" and not skip_to_fusion:
         # Convert sparse cloud to Open3D PointCloud
         pcd = None
         if sparse_cloud["points_3d"].shape[0] > 0:
@@ -490,6 +592,8 @@ def process_frame(
                 ctx.projection_models,
                 undistorted_tensors,
                 config.fusion.voxel_size,
+                camera_centers,
+                ctx.ring_cameras,
             )
         else:
             logger.warning(
@@ -508,6 +612,25 @@ def process_frame(
         if pcd is not None and pcd.has_points():
             logger.info("Frame %d: reconstructing surface", frame_idx)
             mesh = reconstruct_surface(pcd, config.surface)
+
+            # Re-color mesh vertices via best-view camera projection
+            if mesh is not None and len(mesh.vertices) > 0:
+                from .coloring import best_view_colors
+
+                # Filter to ring cameras only (exclude auxiliary cameras)
+                ring_models = {n: m for n, m in ctx.projection_models.items() if n in ctx.ring_cameras}
+                ring_images = {n: img for n, img in undistorted_tensors.items() if n in ctx.ring_cameras}
+                ring_centers = {n: c for n, c in camera_centers.items() if n in ctx.ring_cameras}
+
+                mesh.compute_vertex_normals()
+                vertex_colors = best_view_colors(
+                    np.asarray(mesh.vertices),
+                    np.asarray(mesh.vertex_normals),
+                    ring_models,
+                    ring_images,
+                    ring_centers,
+                )
+                mesh.vertex_colors = o3d.utility.Vector3dVector(vertex_colors)
 
             # Save mesh (opt-out)
             if config.output.save_mesh:
@@ -576,96 +699,111 @@ def process_frame(
         return
 
     # --- Stage 6: Dense Stereo (per ring camera) ---
-    logger.info("Frame %d: running dense stereo", frame_idx)
-    depth_maps = {}
-    confidence_maps = {}
+    # Skip for roma+full (depth maps already generated above)
+    if not skip_to_fusion:
+        logger.info("Frame %d: running dense stereo", frame_idx)
+        depth_maps = {}
+        confidence_maps = {}
 
-    for ref_name in ctx.ring_cameras:
-        if ref_name not in depth_ranges:
-            logger.warning(
-                "Frame %d: no depth range for %s, skipping", frame_idx, ref_name
-            )
-            continue
+        for ref_name in ctx.ring_cameras:
+            if ref_name not in depth_ranges:
+                logger.warning(
+                    "Frame %d: no depth range for %s, skipping", frame_idx, ref_name
+                )
+                continue
 
-        src_names = ctx.pairs.get(ref_name, [])
-        if not src_names:
-            logger.warning(
-                "Frame %d: no source cameras for %s, skipping", frame_idx, ref_name
-            )
-            continue
+            src_names = ctx.pairs.get(ref_name, [])
+            if not src_names:
+                logger.warning(
+                    "Frame %d: no source cameras for %s, skipping", frame_idx, ref_name
+                )
+                continue
 
-        # Plane sweep
-        sweep_result = plane_sweep_stereo(
-            ref_name=ref_name,
-            ref_model=ctx.projection_models[ref_name],
-            src_names=src_names,
-            src_models=ctx.projection_models,
-            ref_image=undistorted_tensors[ref_name],
-            src_images=undistorted_tensors,
-            depth_range=depth_ranges[ref_name],
-            config=config.dense_stereo,
-            device=device,
-        )
-
-        # Depth extraction
-        depth_map, confidence = extract_depth(
-            sweep_result["cost_volume"],
-            sweep_result["depths"],
-        )
-
-        # Apply mask to depth map
-        if ref_name in ctx.masks:
-            from .masks import apply_mask_to_depth
-
-            depth_map, confidence = apply_mask_to_depth(
-                depth_map, confidence, ctx.masks[ref_name]
+            # Plane sweep
+            sweep_result = plane_sweep_stereo(
+                ref_name=ref_name,
+                ref_model=ctx.projection_models[ref_name],
+                src_names=src_names,
+                src_models=ctx.projection_models,
+                ref_image=undistorted_tensors[ref_name],
+                src_images=undistorted_tensors,
+                depth_range=depth_ranges[ref_name],
+                config=config.dense_stereo,
+                device=device,
             )
 
-        depth_maps[ref_name] = depth_map
-        confidence_maps[ref_name] = confidence
-
-        logger.debug("Frame %d: %s depth extracted", frame_idx, ref_name)
-
-    # --- Save depth maps (opt-out) ---
-    if config.output.save_depth_maps:
-        depth_dir = frame_dir / "depth_maps"
-        depth_dir.mkdir(exist_ok=True)
-        for cam_name in depth_maps:
-            save_depth_map(
-                depth_maps[cam_name],
-                confidence_maps[cam_name],
-                depth_dir / f"{cam_name}.npz",
+            # Depth extraction
+            depth_map, confidence = extract_depth(
+                sweep_result["cost_volume"],
+                sweep_result["depths"],
             )
 
-    # --- [viz] Depth map renders ---
-    if _should_viz(config, "depth"):
-        try:
-            from .visualization.depth import render_all_depth_maps
+            # Apply mask to depth map
+            if ctx.masks and ref_name in ctx.masks:
+                from .masks import apply_mask_to_depth
 
-            logger.info("Frame %d: rendering depth map visualizations", frame_idx)
-            viz_dir = frame_dir / "viz"
-            viz_dir.mkdir(exist_ok=True)
+                depth_map, confidence = apply_mask_to_depth(
+                    depth_map, confidence, ctx.masks[ref_name]
+                )
 
-            # Convert depth/confidence tensors to numpy
-            np_depths = {name: dm.cpu().numpy() for name, dm in depth_maps.items()}
-            np_confs = {name: cm.cpu().numpy() for name, cm in confidence_maps.items()}
+            depth_maps[ref_name] = depth_map
+            confidence_maps[ref_name] = confidence
 
-            render_all_depth_maps(np_depths, np_confs, viz_dir)
-        except Exception:
-            logger.exception("Frame %d: depth visualization failed", frame_idx)
+            logger.debug("Frame %d: %s depth extracted", frame_idx, ref_name)
+
+        # --- Save depth maps (opt-out) ---
+        if config.output.save_depth_maps:
+            depth_dir = frame_dir / "depth_maps"
+            depth_dir.mkdir(exist_ok=True)
+            for cam_name in depth_maps:
+                save_depth_map(
+                    depth_maps[cam_name],
+                    confidence_maps[cam_name],
+                    depth_dir / f"{cam_name}.npz",
+                )
+
+        # --- [viz] Depth map renders ---
+        if _should_viz(config, "depth"):
+            try:
+                from .visualization.depth import render_all_depth_maps
+
+                logger.info("Frame %d: rendering depth map visualizations", frame_idx)
+                viz_dir = frame_dir / "viz"
+                viz_dir.mkdir(exist_ok=True)
+
+                # Convert depth/confidence tensors to numpy
+                np_depths = {name: dm.cpu().numpy() for name, dm in depth_maps.items()}
+                np_confs = {
+                    name: cm.cpu().numpy() for name, cm in confidence_maps.items()
+                }
+
+                render_all_depth_maps(np_depths, np_confs, viz_dir)
+            except Exception:
+                logger.exception("Frame %d: depth visualization failed", frame_idx)
 
     # --- Stage 7: Geometric Consistency Filtering ---
-    logger.info("Frame %d: filtering depth maps", frame_idx)
-    filtered = filter_all_depth_maps(
-        ctx.ring_cameras,
-        ctx.projection_models,
-        depth_maps,
-        confidence_maps,
-        config.fusion,
-    )
+    # Skip for RoMa+full: aggregate_pairwise_depths already enforces multi-view
+    # consistency at warp level. Applying cross-camera filtering on top causes
+    # cascading sparsification (sparse maps can't cross-validate each other's
+    # edges), producing the star/wedge pattern in the fused cloud. (B.16)
+    if skip_to_fusion:
+        logger.info(
+            "Frame %d: skipping geometric consistency filter (RoMa path)", frame_idx
+        )
+        filtered_depths = depth_maps
+        filtered_confs = confidence_maps
+    else:
+        logger.info("Frame %d: filtering depth maps", frame_idx)
+        filtered = filter_all_depth_maps(
+            ctx.ring_cameras,
+            ctx.projection_models,
+            depth_maps,
+            confidence_maps,
+            config.fusion,
+        )
 
-    filtered_depths = {name: f[0] for name, f in filtered.items()}
-    filtered_confs = {name: f[1] for name, f in filtered.items()}
+        filtered_depths = {name: f[0] for name, f in filtered.items()}
+        filtered_confs = {name: f[1] for name, f in filtered.items()}
 
     # --- Stage 8: Depth Map Fusion ---
     logger.info("Frame %d: fusing depth maps", frame_idx)
@@ -707,6 +845,25 @@ def process_frame(
     if fused_pcd.has_points():
         logger.info("Frame %d: reconstructing surface", frame_idx)
         mesh = reconstruct_surface(fused_pcd, config.surface)
+
+        # Re-color mesh vertices via best-view camera projection
+        if mesh is not None and len(mesh.vertices) > 0:
+            from .coloring import best_view_colors
+
+            # Filter to ring cameras only (exclude auxiliary cameras)
+            ring_models = {n: m for n, m in ctx.projection_models.items() if n in ctx.ring_cameras}
+            ring_images = {n: img for n, img in undistorted_tensors.items() if n in ctx.ring_cameras}
+            ring_centers = {n: c for n, c in camera_centers.items() if n in ctx.ring_cameras}
+
+            mesh.compute_vertex_normals()
+            vertex_colors = best_view_colors(
+                np.asarray(mesh.vertices),
+                np.asarray(mesh.vertex_normals),
+                ring_models,
+                ring_images,
+                ring_centers,
+            )
+            mesh.vertex_colors = o3d.utility.Vector3dVector(vertex_colors)
 
         # --- Save mesh (opt-out) ---
         if config.output.save_mesh:
