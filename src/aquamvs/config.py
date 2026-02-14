@@ -1,92 +1,107 @@
 """Configuration management for AquaMVS pipeline."""
 
-from dataclasses import asdict, dataclass, field
+import logging
 from pathlib import Path
-from typing import Any
+from typing import Any, Literal
 
 import yaml
+from pydantic import (
+    BaseModel,
+    ConfigDict,
+    Field,
+    ValidationError,
+    field_validator,
+    model_validator,
+)
+
+logger = logging.getLogger(__name__)
+
+# Valid values for enum fields
+VALID_COLOR_NORM_METHODS = ["gain", "histogram"]
+VALID_VIZ_STAGES = ["depth", "features", "scene", "rig", "summary"]
+VALID_EXTRACTORS = ["superpoint", "aliked", "disk"]
+VALID_MATCHERS = ["lightglue", "roma"]
 
 
-@dataclass
-class ColorNormConfig:
-    """Configuration for cross-camera color normalization.
+class PreprocessingConfig(BaseModel):
+    """Configuration for preprocessing (color normalization + frame sampling).
 
-    When enabled, undistorted images are normalized across cameras before
-    any color sampling. This corrects white balance and exposure differences
-    between cameras.
+    Consolidates ColorNormConfig and FrameSamplingConfig.
 
     Attributes:
-        enabled: Enable cross-camera color normalization.
-        method: Normalization method.
-            "gain": Per-channel multiplicative gain to match cross-camera mean.
-            "histogram": Per-channel histogram matching to the cross-camera
-                aggregate histogram.
+        color_norm_enabled: Enable cross-camera color normalization.
+        color_norm_method: Normalization method ("gain" or "histogram").
+        frame_start: First frame index to process.
+        frame_stop: Last frame index to process (None = end of video).
+        frame_step: Frame step interval (e.g., 100 = every 100th frame).
     """
 
-    enabled: bool = False
-    method: str = "gain"
+    model_config = ConfigDict(extra="allow")
+
+    # Color normalization
+    color_norm_enabled: bool = False
+    color_norm_method: Literal["gain", "histogram"] = "gain"
+
+    # Frame sampling
+    frame_start: int = 0
+    frame_stop: int | None = None
+    frame_step: int = 1
+
+    @model_validator(mode="after")
+    def warn_extra_fields(self) -> "PreprocessingConfig":
+        """Warn about unknown configuration keys."""
+        if self.__pydantic_extra__:
+            logger.warning(
+                "Unknown config keys in PreprocessingConfig (ignored): %s",
+                list(self.__pydantic_extra__.keys()),
+            )
+        return self
 
 
-@dataclass
-class FrameSamplingConfig:
-    """Configuration for frame sampling from video sequences.
+class SparseMatchingConfig(BaseModel):
+    """Configuration for sparse matching (extraction + pair selection + matching).
+
+    Consolidates FeatureExtractionConfig, PairSelectionConfig, and MatchingConfig.
 
     Attributes:
-        start: First frame index to process.
-        stop: Last frame index to process (None = end of video).
-        step: Frame step interval (e.g., 100 = every 100th frame).
-    """
-
-    start: int = 0
-    stop: int | None = None
-    step: int = 1
-
-
-@dataclass
-class FeatureExtractionConfig:
-    """Configuration for feature extraction.
-
-    Attributes:
-        extractor_type: Feature extractor backend ("superpoint", "aliked", or "disk").
+        extractor_type: Feature extractor backend.
         max_keypoints: Maximum number of keypoints to extract per image.
         detection_threshold: Detection confidence threshold.
         clahe_enabled: Apply CLAHE preprocessing before feature detection.
         clahe_clip_limit: Contrast limit for CLAHE (higher = more enhancement).
+        num_neighbors: Number of nearest ring cameras to use as sources.
+        include_center: Whether to include the center (auxiliary) camera as a source.
+        filter_threshold: Match confidence threshold for filtering.
     """
 
-    extractor_type: str = "superpoint"
+    model_config = ConfigDict(extra="allow")
+
+    # Feature extraction
+    extractor_type: Literal["superpoint", "aliked", "disk"] = "superpoint"
     max_keypoints: int = 2048
     detection_threshold: float = 0.005
     clahe_enabled: bool = False
     clahe_clip_limit: float = 2.0
 
-
-@dataclass
-class PairSelectionConfig:
-    """Configuration for selecting source cameras for stereo matching.
-
-    Attributes:
-        num_neighbors: Number of nearest ring cameras to use as sources.
-        include_center: Whether to include the center (auxiliary) camera as a source.
-    """
-
+    # Pair selection
     num_neighbors: int = 4
     include_center: bool = True
 
-
-@dataclass
-class MatchingConfig:
-    """Configuration for LightGlue feature matching.
-
-    Attributes:
-        filter_threshold: Match confidence threshold for filtering.
-    """
-
+    # Matching
     filter_threshold: float = 0.1
 
+    @model_validator(mode="after")
+    def warn_extra_fields(self) -> "SparseMatchingConfig":
+        """Warn about unknown configuration keys."""
+        if self.__pydantic_extra__:
+            logger.warning(
+                "Unknown config keys in SparseMatchingConfig (ignored): %s",
+                list(self.__pydantic_extra__.keys()),
+            )
+        return self
 
-@dataclass
-class DenseMatchingConfig:
+
+class DenseMatchingConfig(BaseModel):
     """Configuration for RoMa v2 dense matching.
 
     Attributes:
@@ -94,125 +109,120 @@ class DenseMatchingConfig:
         max_correspondences: Maximum number of correspondences to keep per pair.
     """
 
+    model_config = ConfigDict(extra="allow")
+
     certainty_threshold: float = 0.5
     max_correspondences: int = 100000
 
+    @model_validator(mode="after")
+    def warn_extra_fields(self) -> "DenseMatchingConfig":
+        """Warn about unknown configuration keys."""
+        if self.__pydantic_extra__:
+            logger.warning(
+                "Unknown config keys in DenseMatchingConfig (ignored): %s",
+                list(self.__pydantic_extra__.keys()),
+            )
+        return self
 
-@dataclass
-class DenseStereoConfig:
-    """Configuration for plane-sweep dense stereo.
+
+class ReconstructionConfig(BaseModel):
+    """Configuration for reconstruction (stereo + fusion + surface + outliers).
+
+    Consolidates DenseStereoConfig, FusionConfig, SurfaceConfig, and OutlierRemovalConfig.
 
     Attributes:
         num_depths: Number of depth hypotheses in plane sweep.
-        cost_function: Photometric cost function ("ncc" or "ssim").
+        cost_function: Photometric cost function.
         window_size: Local window size for cost computation (pixels, must be odd).
         depth_margin: Margin added to sparse depth range [d_min, d_max] (meters).
+        min_consistent_views: Minimum number of views that must agree for a point to survive.
+        depth_tolerance: Maximum depth disagreement for consistency (meters).
+        roma_depth_tolerance: Maximum depth disagreement for RoMa pairwise depth aggregation (meters).
+        voxel_size: Voxel grid cell size for deduplication (meters).
+        min_confidence: Minimum confidence threshold to consider a depth pixel.
+        surface_method: Surface reconstruction method.
+        poisson_depth: Octree depth for Poisson reconstruction.
+        grid_resolution: Grid cell size for height-field interpolation (meters).
+        bpa_radii: List of ball radii for Ball Pivoting Algorithm (meters), or None to auto-estimate.
+        target_faces: Target triangle count for mesh simplification (None = no simplification).
+        outlier_removal_enabled: Enable statistical outlier removal.
+        outlier_nb_neighbors: Number of neighbors for mean distance calculation.
+        outlier_std_ratio: Standard deviation ratio threshold.
     """
 
+    model_config = ConfigDict(extra="allow")
+
+    # Dense stereo
     num_depths: int = 128
-    cost_function: str = "ncc"
+    cost_function: Literal["ncc", "ssim"] = "ncc"
     window_size: int = 11
     depth_margin: float = 0.05
 
-
-@dataclass
-class FusionConfig:
-    """Configuration for multi-view depth map fusion.
-
-    Attributes:
-        min_consistent_views: Minimum number of views that must agree for a point to survive.
-        depth_tolerance: Maximum depth disagreement for consistency (meters).
-            Used by plane-sweep geometric consistency filtering.
-        roma_depth_tolerance: Maximum depth disagreement for RoMa pairwise depth
-            aggregation (meters). RoMa operates at ~560px warp resolution, so
-            triangulated depths have coarser quantization than plane-sweep.
-            Defaults to 0.02m (4x the plane-sweep tolerance). (B.16)
-        voxel_size: Voxel grid cell size for deduplication (meters).
-        min_confidence: Minimum confidence threshold to consider a depth pixel.
-    """
-
+    # Fusion
     min_consistent_views: int = 3
     depth_tolerance: float = 0.005
     roma_depth_tolerance: float = 0.02
     voxel_size: float = 0.001
     min_confidence: float = 0.1
 
-
-@dataclass
-class SurfaceConfig:
-    """Configuration for surface reconstruction from point clouds.
-
-    Attributes:
-        method: Surface reconstruction method ("poisson", "heightfield", or "bpa").
-        poisson_depth: Octree depth for Poisson reconstruction.
-        grid_resolution: Grid cell size for height-field interpolation (meters).
-        bpa_radii: List of ball radii for Ball Pivoting Algorithm (meters),
-            or None to auto-estimate from point spacing.
-        target_faces: Target triangle count for mesh simplification (None = no simplification).
-    """
-
-    method: str = "poisson"
+    # Surface
+    surface_method: Literal["poisson", "heightfield", "bpa"] = "poisson"
     poisson_depth: int = 9
     grid_resolution: float = 0.002
     bpa_radii: list[float] | None = None
     target_faces: int | None = None
 
+    # Outlier removal
+    outlier_removal_enabled: bool = True
+    outlier_nb_neighbors: int = 20
+    outlier_std_ratio: float = 2.0
 
-@dataclass
-class EvaluationConfig:
-    """Configuration for reconstruction evaluation metrics.
+    @field_validator("window_size")
+    @classmethod
+    def validate_window_size(cls, v: int) -> int:
+        """Validate that window_size is positive and odd."""
+        if v <= 0 or v % 2 == 0:
+            raise ValueError(f"window_size must be positive and odd, got {v}")
+        return v
+
+    @model_validator(mode="after")
+    def warn_extra_fields(self) -> "ReconstructionConfig":
+        """Warn about unknown configuration keys."""
+        if self.__pydantic_extra__:
+            logger.warning(
+                "Unknown config keys in ReconstructionConfig (ignored): %s",
+                list(self.__pydantic_extra__.keys()),
+            )
+        return self
+
+
+class RuntimeConfig(BaseModel):
+    """Configuration for runtime settings (device + output + viz + benchmark + evaluation).
+
+    Consolidates DeviceConfig, OutputConfig, VizConfig, BenchmarkConfig, and EvaluationConfig.
 
     Attributes:
+        device: PyTorch device string.
+        save_features: Save features and matches (.pt files).
+        save_depth_maps: Save per-camera depth + confidence maps (.npz).
+        save_point_cloud: Save fused point cloud (.ply).
+        save_mesh: Save surface mesh (.ply).
+        keep_intermediates: Keep depth maps after fusion.
+        save_consistency_maps: Save consistency maps as colormapped PNG + NPZ.
+        viz_enabled: Master switch for all visualization.
+        viz_stages: List of visualization stages to run.
+        benchmark_extractors: List of extractor backends to sweep.
+        benchmark_clahe: List of CLAHE on/off settings to sweep.
         icp_max_distance: ICP correspondence distance threshold (meters).
+        quiet: Suppress progress output.
     """
 
-    icp_max_distance: float = 0.01
+    model_config = ConfigDict(extra="allow")
 
+    # Device
+    device: Literal["cpu", "cuda"] = "cpu"
 
-@dataclass
-class DeviceConfig:
-    """Configuration for PyTorch device selection.
-
-    Attributes:
-        device: PyTorch device string ("cpu" or "cuda").
-    """
-
-    device: str = "cpu"
-
-
-@dataclass
-class OutlierRemovalConfig:
-    """Configuration for statistical outlier removal on fused point clouds.
-
-    Applied after fusion, before surface reconstruction.
-    Uses Open3D remove_statistical_outlier().
-
-    Attributes:
-        enabled: Enable statistical outlier removal (on by default).
-        nb_neighbors: Number of neighbors for mean distance calculation.
-        std_ratio: Standard deviation ratio threshold.
-    """
-
-    enabled: bool = True
-    nb_neighbors: int = 20
-    std_ratio: float = 2.0
-
-
-@dataclass
-class OutputConfig:
-    """Configuration for output artifact persistence.
-
-    Attributes:
-        save_features: Save features and matches (.pt files). Off by default.
-        save_depth_maps: Save per-camera depth + confidence maps (.npz). On by default.
-        save_point_cloud: Save fused point cloud (.ply). On by default.
-        save_mesh: Save surface mesh (.ply). On by default.
-        keep_intermediates: Keep depth maps after fusion. If False, depth maps
-            are deleted after successful fusion to save space. On by default.
-        save_consistency_maps: Save consistency maps as colormapped PNG + NPZ
-            alongside depth maps. Opt-in.
-    """
-
+    # Output
     save_features: bool = False
     save_depth_maps: bool = True
     save_point_cloud: bool = True
@@ -220,52 +230,58 @@ class OutputConfig:
     keep_intermediates: bool = True
     save_consistency_maps: bool = False
 
+    # Visualization
+    viz_enabled: bool = False
+    viz_stages: list[str] = Field(default_factory=list)
 
-VALID_COLOR_NORM_METHODS = ["gain", "histogram"]
-VALID_VIZ_STAGES = ["depth", "features", "scene", "rig", "summary"]
-VALID_EXTRACTORS = ["superpoint", "aliked", "disk"]
-VALID_MATCHERS = ["lightglue", "roma"]
-
-
-@dataclass
-class VizConfig:
-    """Configuration for visualization output.
-
-    When enabled=False, no visualization is generated (zero overhead).
-    When enabled=True, only the stages listed in `stages` are rendered.
-
-    Attributes:
-        enabled: Master switch for all visualization.
-        stages: List of visualization stages to run. Valid values:
-            "depth", "features", "scene", "rig", "summary".
-            Empty list with enabled=True means all stages.
-    """
-
-    enabled: bool = False
-    stages: list[str] = field(default_factory=list)
-
-
-@dataclass
-class BenchmarkConfig:
-    """Configuration for the benchmark sweep.
-
-    The runner computes the cross product of extractors x clahe to
-    produce the sweep matrix. Adding new extractors means appending
-    to the list -- no code change.
-
-    Attributes:
-        extractors: List of extractor backends to sweep.
-        clahe: List of CLAHE on/off settings to sweep.
-    """
-
-    extractors: list[str] = field(
+    # Benchmark
+    benchmark_extractors: list[str] = Field(
         default_factory=lambda: ["superpoint", "aliked", "disk"]
     )
-    clahe: list[bool] = field(default_factory=lambda: [True, False])
+    benchmark_clahe: list[bool] = Field(default_factory=lambda: [True, False])
+
+    # Evaluation
+    icp_max_distance: float = 0.01
+
+    # Progress
+    quiet: bool = False
+
+    @field_validator("viz_stages")
+    @classmethod
+    def validate_viz_stages(cls, v: list[str]) -> list[str]:
+        """Validate that all viz_stages are valid."""
+        for stage in v:
+            if stage not in VALID_VIZ_STAGES:
+                raise ValueError(
+                    f"Invalid visualization stage: {stage!r}. "
+                    f"Valid stages: {VALID_VIZ_STAGES}"
+                )
+        return v
+
+    @field_validator("benchmark_extractors")
+    @classmethod
+    def validate_benchmark_extractors(cls, v: list[str]) -> list[str]:
+        """Validate that all benchmark_extractors are valid."""
+        for extractor in v:
+            if extractor not in VALID_EXTRACTORS:
+                raise ValueError(
+                    f"Invalid benchmark extractor: {extractor!r}. "
+                    f"Valid extractors: {VALID_EXTRACTORS}"
+                )
+        return v
+
+    @model_validator(mode="after")
+    def warn_extra_fields(self) -> "RuntimeConfig":
+        """Warn about unknown configuration keys."""
+        if self.__pydantic_extra__:
+            logger.warning(
+                "Unknown config keys in RuntimeConfig (ignored): %s",
+                list(self.__pydantic_extra__.keys()),
+            )
+        return self
 
 
-@dataclass
-class PipelineConfig:
+class PipelineConfig(BaseModel):
     """Top-level configuration for the AquaMVS reconstruction pipeline.
 
     Attributes:
@@ -273,133 +289,63 @@ class PipelineConfig:
         output_dir: Root output directory for reconstruction results.
         camera_video_map: Mapping from camera name to video file path.
         mask_dir: Optional directory containing per-camera ROI mask PNGs.
-            If None, no masking is applied. Masks suppress features and depth
-            outside the valid region.
         pipeline_mode: Pipeline execution mode ("sparse" or "full").
-            "sparse" mode stops after sparse triangulation and produces point cloud + mesh.
-            "full" mode runs the complete pipeline including dense stereo and fusion.
-        frame_sampling: Frame sampling configuration.
-        feature_extraction: Feature extraction configuration.
-        pair_selection: Camera pair selection configuration.
-        matching: Feature matching configuration.
-        dense_stereo: Dense stereo configuration.
-        fusion: Multi-view fusion configuration.
-        surface: Surface reconstruction configuration.
-        evaluation: Evaluation configuration.
-        device: Device configuration.
-        output: Output artifact persistence configuration.
-        visualization: Visualization output configuration.
+        matcher_type: Matcher backend ("lightglue" or "roma").
+        preprocessing: Preprocessing configuration.
+        sparse_matching: Sparse matching configuration.
+        dense_matching: Dense matching configuration.
+        reconstruction: Reconstruction configuration.
+        runtime: Runtime configuration.
     """
 
-    # Session fields (no sensible defaults)
+    model_config = ConfigDict(extra="allow")
+
+    # Required fields (no sensible defaults)
     calibration_path: str = ""
     output_dir: str = ""
-    camera_video_map: dict[str, str] = field(default_factory=dict)
+    camera_video_map: dict[str, str] = Field(default_factory=dict)
+
+    # Optional with defaults
     mask_dir: str | None = None
-    pipeline_mode: str = "full"
-    matcher_type: str = "lightglue"
+    pipeline_mode: Literal["sparse", "full"] = "full"
+    matcher_type: Literal["lightglue", "roma"] = "lightglue"
 
-    # Stage configurations (all have defaults)
-    color_norm: ColorNormConfig = field(default_factory=ColorNormConfig)
-    frame_sampling: FrameSamplingConfig = field(default_factory=FrameSamplingConfig)
-    feature_extraction: FeatureExtractionConfig = field(
-        default_factory=FeatureExtractionConfig
-    )
-    pair_selection: PairSelectionConfig = field(default_factory=PairSelectionConfig)
-    matching: MatchingConfig = field(default_factory=MatchingConfig)
-    dense_matching: DenseMatchingConfig = field(default_factory=DenseMatchingConfig)
-    dense_stereo: DenseStereoConfig = field(default_factory=DenseStereoConfig)
-    fusion: FusionConfig = field(default_factory=FusionConfig)
-    surface: SurfaceConfig = field(default_factory=SurfaceConfig)
-    evaluation: EvaluationConfig = field(default_factory=EvaluationConfig)
-    device: DeviceConfig = field(default_factory=DeviceConfig)
-    outlier_removal: OutlierRemovalConfig = field(default_factory=OutlierRemovalConfig)
-    output: OutputConfig = field(default_factory=OutputConfig)
-    visualization: VizConfig = field(default_factory=VizConfig)
-    benchmark: BenchmarkConfig = field(default_factory=BenchmarkConfig)
+    # Sub-configs
+    preprocessing: PreprocessingConfig = Field(default_factory=PreprocessingConfig)
+    sparse_matching: SparseMatchingConfig = Field(default_factory=SparseMatchingConfig)
+    dense_matching: DenseMatchingConfig = Field(default_factory=DenseMatchingConfig)
+    reconstruction: ReconstructionConfig = Field(default_factory=ReconstructionConfig)
+    runtime: RuntimeConfig = Field(default_factory=RuntimeConfig)
 
-    def validate(self) -> None:
-        """Validate configuration values.
-
-        Raises:
-            ValueError: If any configuration value is invalid.
-        """
-        # Validate color normalization method
-        if self.color_norm.method not in VALID_COLOR_NORM_METHODS:
-            raise ValueError(
-                f"Invalid color_norm method: {self.color_norm.method!r}. "
-                f"Valid methods: {VALID_COLOR_NORM_METHODS}"
+    @model_validator(mode="after")
+    def check_cross_stage_constraints(self) -> "PipelineConfig":
+        """Validate cross-stage constraints and warn about extra fields."""
+        # Warn about RoMa with low certainty threshold
+        if (
+            self.matcher_type == "roma"
+            and self.dense_matching.certainty_threshold < 0.1
+        ):
+            logger.warning(
+                "matcher_type=roma with certainty_threshold=%.2f (< 0.1) may produce "
+                "unreliable results. Consider increasing certainty_threshold.",
+                self.dense_matching.certainty_threshold,
             )
 
-        # Validate pipeline mode
-        if self.pipeline_mode not in ["sparse", "full"]:
-            raise ValueError(
-                f"Invalid pipeline_mode: {self.pipeline_mode!r}. "
-                "Must be 'sparse' or 'full'."
+        # Warn about unknown top-level keys
+        if self.__pydantic_extra__:
+            logger.warning(
+                "Unknown config keys in PipelineConfig (ignored): %s",
+                list(self.__pydantic_extra__.keys()),
             )
 
-        # Validate cost function
-        if self.dense_stereo.cost_function not in ["ncc", "ssim"]:
-            raise ValueError(
-                f"Invalid cost_function: {self.dense_stereo.cost_function}. "
-                "Must be 'ncc' or 'ssim'."
-            )
-
-        # Validate surface method
-        if self.surface.method not in ["poisson", "heightfield", "bpa"]:
-            raise ValueError(
-                f"Invalid surface method: {self.surface.method}. "
-                "Must be 'poisson', 'heightfield', or 'bpa'."
-            )
-
-        # Validate window size (must be odd and positive)
-        if self.dense_stereo.window_size <= 0 or self.dense_stereo.window_size % 2 == 0:
-            raise ValueError(
-                f"Invalid window_size: {self.dense_stereo.window_size}. "
-                "Must be positive and odd."
-            )
-
-        # Validate device
-        if self.device.device not in ["cpu", "cuda"]:
-            raise ValueError(
-                f"Invalid device: {self.device.device}. Must be 'cpu' or 'cuda'."
-            )
-
-        # Validate extractor type
-        if self.feature_extraction.extractor_type not in VALID_EXTRACTORS:
-            raise ValueError(
-                f"Invalid extractor_type: {self.feature_extraction.extractor_type!r}. "
-                f"Valid types: {VALID_EXTRACTORS}"
-            )
-
-        # Validate matcher type
-        if self.matcher_type not in VALID_MATCHERS:
-            raise ValueError(
-                f"Invalid matcher_type: {self.matcher_type!r}. "
-                f"Valid types: {VALID_MATCHERS}"
-            )
-
-        # Validate viz stages
-        for stage in self.visualization.stages:
-            if stage not in VALID_VIZ_STAGES:
-                raise ValueError(
-                    f"Invalid visualization stage: {stage!r}. "
-                    f"Valid stages: {VALID_VIZ_STAGES}"
-                )
-
-        # Validate benchmark extractors
-        for extractor in self.benchmark.extractors:
-            if extractor not in VALID_EXTRACTORS:
-                raise ValueError(
-                    f"Invalid benchmark extractor: {extractor!r}. "
-                    f"Valid extractors: {VALID_EXTRACTORS}"
-                )
+        return self
 
     @classmethod
     def from_yaml(cls, path: str | Path) -> "PipelineConfig":
         """Load configuration from a YAML file.
 
         Missing fields use their default values. Loaded values are merged over defaults.
+        Supports backward compatibility with old flat structure.
 
         Args:
             path: Path to YAML configuration file.
@@ -410,6 +356,7 @@ class PipelineConfig:
         Raises:
             FileNotFoundError: If the file does not exist.
             yaml.YAMLError: If the file is not valid YAML.
+            ValueError: If validation fails (with all errors collected).
         """
         path = Path(path)
         with open(path) as f:
@@ -418,60 +365,140 @@ class PipelineConfig:
         if data is None:
             data = {}
 
-        # Helper to instantiate dataclass from dict, merging over defaults
-        def _build_dataclass(cls_type: type, data_dict: dict[str, Any] | None):
-            if data_dict is None:
-                return cls_type()
-            return cls_type(**data_dict)
+        # Backward compatibility: remap old flat structure to new nested structure
+        data = cls._migrate_legacy_config(data)
 
-        # Extract sub-config dicts
-        color_norm = data.pop("color_norm", None)
-        frame_sampling = data.pop("frame_sampling", None)
-        feature_extraction = data.pop("feature_extraction", None)
-        pair_selection = data.pop("pair_selection", None)
-        matching = data.pop("matching", None)
-        dense_matching = data.pop("dense_matching", None)
-        dense_stereo = data.pop("dense_stereo", None)
-        fusion = data.pop("fusion", None)
-        surface = data.pop("surface", None)
-        evaluation = data.pop("evaluation", None)
-        device = data.pop("device", None)
-        outlier_removal = data.pop("outlier_removal", None)
-        output = data.pop("output", None)
-        visualization = data.pop("visualization", None)
-        benchmark = data.pop("benchmark", None)
+        # Log info about missing sections (using defaults)
+        cls._log_default_sections(data)
 
-        # Build sub-configs
-        config = cls(
-            calibration_path=data.get("calibration_path", ""),
-            output_dir=data.get("output_dir", ""),
-            camera_video_map=data.get("camera_video_map", {}),
-            mask_dir=data.get("mask_dir"),
-            pipeline_mode=data.get("pipeline_mode", "full"),
-            matcher_type=data.get("matcher_type", "lightglue"),
-            color_norm=_build_dataclass(ColorNormConfig, color_norm),
-            frame_sampling=_build_dataclass(FrameSamplingConfig, frame_sampling),
-            feature_extraction=_build_dataclass(
-                FeatureExtractionConfig, feature_extraction
-            ),
-            pair_selection=_build_dataclass(PairSelectionConfig, pair_selection),
-            matching=_build_dataclass(MatchingConfig, matching),
-            dense_matching=_build_dataclass(DenseMatchingConfig, dense_matching),
-            dense_stereo=_build_dataclass(DenseStereoConfig, dense_stereo),
-            fusion=_build_dataclass(FusionConfig, fusion),
-            surface=_build_dataclass(SurfaceConfig, surface),
-            evaluation=_build_dataclass(EvaluationConfig, evaluation),
-            device=_build_dataclass(DeviceConfig, device),
-            outlier_removal=_build_dataclass(OutlierRemovalConfig, outlier_removal),
-            output=_build_dataclass(OutputConfig, output),
-            visualization=_build_dataclass(VizConfig, visualization),
-            benchmark=_build_dataclass(BenchmarkConfig, benchmark),
-        )
-
-        # Validate the loaded config
-        config.validate()
+        try:
+            config = cls.model_validate(data)
+        except ValidationError as e:
+            # Format validation errors with YAML paths
+            formatted_errors = format_validation_errors(e)
+            raise ValueError(f"Configuration validation failed:\n{formatted_errors}")
 
         return config
+
+    @staticmethod
+    def _migrate_legacy_config(data: dict[str, Any]) -> dict[str, Any]:
+        """Migrate legacy flat config structure to new nested structure.
+
+        Args:
+            data: Configuration dictionary loaded from YAML.
+
+        Returns:
+            Migrated configuration dictionary.
+        """
+        # Check for old-style keys and migrate them
+        migrations = {
+            # Preprocessing
+            "color_norm": "preprocessing",
+            "frame_sampling": "preprocessing",
+            # Sparse matching
+            "feature_extraction": "sparse_matching",
+            "pair_selection": "sparse_matching",
+            "matching": "sparse_matching",
+            # Reconstruction
+            "dense_stereo": "reconstruction",
+            "fusion": "reconstruction",
+            "surface": "reconstruction",
+            "outlier_removal": "reconstruction",
+            # Runtime
+            "device": "runtime",
+            "output": "runtime",
+            "visualization": "runtime",
+            "benchmark": "runtime",
+            "evaluation": "runtime",
+        }
+
+        migrated = data.copy()
+
+        for old_key, new_section in migrations.items():
+            if old_key in migrated:
+                logger.info(
+                    "Migrating legacy config key '%s' to new structure", old_key
+                )
+
+                # Get or create the target section
+                if new_section not in migrated:
+                    migrated[new_section] = {}
+
+                # Merge the old section into the new section
+                old_data = migrated.pop(old_key)
+                if isinstance(old_data, dict):
+                    # Handle field name mappings
+                    if old_key == "color_norm":
+                        # Map color_norm.enabled -> preprocessing.color_norm_enabled
+                        if "enabled" in old_data:
+                            migrated[new_section]["color_norm_enabled"] = old_data[
+                                "enabled"
+                            ]
+                        if "method" in old_data:
+                            migrated[new_section]["color_norm_method"] = old_data[
+                                "method"
+                            ]
+                    elif old_key == "frame_sampling":
+                        # Map frame_sampling fields directly
+                        migrated[new_section].update(
+                            {f"frame_{k}": v for k, v in old_data.items()}
+                        )
+                    elif old_key == "outlier_removal":
+                        # Map outlier_removal fields with prefix
+                        migrated[new_section]["outlier_removal_enabled"] = old_data.get(
+                            "enabled", True
+                        )
+                        migrated[new_section]["outlier_nb_neighbors"] = old_data.get(
+                            "nb_neighbors", 20
+                        )
+                        migrated[new_section]["outlier_std_ratio"] = old_data.get(
+                            "std_ratio", 2.0
+                        )
+                    elif old_key == "visualization":
+                        # Map visualization fields with prefix
+                        if "enabled" in old_data:
+                            migrated[new_section]["viz_enabled"] = old_data["enabled"]
+                        if "stages" in old_data:
+                            migrated[new_section]["viz_stages"] = old_data["stages"]
+                    elif old_key == "benchmark":
+                        # Map benchmark fields with prefix
+                        if "extractors" in old_data:
+                            migrated[new_section]["benchmark_extractors"] = old_data[
+                                "extractors"
+                            ]
+                        if "clahe" in old_data:
+                            migrated[new_section]["benchmark_clahe"] = old_data["clahe"]
+                    elif old_key == "device":
+                        # Device is a nested config in old structure
+                        if isinstance(old_data, dict) and "device" in old_data:
+                            migrated[new_section]["device"] = old_data["device"]
+                        else:
+                            # Or it might be a direct string
+                            migrated[new_section]["device"] = old_data
+                    else:
+                        # Direct merge for other sections
+                        migrated[new_section].update(old_data)
+
+        return migrated
+
+    @staticmethod
+    def _log_default_sections(data: dict[str, Any]) -> None:
+        """Log INFO messages about sections using defaults.
+
+        Args:
+            data: Configuration dictionary.
+        """
+        sections = [
+            "preprocessing",
+            "sparse_matching",
+            "dense_matching",
+            "reconstruction",
+            "runtime",
+        ]
+
+        for section in sections:
+            if section not in data:
+                logger.info("Using default: %s (all defaults)", section)
 
     def to_yaml(self, path: str | Path) -> None:
         """Save configuration to a YAML file.
@@ -484,8 +511,66 @@ class PipelineConfig:
         path = Path(path)
         path.parent.mkdir(parents=True, exist_ok=True)
 
-        # Convert to dict using dataclasses.asdict (handles nested dataclasses)
-        data = asdict(self)
+        # Convert to dict using Pydantic v2 model_dump
+        data = self.model_dump()
 
         with open(path, "w") as f:
             yaml.safe_dump(data, f, default_flow_style=False, sort_keys=False)
+
+    def validate(self) -> None:
+        """Validate configuration values.
+
+        This method exists for backward compatibility. Pydantic now validates
+        automatically during construction.
+
+        Raises:
+            ValidationError: If any configuration value is invalid.
+        """
+        # Pydantic validates on construction, so just trigger re-validation
+        self.model_validate(self.model_dump())
+
+
+def format_validation_errors(error: ValidationError) -> str:
+    """Format Pydantic validation errors with YAML-style paths.
+
+    Args:
+        error: Pydantic ValidationError.
+
+    Returns:
+        Formatted error string with YAML paths and messages.
+    """
+    lines = []
+    for err in error.errors():
+        # Build YAML path from location tuple
+        loc = err["loc"]
+        path_parts = []
+        for part in loc:
+            if isinstance(part, int):
+                # Array index
+                path_parts[-1] = f"{path_parts[-1]}[{part}]"
+            else:
+                # Field name
+                path_parts.append(str(part))
+
+        path = ".".join(path_parts)
+        msg = err["msg"]
+        lines.append(f"  {path}: {msg}")
+
+    return "\n".join(lines)
+
+
+# Backward-compatible aliases (deprecated, will be removed in v0.3)
+ColorNormConfig = PreprocessingConfig  # Partial — users should migrate
+FrameSamplingConfig = PreprocessingConfig
+FeatureExtractionConfig = SparseMatchingConfig
+PairSelectionConfig = SparseMatchingConfig
+MatchingConfig = SparseMatchingConfig
+DenseStereoConfig = ReconstructionConfig
+FusionConfig = ReconstructionConfig
+SurfaceConfig = ReconstructionConfig
+OutlierRemovalConfig = ReconstructionConfig
+DeviceConfig = RuntimeConfig
+OutputConfig = RuntimeConfig
+VizConfig = RuntimeConfig
+BenchmarkConfig = RuntimeConfig
+EvaluationConfig = RuntimeConfig

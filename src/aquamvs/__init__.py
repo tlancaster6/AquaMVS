@@ -32,6 +32,10 @@ from .config import (
     MatchingConfig,
     PairSelectionConfig,
     PipelineConfig,
+    PreprocessingConfig,
+    ReconstructionConfig,
+    RuntimeConfig,
+    SparseMatchingConfig,
     SurfaceConfig,
 )
 from .evaluation import (
@@ -84,11 +88,15 @@ __version__ = "0.1.0"
 
 __all__ = [
     "PipelineConfig",
+    "PreprocessingConfig",
+    "SparseMatchingConfig",
+    "DenseMatchingConfig",
+    "ReconstructionConfig",
+    "RuntimeConfig",
     "FrameSamplingConfig",
     "FeatureExtractionConfig",
     "PairSelectionConfig",
     "MatchingConfig",
-    "DenseMatchingConfig",
     "DenseStereoConfig",
     "FusionConfig",
     "SurfaceConfig",
