@@ -72,7 +72,7 @@ Plans:
 - [x] 02-02-PLAN.md — Update pipeline/CLI consumers, tqdm progress bars, --quiet flag
 
 ### Phase 3: Pipeline Decomposition and Modularization
-**Goal**: Monolithic pipeline.py is decomposed into maintainable modular package while preserving backward compatibility
+**Goal**: Monolithic pipeline.py is decomposed into maintainable modular package with clean public API
 **Depends on**: Phase 2
 **Requirements**: REF-01, REF-02, REF-03, REF-04
 **Success Criteria** (what must be TRUE):
@@ -80,11 +80,13 @@ Plans:
   2. Each execution path (lightglue+sparse, lightglue+full, roma+sparse, roma+full) is implemented as distinct stage module
   3. AquaCal VideoSet usage is isolated behind adapter interface (not directly imported throughout codebase)
   4. Feature extractors (SuperPoint, ALIKED, DISK, RoMa) are accessed via protocol interface enabling swappability
-  5. Existing user code that imports from old pipeline.py continues to work with deprecation warnings
-**Plans**: TBD
+  5. Pipeline class is primary programmatic entry point: `from aquamvs import Pipeline`
+**Plans:** 3 plans
 
 Plans:
-- TBD during planning
+- [ ] 03-01-PLAN.md — Protocol interfaces (FrameSource, CalibrationProvider), pipeline package scaffold, builder extraction
+- [ ] 03-02-PLAN.md — Stage module extraction (undistortion, sparse/dense matching, depth, fusion, surface)
+- [ ] 03-03-PLAN.md — Pipeline class, runner, import wiring, test updates
 
 ### Phase 4: Documentation and Examples
 **Goal**: Users can learn, install, and use AquaMVS through comprehensive documentation and working examples
