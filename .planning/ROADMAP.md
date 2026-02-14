@@ -48,10 +48,11 @@ Plans:
   4. Statistical outlier removal runs by default on fused point clouds before surface reconstruction
   5. Consistency maps can be saved (opt-in) as colormapped PNG + NPZ alongside depth maps
   6. Pipeline accepts image directories as input (not just video files)
-**Plans:** TBD
+**Plans:** 2 plans
 
 Plans:
-- TBD during planning
+- [ ] 01.1-01-PLAN.md — New CLI tools: temporal median preprocessing + mesh export/simplification
+- [ ] 01.1-02-PLAN.md — Pipeline enhancements: statistical outlier removal + consistency maps + image input support
 
 ### Phase 2: Configuration and API Cleanup
 **Goal**: Configuration is validated at load time with clear error messages, and public APIs are typed and stable
