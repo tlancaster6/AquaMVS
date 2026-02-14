@@ -102,34 +102,34 @@ Which phases cover which requirements. Updated during roadmap creation.
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| PKG-01 | TBD | Pending |
-| PKG-02 | TBD | Pending |
-| PKG-03 | TBD | Pending |
-| PKG-04 | TBD | Pending |
-| PKG-05 | TBD | Pending |
-| PKG-06 | TBD | Pending |
-| CFG-01 | TBD | Pending |
-| CFG-02 | TBD | Pending |
-| CFG-03 | TBD | Pending |
-| CFG-04 | TBD | Pending |
-| REF-01 | TBD | Pending |
-| REF-02 | TBD | Pending |
-| REF-03 | TBD | Pending |
-| REF-04 | TBD | Pending |
-| DOC-01 | TBD | Pending |
-| DOC-02 | TBD | Pending |
-| DOC-03 | TBD | Pending |
-| DOC-04 | TBD | Pending |
-| UX-01 | TBD | Pending |
-| BEN-01 | TBD | Pending |
-| BEN-02 | TBD | Pending |
-| BEN-03 | TBD | Pending |
+| PKG-01 | Phase 1 | Pending |
+| PKG-02 | Phase 1 | Pending |
+| PKG-03 | Phase 1 | Pending |
+| PKG-04 | Phase 1 | Pending |
+| PKG-05 | Phase 1 | Pending |
+| PKG-06 | Phase 1 | Pending |
+| CFG-01 | Phase 2 | Pending |
+| CFG-02 | Phase 2 | Pending |
+| CFG-03 | Phase 2 | Pending |
+| CFG-04 | Phase 2 | Pending |
+| UX-01 | Phase 2 | Pending |
+| REF-01 | Phase 3 | Pending |
+| REF-02 | Phase 3 | Pending |
+| REF-03 | Phase 3 | Pending |
+| REF-04 | Phase 3 | Pending |
+| DOC-01 | Phase 4 | Pending |
+| DOC-02 | Phase 4 | Pending |
+| DOC-03 | Phase 4 | Pending |
+| DOC-04 | Phase 4 | Pending |
+| BEN-01 | Phase 5 | Pending |
+| BEN-02 | Phase 5 | Pending |
+| BEN-03 | Phase 5 | Pending |
 
 **Coverage:**
 - v1 requirements: 22 total
-- Mapped to phases: 0
-- Unmapped: 22 ⚠️
+- Mapped to phases: 22
+- Unmapped: 0
 
 ---
 *Requirements defined: 2026-02-14*
-*Last updated: 2026-02-14 after initial definition*
+*Last updated: 2026-02-14 after roadmap creation*
