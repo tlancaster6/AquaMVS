@@ -9,19 +9,19 @@ See: .planning/PROJECT.md (updated 2026-02-14)
 
 ## Current Position
 
-Phase: 01.1 (Last-Minute Feature Additions)
-Plan: 2 of 2 plans complete
-Status: Complete — phase 01.1 finished
-Last activity: 2026-02-14 - Completed 01.1-02-PLAN.md: Pipeline enhancements (outlier removal, consistency maps, image input)
+Phase: 02 (Configuration and API Cleanup)
+Plan: 1 of 3 plans complete
+Status: In progress — phase 02 started
+Last activity: 2026-02-14 - Completed 02-01-PLAN.md: Pydantic config migration with grouped models
 
-Progress: [████░░░░░░] 40% (1 of 5 phases complete, 2 of 2 plans in phase 01.1)
+Progress: [████░░░░░░] 42% (1 of 5 phases complete, 1 of 3 plans in phase 02)
 
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 4
-- Average duration: 9.5 min
-- Total execution time: 0.63 hours
+- Total plans completed: 5
+- Average duration: 8.8 min
+- Total execution time: 0.73 hours
 
 **By Phase:**
 
@@ -29,10 +29,11 @@ Progress: [████░░░░░░] 40% (1 of 5 phases complete, 2 of 2 p
 |-------|-------|-------|----------|
 | 01    | 2     | 20min | 10min    |
 | 01.1  | 2     | 17min | 8.5min   |
+| 02    | 1     | 5min  | 5min     |
 
 **Recent Trend:**
-- Last 5 plans: 01-01 (15min), 01-02 (5min), 01.1-01 (5min), 01.1-02 (12min)
-- Trend: Stabilizing around 8-10min per plan
+- Last 5 plans: 01-02 (5min), 01.1-01 (5min), 01.1-02 (12min), 02-01 (5min)
+- Trend: Fast plans (5min) for focused refactoring tasks
 
 ## Accumulated Context
 
@@ -70,6 +71,13 @@ Recent decisions affecting current work:
 - Auto-detection of input type (image directory vs video file) based on path.is_dir()
 - ImageDirectorySet validates matching filenames and frame counts across cameras
 
+**Phase 02 Plan 01 (2026-02-14):**
+- Consolidated 14 dataclasses into 6 Pydantic models grouped by pipeline stage
+- Automatic error collection with YAML-path formatting (not fail-on-first)
+- Extra fields produce warnings, not errors (forward-compatible)
+- Backward-compatible YAML migration layer with INFO logging
+- Old class names as aliases to prevent import errors
+
 ### Roadmap Evolution
 
 - Phase 1.1 inserted after Phase 1: Last-Minute Feature Additions (URGENT)
@@ -97,6 +105,6 @@ approved
 
 ## Session Continuity
 
-Last session: 2026-02-14 (phase 01.1 execution)
-Stopped at: Completed 01.1-02-PLAN.md — phase 01.1 complete, ready for phase 02
+Last session: 2026-02-14 (phase 02 execution)
+Stopped at: Completed 02-01-PLAN.md — 1 of 3 plans in phase 02 complete
 Resume file: None
