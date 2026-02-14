@@ -387,6 +387,53 @@ def benchmark_command(config_path: Path, frame: int = 0) -> None:
         sys.exit(1)
 
 
+def preprocess_command(args) -> None:
+    """Apply temporal median filtering to remove fish/debris from underwater video.
+
+    Args:
+        args: Parsed command-line arguments.
+    """
+    # Configure logging
+    logging.basicConfig(
+        level=logging.INFO,
+        format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
+        datefmt="%H:%M:%S",
+    )
+
+    # Lazy import to avoid loading cv2/numpy at CLI parse time
+    from aquamvs.preprocess import process_batch
+
+    # Validate input
+    input_path = args.input
+    if not input_path.exists():
+        print(f"Error: Input path does not exist: {input_path}", file=sys.stderr)
+        sys.exit(1)
+
+    # Run preprocessing
+    try:
+        results = process_batch(
+            input_path=input_path,
+            output_dir=args.output_dir,
+            window=args.window,
+            framestep=args.framestep,
+            output_format=args.format,
+        )
+
+        # Print summary
+        print("\nPreprocessing complete!")
+        print(f"Processed {len(results)} video(s):")
+        for video_name, count in results.items():
+            print(f"  {video_name}: {count} frames")
+        print()
+
+    except Exception as e:
+        print(f"Error: Preprocessing failed: {e}", file=sys.stderr)
+        import traceback
+
+        traceback.print_exc()
+        sys.exit(1)
+
+
 def main() -> None:
     """Main entry point for the AquaMVS CLI."""
     parser = argparse.ArgumentParser(
@@ -488,6 +535,42 @@ def main() -> None:
         help="Frame index to benchmark (default: 0)",
     )
 
+    # preprocess subcommand
+    preprocess_parser = subparsers.add_parser(
+        "preprocess",
+        help="Apply temporal median filtering to remove fish/debris from underwater video",
+    )
+    preprocess_parser.add_argument(
+        "input",
+        type=Path,
+        help="Video file or directory of videos",
+    )
+    preprocess_parser.add_argument(
+        "--output-dir",
+        type=Path,
+        default=None,
+        help="Output directory (auto-computed if omitted)",
+    )
+    preprocess_parser.add_argument(
+        "--window",
+        type=int,
+        default=30,
+        help="Median window size in frames (default: 30)",
+    )
+    preprocess_parser.add_argument(
+        "--framestep",
+        type=int,
+        default=1,
+        help="Output every Nth frame (default: 1)",
+    )
+    preprocess_parser.add_argument(
+        "--format",
+        type=str,
+        choices=["png", "mp4"],
+        default="png",
+        help="Output format (default: png)",
+    )
+
     args = parser.parse_args()
 
     # Dispatch
@@ -515,6 +598,8 @@ def main() -> None:
             config_path=args.config,
             frame=args.frame,
         )
+    elif args.command == "preprocess":
+        preprocess_command(args)
     else:
         parser.print_help()
         sys.exit(1)
