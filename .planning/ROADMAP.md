@@ -65,10 +65,11 @@ Plans:
   3. User can create minimal config file with only essential parameters (sensible defaults fill the rest)
   4. Long-running operations (matching, plane sweep, fusion) display progress bars showing completion percentage
   5. Cross-stage configuration constraints are validated (e.g., matcher_type=roma requires DenseMatchingConfig)
-**Plans**: TBD
+**Plans:** 2 plans
 
 Plans:
-- TBD during planning
+- [ ] 02-01-PLAN.md — Pydantic config models, validation, YAML I/O, backward compatibility, tests
+- [ ] 02-02-PLAN.md — Update pipeline/CLI consumers, tqdm progress bars, --quiet flag
 
 ### Phase 3: Pipeline Decomposition and Modularization
 **Goal**: Monolithic pipeline.py is decomposed into maintainable modular package while preserving backward compatibility
@@ -123,7 +124,7 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5
 |-------|----------------|--------|-----------|
 | 1. Dependency Resolution and Packaging Foundations | 2/2 | ✓ Complete | 2026-02-14 |
 | 01.1. Last-Minute Feature Additions | 2/2 | ✓ Complete | 2026-02-14 |
-| 2. Configuration and API Cleanup | 0/TBD | Not started | - |
+| 2. Configuration and API Cleanup | 0/2 | Not started | - |
 | 3. Pipeline Decomposition and Modularization | 0/TBD | Not started | - |
 | 4. Documentation and Examples | 0/TBD | Not started | - |
 | 5. Performance and Optimization | 0/TBD | Not started | - |
