@@ -1,5 +1,15 @@
 """Multi-view stereo reconstruction of underwater surfaces with refractive modeling."""
 
+try:
+    import torch
+except ImportError:
+    raise ImportError(
+        "PyTorch is required but not installed. "
+        "Install it from https://pytorch.org/get-started/locally/ "
+        "choosing the appropriate CUDA version for your system. "
+        "Example: pip install torch torchvision --index-url https://download.pytorch.org/whl/cu121"
+    ) from None
+
 from .calibration import (
     CalibrationData,
     CameraData,
@@ -8,8 +18,11 @@ from .calibration import (
     load_calibration_data,
     undistort_image,
 )
+from .coloring import best_view_colors, normalize_colors
 from .config import (
     BenchmarkConfig,
+    ColorNormConfig,
+    DenseMatchingConfig,
     DenseStereoConfig,
     DeviceConfig,
     EvaluationConfig,
@@ -37,6 +50,7 @@ from .masks import (
 )
 from .surface import (
     load_mesh,
+    reconstruct_bpa,
     reconstruct_heightfield,
     reconstruct_poisson,
     reconstruct_surface,
@@ -72,18 +86,22 @@ __all__ = [
     "FeatureExtractionConfig",
     "PairSelectionConfig",
     "MatchingConfig",
+    "DenseMatchingConfig",
     "DenseStereoConfig",
     "FusionConfig",
     "SurfaceConfig",
     "EvaluationConfig",
     "DeviceConfig",
     "BenchmarkConfig",
+    "ColorNormConfig",
     "CalibrationData",
     "CameraData",
     "UndistortionData",
     "load_calibration_data",
     "compute_undistortion_maps",
     "undistort_image",
+    "best_view_colors",
+    "normalize_colors",
     "triangulate_rays",
     "triangulate_pair",
     "triangulate_all_pairs",
@@ -103,6 +121,7 @@ __all__ = [
     "apply_mask_to_depth",
     "reconstruct_poisson",
     "reconstruct_heightfield",
+    "reconstruct_bpa",
     "reconstruct_surface",
     "save_mesh",
     "load_mesh",

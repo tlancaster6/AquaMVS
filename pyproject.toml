@@ -25,25 +25,17 @@ classifiers = [
     "Programming Language :: Python :: 3.12",
 ]
 
-# Note: aquacal is a local editable dependency and must be installed separately:
-#   pip install -e ../AquaCal
 dependencies = [
-    "torch",
-    "kornia",
-    "open3d",
-    "opencv-python>=4.6",
-    "numpy",
-    "scipy",
-    "pyyaml",
-    "matplotlib",
-    "lightglue @ git+https://github.com/cvg/LightGlue.git",
-    "romav2",
-    # Additional romav2 dependencies (explicitly listed for clarity since romav2
-    # declares dataclasses>=0.8 which doesn't exist on Python 3.10+; install with
-    # `pip install --no-deps romav2` followed by these deps to work around PyPI bug)
-    "einops>=0.8.1",
-    "rich>=14.2.0",
-    "tqdm>=4.67.1",
+    "kornia>=0.7.0",
+    "open3d>=0.18.0",
+    "opencv-python>=4.6.0",
+    "numpy>=1.24.0",
+    "scipy>=1.10.0",
+    "pyyaml>=6.0",
+    "matplotlib>=3.7.0",
+    "aquacal>=0.1.0",
+    "lightglue @ git+https://github.com/cvg/LightGlue.git@edb2b83",
+    "romav2 @ git+https://github.com/tlancaster6/RoMaV2.git@3862b19d5880cd7d690b544d27f30bb88e7d8fa4",
 ]
 
 [project.optional-dependencies]
@@ -52,6 +44,8 @@ dev = [
     "pytest-cov",
     "black",
     "mypy",
+    "python-semantic-release",
+    "build",
 ]
 
 [project.urls]
@@ -62,6 +56,20 @@ aquamvs = "aquamvs.cli:main"
 
 [tool.setuptools.packages.find]
 where = ["src"]
+exclude = ["tests*", "docs*"]
+
+[tool.setuptools]
+include-package-data = false
+
+[tool.semantic_release]
+version_toml = ["pyproject.toml:project.version"]
+branch = "main"
+build_command = "pip install build && python -m build"
+
+[tool.semantic_release.commit_parser_options]
+allowed_tags = ["feat", "fix", "docs", "refactor", "perf", "test", "chore"]
+minor_tags = ["feat"]
+patch_tags = ["fix", "perf"]
 
 [tool.pytest.ini_options]
 markers = [
