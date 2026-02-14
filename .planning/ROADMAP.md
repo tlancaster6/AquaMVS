@@ -31,10 +31,11 @@ Decimal phases appear between their surrounding integers in numeric order.
   4. RoMa v2 installs without requiring manual `--no-deps` workaround
   5. AquaCal dependency is resolved for distribution (published to PyPI, vendored, or documented)
   6. CI pipeline runs tests successfully on both Windows and Linux platforms
-**Plans**: TBD
+**Plans:** 2 plans
 
 Plans:
-- TBD during planning
+- [ ] 01-01-PLAN.md — Resolve dependency blockers (LightGlue, RoMa, AquaCal), clean pyproject.toml, versioning setup
+- [ ] 01-02-PLAN.md — Create CI/CD workflows (test matrix + PyPI publish)
 
 ### Phase 2: Configuration and API Cleanup
 **Goal**: Configuration is validated at load time with clear error messages, and public APIs are typed and stable
@@ -102,7 +103,7 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
-| 1. Dependency Resolution and Packaging Foundations | 0/TBD | Not started | - |
+| 1. Dependency Resolution and Packaging Foundations | 0/2 | Planned | - |
 | 2. Configuration and API Cleanup | 0/TBD | Not started | - |
 | 3. Pipeline Decomposition and Modularization | 0/TBD | Not started | - |
 | 4. Documentation and Examples | 0/TBD | Not started | - |
