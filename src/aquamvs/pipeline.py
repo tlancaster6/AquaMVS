@@ -642,7 +642,13 @@ def process_frame(
             save_point_cloud(pcd, pcd_dir / "sparse.ply")
 
         # Statistical outlier removal (sparse path)
-        if config.outlier_removal.enabled and pcd is not None and pcd.has_points():
+        # Skip if too few points for meaningful neighbor statistics
+        if (
+            config.outlier_removal.enabled
+            and pcd is not None
+            and pcd.has_points()
+            and len(pcd.points) > config.outlier_removal.nb_neighbors
+        ):
             original_count = len(pcd.points)
             pcd, _ = pcd.remove_statistical_outlier(
                 nb_neighbors=config.outlier_removal.nb_neighbors,
@@ -917,7 +923,12 @@ def process_frame(
             )
 
     # --- Statistical Outlier Removal (after fusion, before surface reconstruction) ---
-    if config.outlier_removal.enabled and fused_pcd.has_points():
+    # Skip if too few points for meaningful neighbor statistics
+    if (
+        config.outlier_removal.enabled
+        and fused_pcd.has_points()
+        and len(fused_pcd.points) > config.outlier_removal.nb_neighbors
+    ):
         original_count = len(fused_pcd.points)
         fused_pcd, _ = fused_pcd.remove_statistical_outlier(
             nb_neighbors=config.outlier_removal.nb_neighbors,
