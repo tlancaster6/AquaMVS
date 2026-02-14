@@ -14,7 +14,7 @@ Decimal phases appear between their surrounding integers in numeric order.
 
 - [x] **Phase 1: Dependency Resolution and Packaging Foundations** - Resolve PyPI blockers, establish clean wheel, set up CI/CD
 - [x] **Phase 01.1: Last-Minute Feature Additions** - Temporal median, mesh export, outlier removal, consistency maps, image input
-- [ ] **Phase 2: Configuration and API Cleanup** - Consolidate config, validate inputs, establish type hints and deprecation patterns
+- [x] **Phase 2: Configuration and API Cleanup** - Consolidate config, validate inputs, establish type hints and deprecation patterns
 - [ ] **Phase 3: Pipeline Decomposition and Modularization** - Refactor 995-line pipeline.py into modular package with protocols
 - [ ] **Phase 4: Documentation and Examples** - Sphinx docs, Jupyter tutorials, example datasets, ReadTheDocs hosting
 - [ ] **Phase 5: Performance and Optimization** - Benchmark suite, profiling, optimization based on measurements
@@ -68,8 +68,8 @@ Plans:
 **Plans:** 2 plans
 
 Plans:
-- [ ] 02-01-PLAN.md — Pydantic config models, validation, YAML I/O, backward compatibility, tests
-- [ ] 02-02-PLAN.md — Update pipeline/CLI consumers, tqdm progress bars, --quiet flag
+- [x] 02-01-PLAN.md — Pydantic config models, validation, YAML I/O, backward compatibility, tests
+- [x] 02-02-PLAN.md — Update pipeline/CLI consumers, tqdm progress bars, --quiet flag
 
 ### Phase 3: Pipeline Decomposition and Modularization
 **Goal**: Monolithic pipeline.py is decomposed into maintainable modular package while preserving backward compatibility
@@ -124,7 +124,7 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5
 |-------|----------------|--------|-----------|
 | 1. Dependency Resolution and Packaging Foundations | 2/2 | ✓ Complete | 2026-02-14 |
 | 01.1. Last-Minute Feature Additions | 2/2 | ✓ Complete | 2026-02-14 |
-| 2. Configuration and API Cleanup | 0/2 | Not started | - |
+| 2. Configuration and API Cleanup | 2/2 | ✓ Complete | 2026-02-14 |
 | 3. Pipeline Decomposition and Modularization | 0/TBD | Not started | - |
 | 4. Documentation and Examples | 0/TBD | Not started | - |
 | 5. Performance and Optimization | 0/TBD | Not started | - |
