@@ -10,28 +10,28 @@ See: .planning/PROJECT.md (updated 2026-02-14)
 ## Current Position
 
 Phase: 1 of 5 (Dependency Resolution and Packaging Foundations)
-Plan: 01-01 complete, ready for 01-02
-Status: In progress
-Last activity: 2026-02-14 — Completed 01-01-PLAN.md (dependency resolution and packaging foundations)
+Plan: 01-02 complete, 2 of 2 phase plans done
+Status: Phase complete
+Last activity: 2026-02-14 — Completed 01-02-PLAN.md (CI/CD setup)
 
-Progress: [██░░░░░░░░] 20% (1 of 5 phase plans complete)
+Progress: [████░░░░░░] 40% (2 of 5 phase plans complete)
 
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 1
-- Average duration: 15 min
-- Total execution time: 0.25 hours
+- Total plans completed: 2
+- Average duration: 10 min
+- Total execution time: 0.33 hours
 
 **By Phase:**
 
 | Phase | Plans | Total | Avg/Plan |
 |-------|-------|-------|----------|
-| 01    | 1     | 15min | 15min    |
+| 01    | 2     | 20min | 10min    |
 
 **Recent Trend:**
-- Last 5 plans: 01-01 (15min)
-- Trend: Establishing baseline
+- Last 5 plans: 01-01 (15min), 01-02 (5min)
+- Trend: Accelerating (33% faster than baseline)
 
 ## Accumulated Context
 
@@ -51,6 +51,11 @@ Recent decisions affecting current work:
 - AquaCal as standard PyPI dependency (aquacal>=0.1.0)
 - prereq-docs strategy: Document LightGlue and RoMa as manual install prerequisites for PyPI compatibility
 
+**Phase 01 Plan 02 (2026-02-14):**
+- Matrix testing across Ubuntu and Windows with Python 3.10, 3.11, 3.12 (6 combinations)
+- Trusted Publishing (OIDC) eliminates API token management for PyPI uploads
+- Three-stage publish pipeline: build -> TestPyPI -> PyPI with manual approval gate
+
 ### Pending Todos
 
 None yet.
@@ -69,5 +74,5 @@ None yet.
 ## Session Continuity
 
 Last session: 2026-02-14 (plan execution)
-Stopped at: Completed 01-01-PLAN.md, ready for 01-02 (CI/CD)
+Stopped at: Completed 01-02-PLAN.md (CI/CD setup) - Phase 01 complete
 Resume file: None
