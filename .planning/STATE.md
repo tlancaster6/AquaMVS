@@ -10,29 +10,29 @@ See: .planning/PROJECT.md (updated 2026-02-14)
 ## Current Position
 
 Phase: 01.1 (Last-Minute Feature Additions)
-Plan: 1 of 2 plans complete
-Status: In progress — executing phase 01.1
-Last activity: 2026-02-14 - Completed 01.1-01-PLAN.md: Temporal median preprocessing and mesh export
+Plan: 2 of 2 plans complete
+Status: Complete — phase 01.1 finished
+Last activity: 2026-02-14 - Completed 01.1-02-PLAN.md: Pipeline enhancements (outlier removal, consistency maps, image input)
 
-Progress: [██░░░░░░░░] 20% (1 of 5 phases complete, 1 of 2 plans in phase 01.1)
+Progress: [████░░░░░░] 40% (1 of 5 phases complete, 2 of 2 plans in phase 01.1)
 
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 3
-- Average duration: 8.3 min
-- Total execution time: 0.42 hours
+- Total plans completed: 4
+- Average duration: 9.5 min
+- Total execution time: 0.63 hours
 
 **By Phase:**
 
 | Phase | Plans | Total | Avg/Plan |
 |-------|-------|-------|----------|
 | 01    | 2     | 20min | 10min    |
-| 01.1  | 1     | 5min  | 5min     |
+| 01.1  | 2     | 17min | 8.5min   |
 
 **Recent Trend:**
-- Last 5 plans: 01-01 (15min), 01-02 (5min), 01.1-01 (5min)
-- Trend: Accelerating (40% faster than baseline)
+- Last 5 plans: 01-01 (15min), 01-02 (5min), 01.1-01 (5min), 01.1-02 (12min)
+- Trend: Stabilizing around 8-10min per plan
 
 ## Accumulated Context
 
@@ -63,6 +63,13 @@ Recent decisions affecting current work:
 - Auto-compute normals for STL export (Open3D requirement)
 - Format detection from output_path suffix for mesh export
 
+**Phase 01.1 Plan 02 (2026-02-14):**
+- Outlier removal enabled by default (nb_neighbors=20, std_ratio=2.0)
+- Consistency map colormap normalized by number of source cameras, not per-frame max
+- Viridis colormap for perceptual uniformity and colorblind accessibility
+- Auto-detection of input type (image directory vs video file) based on path.is_dir()
+- ImageDirectorySet validates matching filenames and frame counts across cameras
+
 ### Roadmap Evolution
 
 - Phase 1.1 inserted after Phase 1: Last-Minute Feature Additions (URGENT)
@@ -91,5 +98,5 @@ approved
 ## Session Continuity
 
 Last session: 2026-02-14 (phase 01.1 execution)
-Stopped at: Completed 01.1-01-PLAN.md — ready for 01.1-02-PLAN.md
+Stopped at: Completed 01.1-02-PLAN.md — phase 01.1 complete, ready for phase 02
 Resume file: None
