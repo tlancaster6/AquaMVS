@@ -1,5 +1,6 @@
 """Point cloud to mesh conversion and surface reconstruction."""
 
+import logging
 from pathlib import Path
 
 import numpy as np
@@ -7,6 +8,8 @@ import open3d as o3d
 from scipy.interpolate import griddata
 
 from .config import SurfaceConfig
+
+logger = logging.getLogger(__name__)
 
 
 def _transfer_colors(
@@ -266,16 +269,22 @@ def reconstruct_surface(
     """
     match config.method:
         case "poisson":
-            return reconstruct_poisson(pcd, config)
+            mesh = reconstruct_poisson(pcd, config)
         case "heightfield":
-            return reconstruct_heightfield(pcd, config)
+            mesh = reconstruct_heightfield(pcd, config)
         case "bpa":
-            return reconstruct_bpa(pcd, config)
+            mesh = reconstruct_bpa(pcd, config)
         case _:
             raise ValueError(
                 f"Unknown surface method: {config.method!r}. "
                 "Expected 'poisson', 'heightfield', or 'bpa'."
             )
+
+    # Apply simplification if configured
+    if config.target_faces is not None:
+        mesh = simplify_mesh(mesh, config.target_faces)
+
+    return mesh
 
 
 def save_mesh(
@@ -303,3 +312,102 @@ def load_mesh(
         Open3D TriangleMesh.
     """
     return o3d.io.read_triangle_mesh(str(path))
+
+
+def simplify_mesh(
+    mesh: o3d.geometry.TriangleMesh,
+    target_faces: int,
+) -> o3d.geometry.TriangleMesh:
+    """Simplify a triangle mesh using quadric decimation.
+
+    Reduces mesh complexity while preserving shape and features.
+    Useful for reducing file size or improving rendering performance.
+
+    Args:
+        mesh: Input triangle mesh.
+        target_faces: Target number of triangles after simplification.
+
+    Returns:
+        Simplified triangle mesh.
+    """
+    original_faces = len(mesh.triangles)
+    logger.info(
+        f"Simplifying mesh: {original_faces} faces -> target {target_faces} faces"
+    )
+
+    simplified = mesh.simplify_quadric_decimation(
+        target_number_of_triangles=target_faces
+    )
+
+    actual_faces = len(simplified.triangles)
+    logger.info(f"Simplification result: {actual_faces} faces")
+
+    if actual_faces > target_faces * 1.1:
+        logger.warning(
+            f"Simplification fell short: {actual_faces} faces "
+            f"(target was {target_faces})"
+        )
+
+    return simplified
+
+
+def export_mesh(
+    input_path: Path,
+    output_path: Path,
+    simplify: int | None = None,
+) -> None:
+    """Export a mesh to a different format with optional simplification.
+
+    Supports conversion between PLY, OBJ, STL, GLTF, and GLB formats.
+    STL export automatically computes vertex normals if missing.
+
+    Args:
+        input_path: Path to input mesh file (typically .ply).
+        output_path: Path to output mesh file. Format determined by extension.
+        simplify: Optional target face count for mesh simplification.
+
+    Raises:
+        ValueError: If input mesh is empty or invalid.
+        RuntimeError: If mesh export fails.
+    """
+    # Load mesh
+    logger.info(f"Loading mesh from {input_path}")
+    mesh = o3d.io.read_triangle_mesh(str(input_path))
+
+    # Validate
+    if not mesh.has_vertices() or len(mesh.vertices) == 0:
+        raise ValueError(f"Input mesh has no vertices: {input_path}")
+
+    logger.info(
+        f"Loaded mesh: {len(mesh.vertices)} vertices, {len(mesh.triangles)} faces"
+    )
+
+    # Simplify if requested
+    if simplify is not None:
+        mesh = simplify_mesh(mesh, simplify)
+
+    # Format-specific preprocessing
+    output_format = output_path.suffix.lower()
+
+    if output_format == ".stl":
+        # STL requires vertex normals
+        if not mesh.has_vertex_normals():
+            logger.info("Computing vertex normals for STL export")
+            mesh.compute_vertex_normals()
+
+        # Warn about color loss
+        if mesh.has_vertex_colors():
+            logger.warning(
+                "STL format does not support vertex colors (colors will be lost)"
+            )
+
+    # Export
+    logger.info(f"Exporting to {output_path} (format: {output_format})")
+    success = o3d.io.write_triangle_mesh(str(output_path), mesh)
+
+    if not success:
+        raise RuntimeError(f"Failed to write mesh to {output_path}")
+
+    logger.info(
+        f"Export complete: {len(mesh.triangles)} faces written to {output_path}"
+    )

@@ -434,6 +434,87 @@ def preprocess_command(args) -> None:
         sys.exit(1)
 
 
+def export_mesh_command(args) -> None:
+    """Export mesh(es) to different format with optional simplification.
+
+    Args:
+        args: Parsed command-line arguments.
+    """
+    # Configure logging
+    logging.basicConfig(
+        level=logging.INFO,
+        format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
+        datefmt="%H:%M:%S",
+    )
+
+    # Lazy import to avoid loading Open3D at CLI parse time
+    from aquamvs.surface import export_mesh
+
+    # Determine mode: single file or batch
+    if args.input_dir is not None:
+        # Batch mode
+        input_dir = args.input_dir
+        if not input_dir.exists() or not input_dir.is_dir():
+            print(
+                f"Error: Input directory does not exist: {input_dir}", file=sys.stderr
+            )
+            sys.exit(1)
+
+        # Find all PLY files
+        ply_files = list(input_dir.glob("*.ply"))
+        if not ply_files:
+            print(f"Error: No .ply files found in {input_dir}", file=sys.stderr)
+            sys.exit(1)
+
+        # Determine output directory
+        output_dir = args.output_dir if args.output_dir is not None else input_dir
+
+        print(f"\nBatch converting {len(ply_files)} mesh(es) to {args.format.upper()}")
+        if args.simplify is not None:
+            print(f"Simplifying to {args.simplify} faces")
+
+        success_count = 0
+        for ply_file in ply_files:
+            output_path = output_dir / f"{ply_file.stem}.{args.format}"
+            try:
+                export_mesh(
+                    input_path=ply_file,
+                    output_path=output_path,
+                    simplify=args.simplify,
+                )
+                success_count += 1
+            except Exception as e:
+                print(f"Failed to export {ply_file.name}: {e}", file=sys.stderr)
+
+        print(f"\nBatch export complete: {success_count}/{len(ply_files)} succeeded\n")
+
+    else:
+        # Single file mode
+        input_path = args.input
+        if not input_path.exists():
+            print(f"Error: Input file does not exist: {input_path}", file=sys.stderr)
+            sys.exit(1)
+
+        # Determine output path
+        output_path = input_path.with_suffix(f".{args.format}")
+
+        # Run export
+        try:
+            export_mesh(
+                input_path=input_path,
+                output_path=output_path,
+                simplify=args.simplify,
+            )
+            print(f"\nExport complete: {output_path}\n")
+
+        except Exception as e:
+            print(f"Error: Export failed: {e}", file=sys.stderr)
+            import traceback
+
+            traceback.print_exc()
+            sys.exit(1)
+
+
 def main() -> None:
     """Main entry point for the AquaMVS CLI."""
     parser = argparse.ArgumentParser(
@@ -571,6 +652,43 @@ def main() -> None:
         help="Output format (default: png)",
     )
 
+    # export-mesh subcommand
+    export_mesh_parser = subparsers.add_parser(
+        "export-mesh",
+        help="Export mesh to different format with optional simplification",
+    )
+    export_mesh_parser.add_argument(
+        "input",
+        type=Path,
+        nargs="?",
+        help="Input PLY mesh file (omit for batch mode with --input-dir)",
+    )
+    export_mesh_parser.add_argument(
+        "--format",
+        type=str,
+        required=True,
+        choices=["obj", "stl", "gltf", "glb"],
+        help="Output format",
+    )
+    export_mesh_parser.add_argument(
+        "--simplify",
+        type=int,
+        default=None,
+        help="Target face count for simplification (optional)",
+    )
+    export_mesh_parser.add_argument(
+        "--input-dir",
+        type=Path,
+        default=None,
+        help="Batch mode: convert all PLY files in directory",
+    )
+    export_mesh_parser.add_argument(
+        "--output-dir",
+        type=Path,
+        default=None,
+        help="Output directory for batch mode (defaults to input-dir)",
+    )
+
     args = parser.parse_args()
 
     # Dispatch
@@ -600,6 +718,8 @@ def main() -> None:
         )
     elif args.command == "preprocess":
         preprocess_command(args)
+    elif args.command == "export-mesh":
+        export_mesh_command(args)
     else:
         parser.print_help()
         sys.exit(1)

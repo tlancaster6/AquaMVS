@@ -148,12 +148,14 @@ class SurfaceConfig:
         grid_resolution: Grid cell size for height-field interpolation (meters).
         bpa_radii: List of ball radii for Ball Pivoting Algorithm (meters),
             or None to auto-estimate from point spacing.
+        target_faces: Target triangle count for mesh simplification (None = no simplification).
     """
 
     method: str = "poisson"
     poisson_depth: int = 9
     grid_resolution: float = 0.002
     bpa_radii: list[float] | None = None
+    target_faces: int | None = None
 
 
 @dataclass

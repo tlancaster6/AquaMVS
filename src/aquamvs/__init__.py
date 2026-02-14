@@ -61,12 +61,14 @@ from .pipeline import (
     setup_pipeline,
 )
 from .surface import (
+    export_mesh,
     load_mesh,
     reconstruct_bpa,
     reconstruct_heightfield,
     reconstruct_poisson,
     reconstruct_surface,
     save_mesh,
+    simplify_mesh,
 )
 from .triangulation import (
     compute_depth_ranges,
@@ -125,6 +127,8 @@ __all__ = [
     "reconstruct_surface",
     "save_mesh",
     "load_mesh",
+    "export_mesh",
+    "simplify_mesh",
     "icp_align",
     "cloud_to_cloud_distance",
     "height_map_difference",
