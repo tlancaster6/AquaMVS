@@ -64,6 +64,39 @@ def _should_viz(config: PipelineConfig, stage: str) -> bool:
     return stage in viz.stages
 
 
+def _save_consistency_map(
+    consistency: torch.Tensor,
+    output_stem: Path,
+    max_value: int,
+) -> None:
+    """Save consistency map as NPZ and colormapped PNG.
+
+    Args:
+        consistency: Consistency count map (H, W), int32.
+        output_stem: Output path stem (without extension).
+        max_value: Maximum consistency value for normalization
+            (number of source cameras for this reference view).
+    """
+    import cv2
+    from matplotlib import cm
+
+    consistency_np = consistency.cpu().numpy()
+
+    # NPZ for programmatic analysis
+    np.savez_compressed(
+        str(output_stem.with_suffix(".npz")),
+        consistency=consistency_np,
+    )
+
+    # Colormapped PNG for visual inspection
+    # Normalize by number of source cameras, not per-frame max
+    cmap = cm.get_cmap("viridis")
+    normalized = consistency_np.astype(float) / max(max_value, 1)
+    colored = cmap(normalized)  # (H, W, 4) RGBA float [0, 1]
+    colored_bgr = (colored[:, :, :3][:, :, ::-1] * 255).astype(np.uint8)
+    cv2.imwrite(str(output_stem.with_suffix(".png")), colored_bgr)
+
+
 def _collect_height_maps(
     config: PipelineConfig,
 ) -> list[tuple[int, np.ndarray, np.ndarray, np.ndarray]]:
@@ -830,6 +863,22 @@ def process_frame(
 
         filtered_depths = {name: f[0] for name, f in filtered.items()}
         filtered_confs = {name: f[1] for name, f in filtered.items()}
+
+        # Save consistency maps (opt-in)
+        if config.output.save_consistency_maps:
+            consistency_dir = frame_dir / "consistency_maps"
+            consistency_dir.mkdir(parents=True, exist_ok=True)
+            for cam_name, (_, _, consistency) in filtered.items():
+                _save_consistency_map(
+                    consistency=consistency,
+                    output_stem=consistency_dir / cam_name,
+                    max_value=len(ctx.pairs[cam_name]),
+                )
+            logger.info(
+                "Frame %d: saved consistency maps for %d cameras",
+                frame_idx,
+                len(filtered),
+            )
 
     # --- Stage 8: Depth Map Fusion ---
     logger.info("Frame %d: fusing depth maps", frame_idx)
