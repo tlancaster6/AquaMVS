@@ -225,9 +225,17 @@ def export_refs_command(
         print("Error: No valid cameras found", file=sys.stderr)
         sys.exit(1)
 
-    # 4. Open videos and seek to frame
+    # 4. Auto-detect input type and open appropriate context manager
+    from aquamvs.io import ImageDirectorySet, detect_input_type
+
+    input_type = detect_input_type(config.camera_video_map)
+    if input_type == "images":
+        context_manager = ImageDirectorySet(config.camera_video_map)
+    else:
+        context_manager = VideoSet(config.camera_video_map)
+
     try:
-        with VideoSet(config.camera_video_map) as videos:
+        with context_manager as videos:
             # Read the specified frame
             frame_found = False
             for frame_idx, raw_images in videos.iterate_frames(  # noqa: B007

@@ -31,6 +31,7 @@ from .features import (
     select_pairs,
 )
 from .fusion import filter_all_depth_maps, fuse_depth_maps, save_point_cloud
+from .io import ImageDirectorySet, detect_input_type
 from .projection.protocol import ProjectionModel
 from .projection.refractive import RefractiveProjectionModel
 from .surface import reconstruct_surface, save_mesh
@@ -607,6 +608,21 @@ def process_frame(
             pcd_dir.mkdir(exist_ok=True)
             save_point_cloud(pcd, pcd_dir / "sparse.ply")
 
+        # Statistical outlier removal (sparse path)
+        if config.outlier_removal.enabled and pcd is not None and pcd.has_points():
+            original_count = len(pcd.points)
+            pcd, _ = pcd.remove_statistical_outlier(
+                nb_neighbors=config.outlier_removal.nb_neighbors,
+                std_ratio=config.outlier_removal.std_ratio,
+            )
+            removed = original_count - len(pcd.points)
+            logger.info(
+                "Frame %d: removed %d outliers (%.1f%%) from sparse cloud",
+                frame_idx,
+                removed,
+                removed / original_count * 100 if original_count > 0 else 0.0,
+            )
+
         # Surface reconstruction (if non-empty)
         mesh = None
         if pcd is not None and pcd.has_points():
@@ -851,6 +867,21 @@ def process_frame(
                 frame_idx,
             )
 
+    # --- Statistical Outlier Removal (after fusion, before surface reconstruction) ---
+    if config.outlier_removal.enabled and fused_pcd.has_points():
+        original_count = len(fused_pcd.points)
+        fused_pcd, _ = fused_pcd.remove_statistical_outlier(
+            nb_neighbors=config.outlier_removal.nb_neighbors,
+            std_ratio=config.outlier_removal.std_ratio,
+        )
+        removed = original_count - len(fused_pcd.points)
+        logger.info(
+            "Frame %d: removed %d outliers (%.1f%%) from fused cloud",
+            frame_idx,
+            removed,
+            removed / original_count * 100 if original_count > 0 else 0.0,
+        )
+
     # --- Stage 9: Surface Reconstruction ---
     if fused_pcd.has_points():
         logger.info("Frame %d: reconstructing surface", frame_idx)
@@ -970,9 +1001,16 @@ def run_pipeline(config: PipelineConfig) -> None:
     # One-time setup
     ctx = setup_pipeline(config)
 
-    # Open video files
-    logger.info("Opening video files")
-    with VideoSet(config.camera_video_map) as videos:
+    # Auto-detect input type and open appropriate context manager
+    input_type = detect_input_type(config.camera_video_map)
+    if input_type == "images":
+        logger.info("Detected image directory input")
+        context_manager = ImageDirectorySet(config.camera_video_map)
+    else:
+        logger.info("Opening video files")
+        context_manager = VideoSet(config.camera_video_map)
+
+    with context_manager as videos:
         frame_sampling = config.frame_sampling
 
         logger.info(

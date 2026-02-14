@@ -181,6 +181,24 @@ class DeviceConfig:
 
 
 @dataclass
+class OutlierRemovalConfig:
+    """Configuration for statistical outlier removal on fused point clouds.
+
+    Applied after fusion, before surface reconstruction.
+    Uses Open3D remove_statistical_outlier().
+
+    Attributes:
+        enabled: Enable statistical outlier removal (on by default).
+        nb_neighbors: Number of neighbors for mean distance calculation.
+        std_ratio: Standard deviation ratio threshold.
+    """
+
+    enabled: bool = True
+    nb_neighbors: int = 20
+    std_ratio: float = 2.0
+
+
+@dataclass
 class OutputConfig:
     """Configuration for output artifact persistence.
 
@@ -191,6 +209,8 @@ class OutputConfig:
         save_mesh: Save surface mesh (.ply). On by default.
         keep_intermediates: Keep depth maps after fusion. If False, depth maps
             are deleted after successful fusion to save space. On by default.
+        save_consistency_maps: Save consistency maps as colormapped PNG + NPZ
+            alongside depth maps. Opt-in.
     """
 
     save_features: bool = False
@@ -198,6 +218,7 @@ class OutputConfig:
     save_point_cloud: bool = True
     save_mesh: bool = True
     keep_intermediates: bool = True
+    save_consistency_maps: bool = False
 
 
 VALID_COLOR_NORM_METHODS = ["gain", "histogram"]
@@ -292,6 +313,7 @@ class PipelineConfig:
     surface: SurfaceConfig = field(default_factory=SurfaceConfig)
     evaluation: EvaluationConfig = field(default_factory=EvaluationConfig)
     device: DeviceConfig = field(default_factory=DeviceConfig)
+    outlier_removal: OutlierRemovalConfig = field(default_factory=OutlierRemovalConfig)
     output: OutputConfig = field(default_factory=OutputConfig)
     visualization: VizConfig = field(default_factory=VizConfig)
     benchmark: BenchmarkConfig = field(default_factory=BenchmarkConfig)
@@ -414,6 +436,7 @@ class PipelineConfig:
         surface = data.pop("surface", None)
         evaluation = data.pop("evaluation", None)
         device = data.pop("device", None)
+        outlier_removal = data.pop("outlier_removal", None)
         output = data.pop("output", None)
         visualization = data.pop("visualization", None)
         benchmark = data.pop("benchmark", None)
@@ -439,6 +462,7 @@ class PipelineConfig:
             surface=_build_dataclass(SurfaceConfig, surface),
             evaluation=_build_dataclass(EvaluationConfig, evaluation),
             device=_build_dataclass(DeviceConfig, device),
+            outlier_removal=_build_dataclass(OutlierRemovalConfig, outlier_removal),
             output=_build_dataclass(OutputConfig, output),
             visualization=_build_dataclass(VizConfig, visualization),
             benchmark=_build_dataclass(BenchmarkConfig, benchmark),

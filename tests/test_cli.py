@@ -579,6 +579,7 @@ def test_export_refs_creates_images(tmp_path: Path, calibration_json: Path):
     mock_undist_data = MagicMock()
 
     with (
+        patch("aquamvs.io.detect_input_type", return_value="video"),
         patch("aquamvs.cli.VideoSet", return_value=mock_video_set),
         patch("aquamvs.cli.load_calibration_data", return_value=mock_cal_data),
         patch("aquamvs.cli.compute_undistortion_maps", return_value=mock_undist_data),
@@ -654,6 +655,7 @@ def test_export_refs_includes_center_camera(tmp_path: Path):
     mock_undist_data = MagicMock()
 
     with (
+        patch("aquamvs.io.detect_input_type", return_value="video"),
         patch("aquamvs.cli.VideoSet", return_value=mock_video_set),
         patch("aquamvs.cli.load_calibration_data", return_value=mock_cal_data),
         patch("aquamvs.cli.compute_undistortion_maps", return_value=mock_undist_data),
