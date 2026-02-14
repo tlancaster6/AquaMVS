@@ -7,7 +7,7 @@ import open3d as o3d
 import torch
 import torch.nn.functional as F
 
-from .config import FusionConfig
+from .config import ReconstructionConfig
 from .projection.protocol import ProjectionModel
 
 
@@ -81,7 +81,7 @@ def filter_depth_map(
     target_names: list[str],
     target_models: dict[str, ProjectionModel],
     target_depths: dict[str, torch.Tensor],
-    config: FusionConfig,
+    config: ReconstructionConfig,
 ) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
     """Filter a depth map by cross-view geometric consistency.
 
@@ -188,7 +188,7 @@ def filter_all_depth_maps(
     projection_models: dict[str, ProjectionModel],
     depth_maps: dict[str, torch.Tensor],
     confidence_maps: dict[str, torch.Tensor],
-    config: FusionConfig,
+    config: ReconstructionConfig,
 ) -> dict[str, tuple[torch.Tensor, torch.Tensor, torch.Tensor]]:
     """Run geometric consistency filtering for all ring cameras.
 
@@ -311,7 +311,7 @@ def fuse_depth_maps(
     filtered_depth_maps: dict[str, torch.Tensor],
     filtered_confidence_maps: dict[str, torch.Tensor],
     images: dict[str, torch.Tensor],
-    config: FusionConfig,
+    config: ReconstructionConfig,
 ) -> o3d.geometry.PointCloud:
     """Fuse filtered depth maps from all ring cameras into a single point cloud.
 

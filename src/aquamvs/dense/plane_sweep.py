@@ -6,7 +6,7 @@ import numpy as np
 import torch
 import torch.nn.functional as F
 
-from ..config import DenseStereoConfig
+from ..config import ReconstructionConfig
 from ..projection.protocol import ProjectionModel
 from .cost import aggregate_costs, compute_cost
 
@@ -176,7 +176,7 @@ def build_cost_volume(
     ref_image: torch.Tensor,
     src_images: list[torch.Tensor],
     depths: torch.Tensor,
-    config: DenseStereoConfig,
+    config: ReconstructionConfig,
 ) -> torch.Tensor:
     """Build a cost volume for one reference camera.
 
@@ -246,7 +246,7 @@ def plane_sweep_stereo(
     ref_image: torch.Tensor,
     src_images: dict[str, torch.Tensor],
     depth_range: tuple[float, float],
-    config: DenseStereoConfig,
+    config: ReconstructionConfig,
     device: str = "cpu",
 ) -> dict[str, torch.Tensor]:
     """Run plane-sweep stereo for a single reference camera.

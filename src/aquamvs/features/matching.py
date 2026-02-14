@@ -5,7 +5,7 @@ from pathlib import Path
 import torch
 from lightglue import LightGlue
 
-from ..config import MatchingConfig
+from ..config import SparseMatchingConfig
 
 
 def create_matcher(
@@ -56,7 +56,7 @@ def match_pair(
     feats_ref: dict[str, torch.Tensor],
     feats_src: dict[str, torch.Tensor],
     image_size: tuple[int, int],
-    config: MatchingConfig,
+    config: SparseMatchingConfig,
     matcher: LightGlue | None = None,
     device: str = "cpu",
     extractor_type: str = "superpoint",
@@ -121,7 +121,7 @@ def match_all_pairs(
     all_features: dict[str, dict[str, torch.Tensor]],
     pairs: dict[str, list[str]],
     image_size: tuple[int, int],
-    config: MatchingConfig,
+    config: SparseMatchingConfig,
     device: str = "cpu",
     extractor_type: str = "superpoint",
 ) -> dict[tuple[str, str], dict[str, torch.Tensor]]:

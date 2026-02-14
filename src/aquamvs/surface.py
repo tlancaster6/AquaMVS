@@ -7,7 +7,7 @@ import numpy as np
 import open3d as o3d
 from scipy.interpolate import griddata
 
-from .config import SurfaceConfig
+from .config import ReconstructionConfig
 
 logger = logging.getLogger(__name__)
 
@@ -44,7 +44,7 @@ def _transfer_colors(
 
 def reconstruct_poisson(
     pcd: o3d.geometry.PointCloud,
-    config: SurfaceConfig,
+    config: ReconstructionConfig,
 ) -> o3d.geometry.TriangleMesh:
     """Reconstruct a surface mesh using Poisson surface reconstruction.
 
@@ -86,7 +86,7 @@ def reconstruct_poisson(
 
 def reconstruct_heightfield(
     pcd: o3d.geometry.PointCloud,
-    config: SurfaceConfig,
+    config: ReconstructionConfig,
 ) -> o3d.geometry.TriangleMesh:
     """Reconstruct a surface mesh using height-field interpolation.
 
@@ -197,7 +197,7 @@ def reconstruct_heightfield(
 
 def reconstruct_bpa(
     pcd: o3d.geometry.PointCloud,
-    config: SurfaceConfig,
+    config: ReconstructionConfig,
 ) -> o3d.geometry.TriangleMesh:
     """Reconstruct a surface mesh using the Ball Pivoting Algorithm.
 
@@ -251,7 +251,7 @@ def reconstruct_bpa(
 
 def reconstruct_surface(
     pcd: o3d.geometry.PointCloud,
-    config: SurfaceConfig,
+    config: ReconstructionConfig,
 ) -> o3d.geometry.TriangleMesh:
     """Reconstruct a surface mesh from a fused point cloud.
 
@@ -267,7 +267,7 @@ def reconstruct_surface(
     Raises:
         ValueError: If config.method is not "poisson", "heightfield", or "bpa".
     """
-    match config.method:
+    match config.surface_method:
         case "poisson":
             mesh = reconstruct_poisson(pcd, config)
         case "heightfield":
@@ -276,7 +276,7 @@ def reconstruct_surface(
             mesh = reconstruct_bpa(pcd, config)
         case _:
             raise ValueError(
-                f"Unknown surface method: {config.method!r}. "
+                f"Unknown surface method: {config.surface_method!r}. "
                 "Expected 'poisson', 'heightfield', or 'bpa'."
             )
 

@@ -5,7 +5,7 @@ import torch
 import torch.nn.functional as F
 from romav2.geometry import to_pixel
 
-from ..config import DenseMatchingConfig, FusionConfig
+from ..config import DenseMatchingConfig, ReconstructionConfig
 from ..projection.protocol import ProjectionModel
 
 # Cross-module private import for triangulation function (stable math interface)
@@ -168,7 +168,7 @@ def roma_warps_to_depth_maps(
     all_warps: dict[tuple[str, str], dict],
     projection_models: dict[str, ProjectionModel],
     dense_matching_config: DenseMatchingConfig,
-    fusion_config: FusionConfig,
+    reconstruction_config: ReconstructionConfig,
     image_size: tuple[int, int],
     masks: dict[str, np.ndarray] | None = None,
 ) -> tuple[dict[str, torch.Tensor], dict[str, torch.Tensor]]:
@@ -184,7 +184,7 @@ def roma_warps_to_depth_maps(
         all_warps: Directed (ref, src) -> raw warp dict from run_roma_all_pairs.
         projection_models: Camera name -> ProjectionModel.
         dense_matching_config: For certainty_threshold.
-        fusion_config: For depth_tolerance, min_consistent_views.
+        reconstruction_config: For roma_depth_tolerance, min_consistent_views.
         image_size: Full image (H, W) for upsampling target.
         masks: Optional per-camera ROI masks (H, W) uint8, 255 = valid.
 
@@ -230,8 +230,8 @@ def roma_warps_to_depth_maps(
         # warp-resolution triangulation noise -- B.16)
         depth_warp, conf_warp = aggregate_pairwise_depths(
             pairwise_depths_list,
-            fusion_config.roma_depth_tolerance,
-            fusion_config.min_consistent_views,
+            reconstruction_config.roma_depth_tolerance,
+            reconstruction_config.min_consistent_views,
         )
 
         # Upsample to full resolution with NaN handling

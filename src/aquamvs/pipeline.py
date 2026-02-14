@@ -1,6 +1,7 @@
 """Pipeline orchestration for multi-frame reconstruction."""
 
 import logging
+import sys
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -8,6 +9,7 @@ import numpy as np
 import open3d as o3d
 import torch
 from aquacal.io.video import VideoSet
+from tqdm import tqdm
 
 from .calibration import (
     CalibrationData,
@@ -55,13 +57,12 @@ def _should_viz(config: PipelineConfig, stage: str) -> bool:
     Returns:
         True if viz is enabled and this stage should run.
     """
-    viz = config.visualization
-    if not viz.enabled:
+    if not config.runtime.viz_enabled:
         return False
     # Empty stages list = all stages
-    if not viz.stages:
+    if not config.runtime.viz_stages:
         return True
-    return stage in viz.stages
+    return stage in config.runtime.viz_stages
 
 
 def _save_consistency_map(
@@ -132,7 +133,7 @@ def _collect_height_maps(
             frame_idx = int(frame_dir.name.split("_")[1])
 
             # Grid the points
-            resolution = config.surface.grid_resolution
+            resolution = config.reconstruction.grid_resolution
             x_min, y_min = pts[:, 0].min(), pts[:, 1].min()
             x_max, y_max = pts[:, 0].max(), pts[:, 1].max()
             grid_x = np.arange(x_min, x_max + resolution, resolution)
@@ -254,7 +255,7 @@ def setup_pipeline(config: PipelineConfig) -> PipelineContext:
     Returns:
         PipelineContext with all precomputed data.
     """
-    device = config.device.device
+    device = config.runtime.device
 
     # 1. Load calibration
     logger.info("Loading calibration from %s", config.calibration_path)
@@ -325,7 +326,7 @@ def setup_pipeline(config: PipelineConfig) -> PipelineContext:
         camera_positions,
         ring_cameras,
         auxiliary_cameras,
-        config.pair_selection,
+        config.sparse_matching,
     )
 
     # 4b. Load ROI masks
@@ -392,11 +393,13 @@ def process_frame(
             undistorted[name] = undistort_image(img, ctx.undistortion_maps[name])
 
     # --- Stage 1b: Color normalization (if enabled) ---
-    if config.color_norm.enabled:
+    if config.preprocessing.color_norm_enabled:
         from .coloring import normalize_colors
 
         logger.info("Frame %d: normalizing colors across cameras", frame_idx)
-        undistorted = normalize_colors(undistorted, method=config.color_norm.method)
+        undistorted = normalize_colors(
+            undistorted, method=config.preprocessing.color_norm_method
+        )
 
     # Convert to tensors for feature extraction
     undistorted_tensors = {
@@ -432,13 +435,13 @@ def process_frame(
                 all_warps=all_warps,
                 projection_models=ctx.projection_models,
                 dense_matching_config=config.dense_matching,
-                fusion_config=config.fusion,
+                reconstruction_config=config.reconstruction,
                 image_size=list(ctx.calibration.cameras.values())[0].image_size,
                 masks=ctx.masks,
             )
 
             # Save depth maps (opt-out)
-            if config.output.save_depth_maps:
+            if config.runtime.save_depth_maps:
                 depth_dir = frame_dir / "depth_maps"
                 depth_dir.mkdir(exist_ok=True)
                 for cam_name in depth_maps:
@@ -486,7 +489,7 @@ def process_frame(
             )
 
             # Save matches if requested
-            if config.output.save_features:
+            if config.runtime.save_features:
                 from .features import save_matches
 
                 features_dir = frame_dir / "features"
@@ -502,7 +505,7 @@ def process_frame(
         logger.info("Frame %d: extracting features", frame_idx)
         all_features = extract_features_batch(
             undistorted_tensors,
-            config.feature_extraction,
+            config.sparse_matching,
             device=device,
         )
 
@@ -531,9 +534,9 @@ def process_frame(
             all_features,
             ctx.pairs,
             image_size=list(ctx.calibration.cameras.values())[0].image_size,
-            config=config.matching,
+            config=config.sparse_matching,
             device=device,
-            extractor_type=config.feature_extraction.extractor_type,
+            extractor_type=config.sparse_matching.extractor_type,
         )
 
         # --- [viz] Feature overlays ---
@@ -570,7 +573,7 @@ def process_frame(
                 logger.exception("Frame %d: feature visualization failed", frame_idx)
 
         # --- Save features (opt-in) ---
-        if config.output.save_features:
+        if config.runtime.save_features:
             from .features import save_features, save_matches
 
             features_dir = frame_dir / "features"
@@ -613,7 +616,7 @@ def process_frame(
         depth_ranges = compute_depth_ranges(
             ctx.projection_models,
             sparse_cloud,
-            margin=config.dense_stereo.depth_margin,
+            margin=config.reconstruction.depth_margin,
         )
 
     # --- Sparse mode branch: convert sparse cloud to Open3D, surface, viz, done ---
@@ -625,7 +628,7 @@ def process_frame(
                 sparse_cloud,
                 ctx.projection_models,
                 undistorted_tensors,
-                config.fusion.voxel_size,
+                config.reconstruction.voxel_size,
                 camera_centers,
                 ctx.ring_cameras,
             )
@@ -636,7 +639,7 @@ def process_frame(
             )
 
         # Save point cloud (if non-empty and save_point_cloud is enabled)
-        if pcd is not None and pcd.has_points() and config.output.save_point_cloud:
+        if pcd is not None and pcd.has_points() and config.runtime.save_point_cloud:
             pcd_dir = frame_dir / "point_cloud"
             pcd_dir.mkdir(exist_ok=True)
             save_point_cloud(pcd, pcd_dir / "sparse.ply")
@@ -644,15 +647,15 @@ def process_frame(
         # Statistical outlier removal (sparse path)
         # Skip if too few points for meaningful neighbor statistics
         if (
-            config.outlier_removal.enabled
+            config.reconstruction.outlier_removal_enabled
             and pcd is not None
             and pcd.has_points()
-            and len(pcd.points) > config.outlier_removal.nb_neighbors
+            and len(pcd.points) > config.reconstruction.outlier_nb_neighbors
         ):
             original_count = len(pcd.points)
             pcd, _ = pcd.remove_statistical_outlier(
-                nb_neighbors=config.outlier_removal.nb_neighbors,
-                std_ratio=config.outlier_removal.std_ratio,
+                nb_neighbors=config.reconstruction.outlier_nb_neighbors,
+                std_ratio=config.reconstruction.outlier_std_ratio,
             )
             removed = original_count - len(pcd.points)
             logger.info(
@@ -666,7 +669,7 @@ def process_frame(
         mesh = None
         if pcd is not None and pcd.has_points():
             logger.info("Frame %d: reconstructing surface", frame_idx)
-            mesh = reconstruct_surface(pcd, config.surface)
+            mesh = reconstruct_surface(pcd, config.reconstruction)
 
             # Re-color mesh vertices via best-view camera projection
             if mesh is not None and len(mesh.vertices) > 0:
@@ -698,7 +701,7 @@ def process_frame(
                 mesh.vertex_colors = o3d.utility.Vector3dVector(vertex_colors)
 
             # Save mesh (opt-out)
-            if config.output.save_mesh:
+            if config.runtime.save_mesh:
                 mesh_dir = frame_dir / "mesh"
                 mesh_dir.mkdir(exist_ok=True)
                 save_mesh(mesh, mesh_dir / "surface.ply")
@@ -770,7 +773,13 @@ def process_frame(
         depth_maps = {}
         confidence_maps = {}
 
-        for ref_name in ctx.ring_cameras:
+        for ref_name in tqdm(
+            ctx.ring_cameras,
+            desc="Plane sweep stereo",
+            disable=config.runtime.quiet or not sys.stderr.isatty(),
+            unit="camera",
+            leave=False,
+        ):
             if ref_name not in depth_ranges:
                 logger.warning(
                     "Frame %d: no depth range for %s, skipping", frame_idx, ref_name
@@ -793,7 +802,7 @@ def process_frame(
                 ref_image=undistorted_tensors[ref_name],
                 src_images=undistorted_tensors,
                 depth_range=depth_ranges[ref_name],
-                config=config.dense_stereo,
+                config=config.reconstruction,
                 device=device,
             )
 
@@ -817,7 +826,7 @@ def process_frame(
             logger.debug("Frame %d: %s depth extracted", frame_idx, ref_name)
 
         # --- Save depth maps (opt-out) ---
-        if config.output.save_depth_maps:
+        if config.runtime.save_depth_maps:
             depth_dir = frame_dir / "depth_maps"
             depth_dir.mkdir(exist_ok=True)
             for cam_name in depth_maps:
@@ -864,14 +873,14 @@ def process_frame(
             ctx.projection_models,
             depth_maps,
             confidence_maps,
-            config.fusion,
+            config.reconstruction,
         )
 
         filtered_depths = {name: f[0] for name, f in filtered.items()}
         filtered_confs = {name: f[1] for name, f in filtered.items()}
 
         # Save consistency maps (opt-in)
-        if config.output.save_consistency_maps:
+        if config.runtime.save_consistency_maps:
             consistency_dir = frame_dir / "consistency_maps"
             consistency_dir.mkdir(parents=True, exist_ok=True)
             for cam_name, (_, _, consistency) in filtered.items():
@@ -898,11 +907,11 @@ def process_frame(
         filtered_depths,
         filtered_confs,
         undistorted_for_fusion,
-        config.fusion,
+        config.reconstruction,
     )
 
     # --- Clean up intermediates after successful fusion ---
-    if not config.output.keep_intermediates:
+    if not config.runtime.keep_intermediates:
         depth_dir = frame_dir / "depth_maps"
         if depth_dir.exists():
             import shutil
@@ -911,7 +920,7 @@ def process_frame(
             logger.debug("Frame %d: removed intermediate depth maps", frame_idx)
 
     # --- Save fused point cloud (opt-out) ---
-    if config.output.save_point_cloud:
+    if config.runtime.save_point_cloud:
         if fused_pcd.has_points():
             pcd_dir = frame_dir / "point_cloud"
             pcd_dir.mkdir(exist_ok=True)
@@ -925,14 +934,14 @@ def process_frame(
     # --- Statistical Outlier Removal (after fusion, before surface reconstruction) ---
     # Skip if too few points for meaningful neighbor statistics
     if (
-        config.outlier_removal.enabled
+        config.reconstruction.outlier_removal_enabled
         and fused_pcd.has_points()
-        and len(fused_pcd.points) > config.outlier_removal.nb_neighbors
+        and len(fused_pcd.points) > config.reconstruction.outlier_nb_neighbors
     ):
         original_count = len(fused_pcd.points)
         fused_pcd, _ = fused_pcd.remove_statistical_outlier(
-            nb_neighbors=config.outlier_removal.nb_neighbors,
-            std_ratio=config.outlier_removal.std_ratio,
+            nb_neighbors=config.reconstruction.outlier_nb_neighbors,
+            std_ratio=config.reconstruction.outlier_std_ratio,
         )
         removed = original_count - len(fused_pcd.points)
         logger.info(
@@ -945,7 +954,7 @@ def process_frame(
     # --- Stage 9: Surface Reconstruction ---
     if fused_pcd.has_points():
         logger.info("Frame %d: reconstructing surface", frame_idx)
-        mesh = reconstruct_surface(fused_pcd, config.surface)
+        mesh = reconstruct_surface(fused_pcd, config.reconstruction)
 
         # Re-color mesh vertices via best-view camera projection
         if mesh is not None and len(mesh.vertices) > 0:
@@ -975,7 +984,7 @@ def process_frame(
             mesh.vertex_colors = o3d.utility.Vector3dVector(vertex_colors)
 
         # --- Save mesh (opt-out) ---
-        if config.output.save_mesh:
+        if config.runtime.save_mesh:
             mesh_dir = frame_dir / "mesh"
             mesh_dir.mkdir(exist_ok=True)
             save_mesh(mesh, mesh_dir / "surface.ply")
@@ -1071,19 +1080,22 @@ def run_pipeline(config: PipelineConfig) -> None:
         context_manager = VideoSet(config.camera_video_map)
 
     with context_manager as videos:
-        frame_sampling = config.frame_sampling
-
         logger.info(
             "Processing frames %d to %s (step %d)",
-            frame_sampling.start,
-            frame_sampling.stop or "end",
-            frame_sampling.step,
+            config.preprocessing.frame_start,
+            config.preprocessing.frame_stop or "end",
+            config.preprocessing.frame_step,
         )
 
-        for frame_idx, raw_images in videos.iterate_frames(
-            start=frame_sampling.start,
-            stop=frame_sampling.stop,
-            step=frame_sampling.step,
+        for frame_idx, raw_images in tqdm(
+            videos.iterate_frames(
+                start=config.preprocessing.frame_start,
+                stop=config.preprocessing.frame_stop,
+                step=config.preprocessing.frame_step,
+            ),
+            desc="Processing frames",
+            disable=config.runtime.quiet or not sys.stderr.isatty(),
+            unit="frame",
         ):
             try:
                 process_frame(frame_idx, raw_images, ctx)

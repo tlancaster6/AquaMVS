@@ -38,7 +38,7 @@ def run_benchmark(
     Returns:
         BenchmarkResults containing all configuration results.
     """
-    device = config.device.device
+    device = config.runtime.device
 
     # --- One-time setup ---
     logger.info("Setting up pipeline context")
@@ -90,8 +90,8 @@ def run_benchmark(
 
     # --- Sweep over configurations ---
     sweep_configs = []
-    for extractor in config.benchmark.extractors:
-        for clahe in config.benchmark.clahe:
+    for extractor in config.runtime.benchmark_extractors:
+        for clahe in config.runtime.benchmark_clahe:
             sweep_configs.append((extractor, clahe))
 
     logger.info("Running benchmark sweep: %d configurations", len(sweep_configs))
@@ -101,8 +101,8 @@ def run_benchmark(
         cfg_name = config_name(extractor, clahe)
         logger.info("Benchmarking: %s", cfg_name)
 
-        # Build per-config FeatureExtractionConfig
-        feat_config = copy.copy(config.feature_extraction)
+        # Build per-config SparseMatchingConfig
+        feat_config = copy.copy(config.sparse_matching)
         feat_config.extractor_type = extractor
         feat_config.clahe_enabled = clahe
 
@@ -132,7 +132,7 @@ def run_benchmark(
             all_features,
             ctx.pairs,
             image_size=image_size,
-            config=config.matching,
+            config=config.sparse_matching,
             device=device,
             extractor_type=extractor,
         )
@@ -177,8 +177,8 @@ def run_benchmark(
             sparse_cloud=sparse_cloud,
             projection_models=ctx.projection_models,
             undistorted_tensors=undistorted_tensors,
-            voxel_size=config.fusion.voxel_size,
-            surface_config=config.surface,
+            voxel_size=config.reconstruction.voxel_size,
+            surface_config=config.reconstruction,
             output_dir=Path(config.output_dir) / "benchmark",
             camera_centers=camera_centers,
         )

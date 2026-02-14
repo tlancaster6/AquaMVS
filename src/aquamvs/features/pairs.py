@@ -2,14 +2,14 @@
 
 import torch
 
-from ..config import PairSelectionConfig
+from ..config import SparseMatchingConfig
 
 
 def select_pairs(
     camera_positions: dict[str, torch.Tensor],
     ring_cameras: list[str],
     auxiliary_cameras: list[str],
-    config: PairSelectionConfig,
+    config: SparseMatchingConfig,
 ) -> dict[str, list[str]]:
     """Select source cameras for each reference camera.
 

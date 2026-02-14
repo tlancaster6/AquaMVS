@@ -7,11 +7,11 @@ import numpy as np
 import torch
 from lightglue import ALIKED, DISK, SuperPoint
 
-from aquamvs.config import FeatureExtractionConfig
+from aquamvs.config import SparseMatchingConfig
 
 
 def create_extractor(
-    config: FeatureExtractionConfig,
+    config: SparseMatchingConfig,
     device: str = "cpu",
 ) -> torch.nn.Module:
     """Create and initialize a feature extractor.
@@ -106,7 +106,7 @@ def _apply_clahe(
 
 def extract_features(
     image: torch.Tensor | np.ndarray,
-    config: FeatureExtractionConfig,
+    config: SparseMatchingConfig,
     extractor: torch.nn.Module | None = None,
     device: str = "cpu",
 ) -> dict[str, torch.Tensor]:
@@ -189,7 +189,7 @@ def extract_features(
 
 def extract_features_batch(
     images: dict[str, torch.Tensor | np.ndarray],
-    config: FeatureExtractionConfig,
+    config: SparseMatchingConfig,
     device: str = "cpu",
 ) -> dict[str, dict[str, torch.Tensor]]:
     """Extract features from multiple images.
