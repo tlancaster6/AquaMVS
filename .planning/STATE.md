@@ -10,30 +10,28 @@ See: .planning/PROJECT.md (updated 2026-02-14)
 ## Current Position
 
 Phase: 1 of 5 (Dependency Resolution and Packaging Foundations)
-Plan: Ready to plan
-Status: Ready to plan
-Last activity: 2026-02-14 — Roadmap created with 5 phases covering 22 v1 requirements
+Plan: 01-01 complete, ready for 01-02
+Status: In progress
+Last activity: 2026-02-14 — Completed 01-01-PLAN.md (dependency resolution and packaging foundations)
 
-Progress: [░░░░░░░░░░] 0%
+Progress: [██░░░░░░░░] 20% (1 of 5 phase plans complete)
 
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 0
-- Average duration: N/A
-- Total execution time: 0 hours
+- Total plans completed: 1
+- Average duration: 15 min
+- Total execution time: 0.25 hours
 
 **By Phase:**
 
 | Phase | Plans | Total | Avg/Plan |
 |-------|-------|-------|----------|
-| - | - | - | - |
+| 01    | 1     | 15min | 15min    |
 
 **Recent Trend:**
-- Last 5 plans: None yet
-- Trend: N/A
-
-*Updated after each plan completion*
+- Last 5 plans: 01-01 (15min)
+- Trend: Establishing baseline
 
 ## Accumulated Context
 
@@ -46,22 +44,30 @@ Recent decisions affecting current work:
 - Dual pathway (LightGlue sparse + RoMa dense) for different accuracy/speed tradeoffs
 - Package as both CLI + library to serve pipeline users and custom workflow developers
 
+**Phase 01 Plan 01 (2026-02-14):**
+- PyTorch as user-managed prerequisite with import-time check (not in pyproject.toml)
+- LightGlue pinned to commit edb2b83 (v0.2 release) via git URL
+- RoMa v2 pinned to user fork at tlancaster6/RoMaV2 (dataclasses metadata fix)
+- AquaCal as standard PyPI dependency (aquacal>=0.1.0)
+- prereq-docs strategy: Document LightGlue and RoMa as manual install prerequisites for PyPI compatibility
+
 ### Pending Todos
 
 None yet.
 
 ### Blockers/Concerns
 
-**Phase 1 Dependencies:**
-- LightGlue PyPI status unclear — may require git dependency pin or fork/vendor approach
-- RoMa v2 installation workaround needs investigation — check if newer numpy works despite metadata
-- AquaCal publication decision needed — publish to PyPI first, vendor interfaces, or document manual install
+**Phase 1 Dependencies (RESOLVED in 01-01):**
+- ✓ LightGlue: git dependency pin to edb2b83, documented as prerequisite
+- ✓ RoMa v2: git dependency pin to user fork, documented as prerequisite
+- ✓ AquaCal: standard PyPI dependency (aquacal>=0.1.0)
+- ✓ PyPI compatibility: prereq-docs strategy allows PyPI upload
 
 **Phase 3 Refactoring:**
 - Backward compatibility scope needs definition — audit which APIs are public vs internal to minimize breakage
 
 ## Session Continuity
 
-Last session: 2026-02-14 (roadmap creation)
-Stopped at: Roadmap and STATE.md created, ready for Phase 1 planning
+Last session: 2026-02-14 (plan execution)
+Stopped at: Completed 01-01-PLAN.md, ready for 01-02 (CI/CD)
 Resume file: None
