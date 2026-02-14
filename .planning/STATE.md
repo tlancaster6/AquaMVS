@@ -56,9 +56,13 @@ Recent decisions affecting current work:
 - Trusted Publishing (OIDC) eliminates API token management for PyPI uploads
 - Three-stage publish pipeline: build -> TestPyPI -> PyPI with manual approval gate
 
+### Roadmap Evolution
+
+- Phase 1.1 inserted after Phase 1: Last-Minute Feature Additions (URGENT)
+
 ### Pending Todos
 
-None yet.
+1. **Mint a Zenodo DOI** (general) — Link repo to Zenodo, add `.zenodo.json`, get citable DOI
 
 ### Blockers/Concerns
 
