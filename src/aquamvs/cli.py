@@ -290,14 +290,18 @@ def export_refs_command(
 
 
 def run_command(
-    config_path: Path, verbose: bool = False, device: str | None = None
+    config_path: Path,
+    verbose: bool = False,
+    device: str | None = None,
+    quiet: bool = False,
 ) -> None:
     """Execute the reconstruction pipeline from a config file.
 
     Args:
         config_path: Path to the pipeline config YAML file.
         verbose: If True, set logging to DEBUG level.
-        device: Optional device override (replaces config.device.device).
+        device: Optional device override (replaces config.runtime.device).
+        quiet: If True, suppress progress bars.
     """
     # 1. Configure logging
     log_level = logging.DEBUG if verbose else logging.INFO
@@ -318,20 +322,19 @@ def run_command(
 
     try:
         config = PipelineConfig.from_yaml(config_path)
+    except ValueError as e:
+        # Pydantic validation errors are already formatted
+        print(f"Configuration validation failed:\n{e}", file=sys.stderr)
+        sys.exit(1)
     except Exception as e:
         print(f"Error: Failed to load config: {e}", file=sys.stderr)
         sys.exit(1)
 
     # 3. Apply CLI overrides
     if device is not None:
-        config.device.device = device
-
-    # 4. Validate
-    try:
-        config.validate()
-    except ValueError as e:
-        print(f"Error: Invalid configuration: {e}", file=sys.stderr)
-        sys.exit(1)
+        config.runtime.device = device
+    if quiet:
+        config.runtime.quiet = quiet
 
     # 5. Run pipeline
     from aquamvs.pipeline import run_pipeline
@@ -364,15 +367,12 @@ def benchmark_command(config_path: Path, frame: int = 0) -> None:
 
     try:
         config = PipelineConfig.from_yaml(config_path)
+    except ValueError as e:
+        # Pydantic validation errors are already formatted
+        print(f"Configuration validation failed:\n{e}", file=sys.stderr)
+        sys.exit(1)
     except Exception as e:
         print(f"Error: Failed to load config: {e}", file=sys.stderr)
-        sys.exit(1)
-
-    # 3. Validate
-    try:
-        config.validate()
-    except ValueError as e:
-        print(f"Error: Invalid configuration: {e}", file=sys.stderr)
         sys.exit(1)
 
     # 4. Run benchmark
@@ -589,6 +589,12 @@ def main() -> None:
         default=None,
         help="Override device (e.g., 'cpu' or 'cuda')",
     )
+    run_parser.add_argument(
+        "-q",
+        "--quiet",
+        action="store_true",
+        help="Suppress progress bars",
+    )
 
     # export-refs subcommand
     export_refs_parser = subparsers.add_parser(
@@ -713,6 +719,7 @@ def main() -> None:
             config_path=args.config,
             verbose=args.verbose,
             device=args.device,
+            quiet=args.quiet,
         )
     elif args.command == "export-refs":
         export_refs_command(
