@@ -47,7 +47,7 @@ Progress: [████████░░] 80% (4 of 5 phases complete)
 | Phase 04 P03 | 7 | 2 tasks | 4 files |
 | Phase 04 P04 | 4 | 2 tasks | 3 files |
 | Phase 04 P05 | 1 | 2 tasks | 3 files |
-| Phase 04 P06 | 3 | 2 tasks | 2 files |
+| Phase 04 P06 | 3 | 3 tasks | 5 files |
 | Phase 04 P07 | 3 | 2 tasks | 1 files |
 
 ## Accumulated Context
@@ -146,7 +146,10 @@ Recent decisions affecting current work:
 - Sphinx build verification confirms all Phase 4 documentation integrates correctly (zero warnings)
 
 **Phase 04 Plan 06 (2026-02-15):**
-- Video-based example dataset packaging script with frame extraction and AquaCal VideoSet integration
+- GitHub Releases used for example dataset distribution instead of Zenodo (can migrate to Zenodo for DOI later)
+- Dataset packaging script automates assembly from AquaCal raw data into distributable archive
+- Citation section updated to reference GitHub with note about future Zenodo DOI
+- All documentation placeholder URLs replaced with actual GitHub Releases download link
 - Dataset structure validation and README generation
 
 **Phase 04 Plan 07 (2026-02-15):**
