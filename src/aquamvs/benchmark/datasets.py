@@ -1,6 +1,7 @@
 """Dataset loaders for benchmark ground truth generation."""
 
 import logging
+from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -18,7 +19,6 @@ from .config import BenchmarkDataset
 from .synthetic import (
     create_flat_plane_scene,
     create_undulating_scene,
-    generate_ground_truth_depth_maps,
     get_reference_geometry,
 )
 
@@ -34,12 +34,14 @@ class DatasetContext:
         ground_truth_depths: Per-camera ground truth depth maps (None for ChArUco).
         charuco_corners: Per-camera detected ChArUco corner positions (None for synthetic).
         tolerance_mm: Tolerance for accurate completeness metric (None = skip).
+        analytic_fn: Analytic ground truth function for synthetic scenes (None for real data).
     """
 
     mesh: o3d.geometry.TriangleMesh | None = None
     ground_truth_depths: dict[str, NDArray[np.float64]] | None = None
     charuco_corners: dict[str, NDArray[np.float64]] | None = None
     tolerance_mm: float | None = None
+    analytic_fn: Callable | None = None
 
 
 def load_dataset(dataset: BenchmarkDataset) -> DatasetContext:
@@ -157,32 +159,28 @@ def _load_synthetic_plane(dataset: BenchmarkDataset) -> DatasetContext:
     # Get reference geometry
     geometry = get_reference_geometry()
 
+    # Compute depth and bounds
+    depth_z = geometry["water_z_m"] + 0.2  # 200mm below water surface
+    bounds = (-0.25, 0.25, -0.15, 0.15)  # 500mm x 300mm centered
+
     # Generate flat plane scene
     mesh, analytic_fn = create_flat_plane_scene(
-        water_z=geometry["water_z"],
-        depth_below_water=0.2,  # 200mm below water surface
-        width=0.5,  # 500mm wide
-        height=0.3,  # 300mm tall
+        depth_z=depth_z,
+        bounds=bounds,
         resolution=0.005,  # 5mm spacing
     )
 
-    # Generate ground truth depth maps for all cameras
-    ground_truth_depths = generate_ground_truth_depth_maps(
-        mesh=mesh,
-        cameras=geometry["cameras"],
-        water_z=geometry["water_z"],
-        n_water=geometry["n_water"],
-    )
-
     logger.info(
-        f"Generated synthetic plane with {len(ground_truth_depths)} camera depth maps"
+        f"Generated synthetic plane at depth_z={depth_z:.3f}m, "
+        f"bounds={bounds}, resolution=0.005m"
     )
 
     return DatasetContext(
         mesh=mesh,
-        ground_truth_depths=ground_truth_depths,
+        ground_truth_depths=None,  # No depth maps for synthetic (rely on mesh + analytic_fn)
         charuco_corners=None,
         tolerance_mm=dataset.ground_truth_tolerance_mm,
+        analytic_fn=analytic_fn,
     )
 
 
@@ -198,34 +196,30 @@ def _load_synthetic_surface(dataset: BenchmarkDataset) -> DatasetContext:
     # Get reference geometry
     geometry = get_reference_geometry()
 
+    # Compute base depth and bounds
+    base_depth_z = geometry["water_z_m"] + 0.2  # 200mm base depth below water
+    bounds = (-0.25, 0.25, -0.15, 0.15)  # 500mm x 300mm centered
+
     # Generate undulating surface scene
     mesh, analytic_fn = create_undulating_scene(
-        water_z=geometry["water_z"],
-        base_depth=0.2,  # 200mm base depth below water
-        amplitude=0.05,  # 50mm wave amplitude
-        wavelength=0.15,  # 150mm wavelength
-        width=0.5,  # 500mm wide
-        height=0.3,  # 300mm tall
+        base_depth_z=base_depth_z,
+        amplitude=0.005,  # 5mm wave amplitude
+        wavelength=0.05,  # 50mm wavelength
+        bounds=bounds,
         resolution=0.005,  # 5mm spacing
     )
 
-    # Generate ground truth depth maps for all cameras
-    ground_truth_depths = generate_ground_truth_depth_maps(
-        mesh=mesh,
-        cameras=geometry["cameras"],
-        water_z=geometry["water_z"],
-        n_water=geometry["n_water"],
-    )
-
     logger.info(
-        f"Generated synthetic surface with {len(ground_truth_depths)} camera depth maps"
+        f"Generated synthetic surface at base_depth_z={base_depth_z:.3f}m, "
+        f"amplitude=0.005m, wavelength=0.05m, bounds={bounds}, resolution=0.005m"
     )
 
     return DatasetContext(
         mesh=mesh,
-        ground_truth_depths=ground_truth_depths,
+        ground_truth_depths=None,  # No depth maps for synthetic (rely on mesh + analytic_fn)
         charuco_corners=None,
         tolerance_mm=dataset.ground_truth_tolerance_mm,
+        analytic_fn=analytic_fn,
     )
 
 

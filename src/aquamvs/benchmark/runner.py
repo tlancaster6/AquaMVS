@@ -7,6 +7,8 @@ from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
 
+import numpy as np
+import open3d as o3d
 import torch
 from tabulate import tabulate
 
@@ -14,6 +16,7 @@ from ..config import PipelineConfig
 from ..pipeline import Pipeline
 from .config import BenchmarkConfig
 from .datasets import load_dataset
+from .metrics import compute_accuracy_metrics
 
 logger = logging.getLogger(__name__)
 
@@ -330,28 +333,37 @@ def _run_pipeline_config(
         total_time = t_end - t_start
 
         # Compute accuracy metrics
-        if dataset_ctx.ground_truth_depths is not None:
+        if dataset_ctx.mesh is not None:
             # Synthetic dataset: compute point-to-mesh accuracy
-            # TODO: Load reconstructed point cloud from output_dir
-            # For now, use placeholder metrics
-            metrics = {
-                "mean_error_mm": 0.0,
-                "median_error_mm": 0.0,
-                "std_error_mm": 0.0,
-                "raw_completeness_pct": 0.0,
-                "timing_seconds": total_time,
-            }
+            # Find reconstructed point cloud file
+            output_path = Path(output_dir) / dataset_config.name
+            cloud_files = list(output_path.rglob("fused_points.ply")) + list(
+                output_path.rglob("sparse_cloud.ply")
+            )
+
+            if cloud_files:
+                # Load first found point cloud
+                cloud_path = cloud_files[0]
+                logger.info(f"    Loading reconstructed point cloud: {cloud_path}")
+                cloud = o3d.io.read_point_cloud(str(cloud_path))
+                points = np.asarray(cloud.points)
+
+                # Compute accuracy metrics
+                accuracy = compute_accuracy_metrics(
+                    points, dataset_ctx.mesh, dataset_ctx.tolerance_mm
+                )
+                metrics = {**accuracy, "timing_seconds": total_time}
+            else:
+                logger.warning(
+                    f"    No point cloud found in {output_path}, returning timing only"
+                )
+                metrics = {"timing_seconds": total_time}
         elif dataset_ctx.charuco_corners is not None:
             # ChArUco dataset: compute corner reprojection error
-            # TODO: Load reconstructed corners from output_dir
-            # For now, use placeholder metrics
-            metrics = {
-                "mean_error_mm": 0.0,
-                "median_error_mm": 0.0,
-                "max_error_mm": 0.0,
-                "rmse_mm": 0.0,
-                "timing_seconds": total_time,
-            }
+            # TODO: Load reconstructed corners from output_dir and compute reprojection error
+            # For now, just return timing
+            logger.warning("ChArUco metric computation not yet implemented")
+            metrics = {"timing_seconds": total_time}
         else:
             metrics = {"timing_seconds": total_time}
 
