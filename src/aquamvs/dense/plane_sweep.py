@@ -5,6 +5,7 @@ from pathlib import Path
 import numpy as np
 import torch
 import torch.nn.functional as F
+from torch.profiler import record_function
 
 from ..config import ReconstructionConfig
 from ..projection.protocol import ProjectionModel
@@ -95,44 +96,45 @@ def _warp_source_at_depth(
         Warped source image, shape (H, W), float32.
         Out-of-bounds or invalid pixels are NaN.
     """
-    H, W = height, width
+    with record_function("grid_sample_warp"):
+        H, W = height, width
 
-    # Compute 3D points at this depth hypothesis
-    points_3d = origins + depth * directions  # (N, 3)
+        # Compute 3D points at this depth hypothesis
+        points_3d = origins + depth * directions  # (N, 3)
 
-    # Project into source camera
-    src_pixels, valid = src_model.project(points_3d)  # (N, 2), (N,)
+        # Project into source camera
+        src_pixels, valid = src_model.project(points_3d)  # (N, 2), (N,)
 
-    # Convert pixel coords to normalized grid coordinates for grid_sample
-    # grid_sample expects grid in [-1, 1] range
-    # grid_x = 2 * u / (W - 1) - 1
-    grid_x = 2.0 * src_pixels[:, 0] / (W - 1) - 1.0  # (N,)
-    grid_y = 2.0 * src_pixels[:, 1] / (H - 1) - 1.0  # (N,)
+        # Convert pixel coords to normalized grid coordinates for grid_sample
+        # grid_sample expects grid in [-1, 1] range
+        # grid_x = 2 * u / (W - 1) - 1
+        grid_x = 2.0 * src_pixels[:, 0] / (W - 1) - 1.0  # (N,)
+        grid_y = 2.0 * src_pixels[:, 1] / (H - 1) - 1.0  # (N,)
 
-    # Set invalid pixels to out-of-bounds (will get padding_mode="zeros" -> 0)
-    grid_x = torch.where(valid, grid_x, torch.tensor(2.0, device=grid_x.device))
-    grid_y = torch.where(valid, grid_y, torch.tensor(2.0, device=grid_y.device))
+        # Set invalid pixels to out-of-bounds (will get padding_mode="zeros" -> 0)
+        grid_x = torch.where(valid, grid_x, torch.tensor(2.0, device=grid_x.device))
+        grid_y = torch.where(valid, grid_y, torch.tensor(2.0, device=grid_y.device))
 
-    # Reshape grid for grid_sample: (1, H, W, 2)
-    grid = torch.stack([grid_x, grid_y], dim=-1).reshape(1, H, W, 2)
+        # Reshape grid for grid_sample: (1, H, W, 2)
+        grid = torch.stack([grid_x, grid_y], dim=-1).reshape(1, H, W, 2)
 
-    # Source image as (1, 1, H, W) for grid_sample
-    src_4d = src_image.unsqueeze(0).unsqueeze(0)
+        # Source image as (1, 1, H, W) for grid_sample
+        src_4d = src_image.unsqueeze(0).unsqueeze(0)
 
-    # Bilinear sampling
-    warped = F.grid_sample(
-        src_4d, grid, mode="bilinear", padding_mode="zeros", align_corners=True
-    )  # (1, 1, H, W)
+        # Bilinear sampling
+        warped = F.grid_sample(
+            src_4d, grid, mode="bilinear", padding_mode="zeros", align_corners=True
+        )  # (1, 1, H, W)
 
-    warped = warped.squeeze(0).squeeze(0)  # (H, W)
+        warped = warped.squeeze(0).squeeze(0)  # (H, W)
 
-    # Mark invalid pixels as NaN (invalid projections + out-of-bounds)
-    invalid_mask = ~valid.reshape(H, W)
-    warped = torch.where(
-        invalid_mask, torch.tensor(float("nan"), device=warped.device), warped
-    )
+        # Mark invalid pixels as NaN (invalid projections + out-of-bounds)
+        invalid_mask = ~valid.reshape(H, W)
+        warped = torch.where(
+            invalid_mask, torch.tensor(float("nan"), device=warped.device), warped
+        )
 
-    return warped
+        return warped
 
 
 def warp_source_image(
@@ -196,46 +198,47 @@ def build_cost_volume(
     Returns:
         Cost volume, shape (H, W, D), float32. Lower = better match.
     """
-    H, W = ref_image.shape
-    D = depths.shape[0]
-    S = len(src_models)
-    device = ref_image.device
+    with record_function("build_cost_volume"), torch.no_grad():
+        H, W = ref_image.shape
+        D = depths.shape[0]
+        S = len(src_models)
+        device = ref_image.device
 
-    # Precompute reference pixel grid and rays (shared across all depths and sources)
-    pixel_grid = _make_pixel_grid(H, W, device=device)
-    origins, directions = ref_model.cast_ray(pixel_grid)  # (H*W, 3), (H*W, 3)
+        # Precompute reference pixel grid and rays (shared across all depths and sources)
+        pixel_grid = _make_pixel_grid(H, W, device=device)
+        origins, directions = ref_model.cast_ray(pixel_grid)  # (H*W, 3), (H*W, 3)
 
-    # Allocate cost volume
-    cost_volume = torch.zeros(H, W, D, device=device)
+        # Allocate cost volume
+        cost_volume = torch.zeros(H, W, D, device=device)
 
-    # Sweep over depth hypotheses
-    for d_idx in range(D):
-        depth = depths[d_idx].item()
+        # Sweep over depth hypotheses
+        for d_idx in range(D):
+            depth = depths[d_idx].item()
 
-        # Compute cost for each source view at this depth
-        source_costs = []
-        for s_idx in range(S):
-            # Warp source image to reference viewpoint at this depth
-            warped = _warp_source_at_depth(
-                origins,
-                directions,
-                src_models[s_idx],
-                src_images[s_idx],
-                depth,
-                H,
-                W,
-            )
+            # Compute cost for each source view at this depth
+            source_costs = []
+            for s_idx in range(S):
+                # Warp source image to reference viewpoint at this depth
+                warped = _warp_source_at_depth(
+                    origins,
+                    directions,
+                    src_models[s_idx],
+                    src_images[s_idx],
+                    depth,
+                    H,
+                    W,
+                )
 
-            # Compute photometric cost
-            cost = compute_cost(
-                ref_image, warped, config.cost_function, config.window_size
-            )
-            source_costs.append(cost)
+                # Compute photometric cost
+                cost = compute_cost(
+                    ref_image, warped, config.cost_function, config.window_size
+                )
+                source_costs.append(cost)
 
-        # Aggregate across source views
-        cost_volume[:, :, d_idx] = aggregate_costs(source_costs)
+            # Aggregate across source views
+            cost_volume[:, :, d_idx] = aggregate_costs(source_costs)
 
-    return cost_volume
+        return cost_volume
 
 
 def plane_sweep_stereo(
@@ -326,66 +329,71 @@ def extract_depth(
         confidence: Per-pixel confidence, shape (H, W), float32 in [0, 1].
             0 for invalid pixels, higher = more confident.
     """
-    H, W, D = cost_volume.shape
-    device = cost_volume.device
-    eps = 1e-8
+    with record_function("extract_depth"):
+        H, W, D = cost_volume.shape
+        device = cost_volume.device
+        eps = 1e-8
 
-    # Stage 1: Winner-Take-All
-    # Find the depth index with minimum cost at each pixel
-    best_idx = torch.argmin(cost_volume, dim=2)  # (H, W), int64
+        # Stage 1: Winner-Take-All
+        # Find the depth index with minimum cost at each pixel
+        best_idx = torch.argmin(cost_volume, dim=2)  # (H, W), int64
 
-    # Look up the discrete depth value
-    depth_step = depths[1] - depths[0]  # uniform spacing
-    best_depth = depths[best_idx]  # (H, W)
-    best_cost = torch.gather(cost_volume, 2, best_idx.unsqueeze(-1)).squeeze(
-        -1
-    )  # (H, W)
+        # Look up the discrete depth value
+        depth_step = depths[1] - depths[0]  # uniform spacing
+        best_depth = depths[best_idx]  # (H, W)
+        best_cost = torch.gather(cost_volume, 2, best_idx.unsqueeze(-1)).squeeze(
+            -1
+        )  # (H, W)
 
-    # Stage 2: Sub-Pixel Parabola Refinement
-    # Get indices for neighbors (clamp to valid range)
-    idx_minus = (best_idx - 1).clamp(min=0)  # (H, W)
-    idx_plus = (best_idx + 1).clamp(max=D - 1)  # (H, W)
+        # Stage 2: Sub-Pixel Parabola Refinement
+        # Get indices for neighbors (clamp to valid range)
+        idx_minus = (best_idx - 1).clamp(min=0)  # (H, W)
+        idx_plus = (best_idx + 1).clamp(max=D - 1)  # (H, W)
 
-    # Gather costs at the three indices
-    c_minus = torch.gather(cost_volume, 2, idx_minus.unsqueeze(-1)).squeeze(
-        -1
-    )  # (H, W)
-    c_center = best_cost  # (H, W)
-    c_plus = torch.gather(cost_volume, 2, idx_plus.unsqueeze(-1)).squeeze(-1)  # (H, W)
+        # Gather costs at the three indices
+        c_minus = torch.gather(cost_volume, 2, idx_minus.unsqueeze(-1)).squeeze(
+            -1
+        )  # (H, W)
+        c_center = best_cost  # (H, W)
+        c_plus = torch.gather(cost_volume, 2, idx_plus.unsqueeze(-1)).squeeze(
+            -1
+        )  # (H, W)
 
-    # Parabola offset
-    denom = c_minus - 2.0 * c_center + c_plus + eps
-    offset = 0.5 * (c_minus - c_plus) / denom  # (H, W)
-    offset = offset.clamp(-0.5, 0.5)
+        # Parabola offset
+        denom = c_minus - 2.0 * c_center + c_plus + eps
+        offset = 0.5 * (c_minus - c_plus) / denom  # (H, W)
+        offset = offset.clamp(-0.5, 0.5)
 
-    # Refined depth
-    depth_map = best_depth + offset * depth_step
+        # Refined depth
+        depth_map = best_depth + offset * depth_step
 
-    # Mark boundary pixels as invalid (cannot do parabola refinement at d_min or d_max)
-    boundary_mask = (best_idx == 0) | (best_idx == D - 1)
+        # Mark boundary pixels as invalid (cannot do parabola refinement at d_min or d_max)
+        boundary_mask = (best_idx == 0) | (best_idx == D - 1)
 
-    # Stage 3: Confidence Estimation
-    # 1. Cost-based confidence: lower best_cost -> higher confidence
-    # NCC cost is in [0, 2], SSIM cost is in [0, 1].
-    # Normalize: confidence_cost = 1 - clamp(best_cost, 0, 1)
-    confidence_cost = 1.0 - best_cost.clamp(0.0, 1.0)  # (H, W)
+        # Stage 3: Confidence Estimation
+        # 1. Cost-based confidence: lower best_cost -> higher confidence
+        # NCC cost is in [0, 2], SSIM cost is in [0, 1].
+        # Normalize: confidence_cost = 1 - clamp(best_cost, 0, 1)
+        confidence_cost = 1.0 - best_cost.clamp(0.0, 1.0)  # (H, W)
 
-    # 2. Distinctness: ratio of best cost to mean cost along depth axis
-    # If best is much lower than mean, the match is distinctive
-    mean_cost = cost_volume.mean(dim=2)  # (H, W)
-    confidence_distinct = 1.0 - (best_cost / (mean_cost + eps))  # (H, W)
-    confidence_distinct = confidence_distinct.clamp(0.0, 1.0)
+        # 2. Distinctness: ratio of best cost to mean cost along depth axis
+        # If best is much lower than mean, the match is distinctive
+        mean_cost = cost_volume.mean(dim=2)  # (H, W)
+        confidence_distinct = 1.0 - (best_cost / (mean_cost + eps))  # (H, W)
+        confidence_distinct = confidence_distinct.clamp(0.0, 1.0)
 
-    # Combined confidence (geometric mean for smooth blending)
-    confidence = torch.sqrt(confidence_cost * confidence_distinct)  # (H, W)
+        # Combined confidence (geometric mean for smooth blending)
+        confidence = torch.sqrt(confidence_cost * confidence_distinct)  # (H, W)
 
-    # Apply invalid masking
-    confidence = torch.where(boundary_mask, torch.zeros_like(confidence), confidence)
-    depth_map = torch.where(
-        boundary_mask, torch.tensor(float("nan"), device=device), depth_map
-    )
+        # Apply invalid masking
+        confidence = torch.where(
+            boundary_mask, torch.zeros_like(confidence), confidence
+        )
+        depth_map = torch.where(
+            boundary_mask, torch.tensor(float("nan"), device=device), depth_map
+        )
 
-    return depth_map, confidence
+        return depth_map, confidence
 
 
 def save_depth_map(

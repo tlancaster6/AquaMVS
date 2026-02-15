@@ -4,6 +4,7 @@ import logging
 from pathlib import Path
 
 import torch
+from torch.profiler import record_function
 
 from ...features import extract_features_batch, match_all_pairs
 from ...triangulation import (
@@ -38,94 +39,95 @@ def run_lightglue_path(
     Returns:
         Dict with "all_matches" key containing match results.
     """
-    config = ctx.config
-    device = ctx.device
+    with record_function("sparse_matching"):
+        config = ctx.config
+        device = ctx.device
 
-    # --- Stage 2: Feature Extraction ---
-    logger.info("Frame %d: extracting features", frame_idx)
-    all_features = extract_features_batch(
-        undistorted_tensors,
-        config.sparse_matching,
-        device=device,
-    )
+        # --- Stage 2: Feature Extraction ---
+        logger.info("Frame %d: extracting features", frame_idx)
+        all_features = extract_features_batch(
+            undistorted_tensors,
+            config.sparse_matching,
+            device=device,
+        )
 
-    # --- Apply masks to features ---
-    if ctx.masks:
-        from ...masks import apply_mask_to_features
+        # --- Apply masks to features ---
+        if ctx.masks:
+            from ...masks import apply_mask_to_features
 
-        for cam_name in list(all_features.keys()):
-            if cam_name in ctx.masks:
-                n_before = all_features[cam_name]["keypoints"].shape[0]
-                all_features[cam_name] = apply_mask_to_features(
-                    all_features[cam_name], ctx.masks[cam_name]
+            for cam_name in list(all_features.keys()):
+                if cam_name in ctx.masks:
+                    n_before = all_features[cam_name]["keypoints"].shape[0]
+                    all_features[cam_name] = apply_mask_to_features(
+                        all_features[cam_name], ctx.masks[cam_name]
+                    )
+                    n_after = all_features[cam_name]["keypoints"].shape[0]
+                    logger.debug(
+                        "Frame %d: %s mask filtered %d -> %d keypoints",
+                        frame_idx,
+                        cam_name,
+                        n_before,
+                        n_after,
+                    )
+
+        # --- Stage 3: Feature Matching ---
+        logger.info("Frame %d: matching features", frame_idx)
+        all_matches = match_all_pairs(
+            all_features,
+            ctx.pairs,
+            image_size=list(ctx.calibration.cameras.values())[0].image_size,
+            config=config.sparse_matching,
+            device=device,
+            extractor_type=config.sparse_matching.extractor_type,
+        )
+
+        # --- [viz] Feature overlays ---
+        if _should_viz(config, "features"):
+            try:
+                from ...visualization.features import render_all_features
+
+                logger.info("Frame %d: rendering feature visualizations", frame_idx)
+                viz_dir = frame_dir / "viz"
+                viz_dir.mkdir(exist_ok=True)
+
+                # Convert tensors to numpy for viz
+                # Get numpy images from undistorted (passed separately if needed)
+                # For now, convert tensors back to numpy
+                np_images = {
+                    name: img.cpu().numpy() for name, img in undistorted_tensors.items()
+                }
+                np_features = {
+                    name: {k: v.cpu().numpy() for k, v in feats.items()}
+                    for name, feats in all_features.items()
+                }
+                np_matches = {
+                    pair: {k: v.cpu().numpy() for k, v in match.items()}
+                    for pair, match in all_matches.items()
+                }
+
+                render_all_features(
+                    images=np_images,
+                    all_features=np_features,
+                    all_matches=np_matches,
+                    sparse_cloud=None,  # Not available yet at this pipeline point
+                    projection_models=None,
+                    output_dir=viz_dir,
                 )
-                n_after = all_features[cam_name]["keypoints"].shape[0]
-                logger.debug(
-                    "Frame %d: %s mask filtered %d -> %d keypoints",
-                    frame_idx,
-                    cam_name,
-                    n_before,
-                    n_after,
-                )
+            except Exception:
+                logger.exception("Frame %d: feature visualization failed", frame_idx)
 
-    # --- Stage 3: Feature Matching ---
-    logger.info("Frame %d: matching features", frame_idx)
-    all_matches = match_all_pairs(
-        all_features,
-        ctx.pairs,
-        image_size=list(ctx.calibration.cameras.values())[0].image_size,
-        config=config.sparse_matching,
-        device=device,
-        extractor_type=config.sparse_matching.extractor_type,
-    )
+        # --- Save features (opt-in) ---
+        if config.runtime.save_features:
+            from ...features import save_features, save_matches
 
-    # --- [viz] Feature overlays ---
-    if _should_viz(config, "features"):
-        try:
-            from ...visualization.features import render_all_features
+            features_dir = frame_dir / "features"
+            features_dir.mkdir(exist_ok=True)
+            for name, feats in all_features.items():
+                save_features(feats, features_dir / f"{name}.pt")
+            for (ref, src), match in all_matches.items():
+                save_matches(match, features_dir / f"{ref}_{src}.pt")
 
-            logger.info("Frame %d: rendering feature visualizations", frame_idx)
-            viz_dir = frame_dir / "viz"
-            viz_dir.mkdir(exist_ok=True)
-
-            # Convert tensors to numpy for viz
-            # Get numpy images from undistorted (passed separately if needed)
-            # For now, convert tensors back to numpy
-            np_images = {
-                name: img.cpu().numpy() for name, img in undistorted_tensors.items()
-            }
-            np_features = {
-                name: {k: v.cpu().numpy() for k, v in feats.items()}
-                for name, feats in all_features.items()
-            }
-            np_matches = {
-                pair: {k: v.cpu().numpy() for k, v in match.items()}
-                for pair, match in all_matches.items()
-            }
-
-            render_all_features(
-                images=np_images,
-                all_features=np_features,
-                all_matches=np_matches,
-                sparse_cloud=None,  # Not available yet at this pipeline point
-                projection_models=None,
-                output_dir=viz_dir,
-            )
-        except Exception:
-            logger.exception("Frame %d: feature visualization failed", frame_idx)
-
-    # --- Save features (opt-in) ---
-    if config.runtime.save_features:
-        from ...features import save_features, save_matches
-
-        features_dir = frame_dir / "features"
-        features_dir.mkdir(exist_ok=True)
-        for name, feats in all_features.items():
-            save_features(feats, features_dir / f"{name}.pt")
-        for (ref, src), match in all_matches.items():
-            save_matches(match, features_dir / f"{ref}_{src}.pt")
-
-    return {"all_matches": all_matches}
+        return {"all_matches": all_matches}
 
 
 def run_triangulation(
