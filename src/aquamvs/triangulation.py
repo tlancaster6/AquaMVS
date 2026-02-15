@@ -151,11 +151,13 @@ def triangulate_pair(
 
     Returns:
         Dict with keys:
-            "points_3d": shape (M, 3), float32 -- triangulated world points
-            "scores": shape (M,), float32 -- match confidence (passed through)
-            "ref_pixels": shape (M, 2), float32 -- reference pixel coords
-            "src_pixels": shape (M, 2), float32 -- source pixel coords
-            "valid": shape (M,), bool -- True if triangulation succeeded
+
+        - ``"points_3d"``: shape (M, 3), float32 -- triangulated world points
+        - ``"scores"``: shape (M,), float32 -- match confidence (passed through)
+        - ``"ref_pixels"``: shape (M, 2), float32 -- reference pixel coords
+        - ``"src_pixels"``: shape (M, 2), float32 -- source pixel coords
+        - ``"valid"``: shape (M,), bool -- True if triangulation succeeded
+
         Invalid entries in points_3d are zeros (masked by valid).
         Returns empty tensors if M=0.
     """
@@ -246,8 +248,10 @@ def triangulate_all_pairs(
 
     Returns:
         Dict with keys:
-            "points_3d": shape (N_total, 3), float32 -- all valid triangulated points
-            "scores": shape (N_total,), float32 -- match confidence scores
+
+        - ``"points_3d"``: shape (N_total, 3), float32 -- all valid triangulated points
+        - ``"scores"``: shape (N_total,), float32 -- match confidence scores
+
         Where N_total is the sum of valid triangulated points across all pairs.
         Returns empty tensors if no valid points.
     """

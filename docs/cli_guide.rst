@@ -1,4 +1,0 @@
-CLI Guide
-=========
-
-Coming soon.

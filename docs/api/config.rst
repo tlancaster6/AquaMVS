@@ -3,7 +3,6 @@ Configuration
 
 .. autoclass:: aquamvs.PipelineConfig
    :members:
-   :undoc-members:
 
 .. autoclass:: aquamvs.PreprocessingConfig
    :members:
