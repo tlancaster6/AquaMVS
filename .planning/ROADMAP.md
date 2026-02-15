@@ -105,8 +105,8 @@ Plans:
 - [x] 04-03-PLAN.md — Theory/concepts section (refractive geometry, dense stereo, fusion)
 - [x] 04-04-PLAN.md — Jupyter tutorial + CLI guide
 - [x] 04-05-PLAN.md — Example dataset packaging, hero image, final build verification
-- [ ] 04-06-PLAN.md — Gap closure: package example dataset and update placeholder URLs
-- [ ] 04-07-PLAN.md — Gap closure: ReadTheDocs deployment verification
+- [x] 04-06-PLAN.md — Gap closure: package example dataset and update placeholder URLs
+- [x] 04-07-PLAN.md — Gap closure: ReadTheDocs deployment verification
 
 ### Phase 5: Performance and Optimization
 **Goal**: Performance bottlenecks identified and optimized based on measurements, with benchmarking infrastructure for tracking
