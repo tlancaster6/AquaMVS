@@ -142,3 +142,17 @@ Phases execute in numeric order: 1 -> 2 -> 3 -> 4 -> 5
 | 3. Pipeline Decomposition and Modularization | 3/3 | Complete | 2026-02-15 |
 | 4. Documentation and Examples | 7/7 | Complete | - |
 | 5. Performance and Optimization | 8/8 | Complete | 2026-02-15 |
+| 6. CLI QA Execution | 0/5 | Planned | - |
+
+### Phase 6: CLI QA Execution
+
+**Goal:** End-to-end QA of all 7 CLI commands and programmatic Pipeline API using real multi-camera capture data, verifying each command runs successfully on GPU with acceptable output quality
+**Depends on:** Phase 5
+**Plans:** 5 plans
+
+Plans:
+- [ ] 06-01-PLAN.md — Preprocess videos, init config, export reference images (setup commands)
+- [ ] 06-02-PLAN.md — Run LightGlue+full reconstruction pipeline on real data
+- [ ] 06-03-PLAN.md — Run RoMa+full reconstruction and benchmark comparison
+- [ ] 06-04-PLAN.md — Export mesh to OBJ, STL, GLTF with simplification
+- [ ] 06-05-PLAN.md — Profile pipeline performance and Pipeline API smoke test
