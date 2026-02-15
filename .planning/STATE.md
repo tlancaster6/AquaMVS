@@ -166,6 +166,7 @@ Recent decisions affecting current work:
 
 1. **Mint a Zenodo DOI** (general) — Link repo to Zenodo, add `.zenodo.json`, get citable DOI
 2. **Build portfolio website for Aqua libraries** (general) — Showcase site for AquaCal/AquaMVS/AquaPose targeting employers; static hosting, 3D viewers, comparison sliders
+3. **Write project retrospective** (general) — Lessons learned (agentic coding, new tech stacks, workflow pain points, future directions)
 
 ### Blockers/Concerns
 
