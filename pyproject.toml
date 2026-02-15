@@ -69,12 +69,17 @@ include-package-data = false
 [tool.semantic_release]
 version_toml = ["pyproject.toml:project.version"]
 branch = "main"
+commit_message = "chore(release): {version}"
 build_command = "pip install build && python -m build"
+tag_format = "v{version}"
 
 [tool.semantic_release.commit_parser_options]
-allowed_tags = ["feat", "fix", "docs", "refactor", "perf", "test", "chore"]
+allowed_tags = ["build", "chore", "ci", "docs", "feat", "fix", "perf", "refactor", "style", "test"]
 minor_tags = ["feat"]
 patch_tags = ["fix", "perf"]
+
+[tool.semantic_release.remote.token]
+env = "GH_TOKEN"
 
 [tool.pytest.ini_options]
 markers = [
