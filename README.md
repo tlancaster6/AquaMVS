@@ -7,7 +7,7 @@
 
 # AquaMVS
 
-Multi-view stereo reconstruction of underwater surfaces viewed through a flat water surface, with Snell's law refraction modeling.
+Multi-view-stereo (MVS) reconstruction of underwater surfaces viewed through a flat water surface, with Snell's law refraction modeling.
 
 ## What it does
 
