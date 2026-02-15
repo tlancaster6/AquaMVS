@@ -249,10 +249,12 @@ def backproject_depth_map(
 
     Returns:
         Dict with keys:
-            "points": shape (K, 3), float32 -- 3D world coordinates
-            "colors": shape (K, 3), float32 -- RGB colors in [0, 1]
-            "confidence": shape (K,), float32 -- confidence values (if provided,
-                else ones)
+
+        - "points": shape (K, 3), float32 -- 3D world coordinates
+        - "colors": shape (K, 3), float32 -- RGB colors in [0, 1]
+        - "confidence": shape (K,), float32 -- confidence values (if provided,
+          else ones)
+
         Where K is the number of valid (non-NaN) pixels.
         Returns empty tensors if no valid pixels.
     """

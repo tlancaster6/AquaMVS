@@ -7,8 +7,6 @@ extensions = [
     "sphinx.ext.napoleon",
     "sphinx.ext.viewcode",
     "sphinx.ext.intersphinx",
-    "sphinxcontrib.mermaid",
-    "myst_parser",
 ]
 
 templates_path = ["_templates"]
@@ -17,11 +15,10 @@ exclude_patterns = ["_build", "Thumbs.db", ".DS_Store"]
 # Source file suffixes
 source_suffix = {
     ".rst": "restructuredtext",
-    ".md": "markdown",
 }
 
 # HTML theme and branding
-html_theme = "furo"
+html_theme = "alabaster"
 html_title = "AquaMVS"
 
 # Intersphinx mapping
