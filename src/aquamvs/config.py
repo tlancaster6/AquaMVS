@@ -376,7 +376,9 @@ class PipelineConfig(BaseModel):
         except ValidationError as e:
             # Format validation errors with YAML paths
             formatted_errors = format_validation_errors(e)
-            raise ValueError(f"Configuration validation failed:\n{formatted_errors}")
+            raise ValueError(
+                f"Configuration validation failed:\n{formatted_errors}"
+            ) from None
 
         return config
 

@@ -10,7 +10,7 @@ import open3d as o3d
 import torch
 
 from ..config import SurfaceConfig
-from ..pipeline import _sparse_cloud_to_open3d  # noqa: used for benchmark colorized PLY
+from ..pipeline import _sparse_cloud_to_open3d  # noqa: F401
 from ..surface import reconstruct_surface
 from ..visualization.features import render_keypoints, render_matches
 from ..visualization.scene import render_scene
