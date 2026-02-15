@@ -27,11 +27,11 @@ from aquamvs.config import (
 )
 from aquamvs.pipeline import (
     PipelineContext,
-    _should_viz,
     process_frame,
     run_pipeline,
     setup_pipeline,
 )
+from aquamvs.pipeline.helpers import _should_viz
 
 
 @pytest.fixture
@@ -85,9 +85,10 @@ def test_setup_pipeline_structure(pipeline_config, mock_calibration_data, tmp_pa
     """Test that setup_pipeline creates PipelineContext with correct structure."""
     with (
         patch(
-            "aquamvs.pipeline.load_calibration_data", return_value=mock_calibration_data
+            "aquamvs.pipeline.builder.load_calibration_data",
+            return_value=mock_calibration_data,
         ),
-        patch("aquamvs.pipeline.select_pairs") as mock_select_pairs,
+        patch("aquamvs.pipeline.builder.select_pairs") as mock_select_pairs,
     ):
         # Mock select_pairs to return simple pair structure
         mock_select_pairs.return_value = {
@@ -116,13 +117,16 @@ def test_setup_pipeline_uses_undistorted_k(pipeline_config, mock_calibration_dat
     """Test that projection models use K_new from undistortion, not original K."""
     with (
         patch(
-            "aquamvs.pipeline.load_calibration_data", return_value=mock_calibration_data
+            "aquamvs.pipeline.builder.load_calibration_data",
+            return_value=mock_calibration_data,
         ),
-        patch("aquamvs.pipeline.select_pairs") as mock_select_pairs,
+        patch("aquamvs.pipeline.builder.select_pairs") as mock_select_pairs,
     ):
         mock_select_pairs.return_value = {"cam0": ["cam1"]}
 
-        with patch("aquamvs.pipeline.compute_undistortion_maps") as mock_compute_undist:
+        with patch(
+            "aquamvs.pipeline.builder.compute_undistortion_maps"
+        ) as mock_compute_undist:
             # Mock undistortion to return a different K_new
             def make_undist_data(cam):
                 K_new = cam.K + 0.1  # Make K_new different from K
@@ -134,7 +138,9 @@ def test_setup_pipeline_uses_undistorted_k(pipeline_config, mock_calibration_dat
 
             mock_compute_undist.side_effect = make_undist_data
 
-            with patch("aquamvs.pipeline.RefractiveProjectionModel") as mock_proj_model:
+            with patch(
+                "aquamvs.pipeline.builder.RefractiveProjectionModel"
+            ) as mock_proj_model:
                 setup_pipeline(pipeline_config)
 
                 # Verify RefractiveProjectionModel was called with K_new
@@ -185,39 +191,41 @@ def test_process_frame_directory_structure(
     )
 
     # Mock all pipeline stages
-    with patch("aquamvs.pipeline.undistort_image") as mock_undist:
+    with patch("aquamvs.pipeline.stages.undistortion.undistort_image") as mock_undist:
         mock_undist.side_effect = lambda img, _: img  # Pass through
 
-        with patch("aquamvs.pipeline.extract_features_batch") as mock_extract:
+        with patch(
+            "aquamvs.pipeline.stages.sparse_matching.extract_features_batch"
+        ) as mock_extract:
             mock_extract.return_value = {}
 
-            with patch("aquamvs.pipeline.match_all_pairs") as mock_match:
+            with patch(
+                "aquamvs.pipeline.stages.sparse_matching.match_all_pairs"
+            ) as mock_match:
                 mock_match.return_value = {}
 
-                with patch("aquamvs.pipeline.triangulate_all_pairs") as mock_tri:
+                with patch("aquamvs.pipeline.stages.sparse_matching.triangulate_all_pairs") as mock_tri:
                     mock_tri.return_value = {
                         "points_3d": torch.zeros(0, 3),
                         "scores": torch.zeros(0),
                     }
 
-                    with patch("aquamvs.pipeline.compute_depth_ranges") as mock_ranges:
+                    with patch("aquamvs.pipeline.stages.sparse_matching.compute_depth_ranges") as mock_ranges:
                         mock_ranges.return_value = {"cam0": (0.3, 0.9)}
 
-                        with patch("aquamvs.pipeline.plane_sweep_stereo") as mock_sweep:
+                        with patch("aquamvs.pipeline.stages.depth_estimation.plane_sweep_stereo") as mock_sweep:
                             mock_sweep.return_value = {
                                 "cost_volume": torch.zeros(1, 1, 1),
                                 "depths": torch.tensor([0.5]),
                             }
 
-                            with patch("aquamvs.pipeline.extract_depth") as mock_extr:
+                            with patch("aquamvs.pipeline.stages.depth_estimation.extract_depth") as mock_extr:
                                 mock_extr.return_value = (
                                     torch.full((480, 640), float("nan")),
                                     torch.zeros(480, 640),
                                 )
 
-                                with patch(
-                                    "aquamvs.pipeline.filter_all_depth_maps"
-                                ) as mock_filter:
+                                with patch("aquamvs.pipeline.stages.fusion.filter_all_depth_maps") as mock_filter:
                                     mock_filter.return_value = {
                                         "cam0": (
                                             torch.full((480, 640), float("nan")),
@@ -226,9 +234,7 @@ def test_process_frame_directory_structure(
                                         )
                                     }
 
-                                    with patch(
-                                        "aquamvs.pipeline.fuse_depth_maps"
-                                    ) as mock_fuse:
+                                    with patch("aquamvs.pipeline.stages.fusion.fuse_depth_maps") as mock_fuse:
                                         # Return non-empty point cloud
                                         pcd = o3d.geometry.PointCloud()
                                         pcd.points = o3d.utility.Vector3dVector(
@@ -236,9 +242,7 @@ def test_process_frame_directory_structure(
                                         )
                                         mock_fuse.return_value = pcd
 
-                                        with patch(
-                                            "aquamvs.pipeline.reconstruct_surface"
-                                        ) as mock_surf:
+                                        with patch("aquamvs.pipeline.stages.surface.reconstruct_surface") as mock_surf:
                                             mock_surf.return_value = (
                                                 o3d.geometry.TriangleMesh()
                                             )
@@ -313,11 +317,11 @@ def test_process_frame_with_none_images(pipeline_config, mock_calibration_data, 
 
 def test_run_pipeline_videoset_integration(pipeline_config):
     """Test that run_pipeline iterates over VideoSet frames correctly."""
-    with patch("aquamvs.pipeline.setup_pipeline") as mock_setup:
+    with patch("aquamvs.pipeline.runner.build_pipeline_context") as mock_setup:
         mock_ctx = Mock()
         mock_setup.return_value = mock_ctx
 
-        with patch("aquamvs.pipeline.VideoSet") as mock_videoset:
+        with patch("aquamvs.pipeline.runner.VideoSet") as mock_videoset:
             # Mock VideoSet to yield 2 frames
             mock_videos = MagicMock()
             mock_videos.__enter__.return_value = mock_videos
@@ -327,7 +331,7 @@ def test_run_pipeline_videoset_integration(pipeline_config):
             ]
             mock_videoset.return_value = mock_videos
 
-            with patch("aquamvs.pipeline.process_frame") as mock_process:
+            with patch("aquamvs.pipeline.runner.process_frame") as mock_process:
                 run_pipeline(pipeline_config)
 
                 # Verify process_frame was called twice with correct indices
@@ -338,11 +342,11 @@ def test_run_pipeline_videoset_integration(pipeline_config):
 
 def test_run_pipeline_handles_frame_failure(pipeline_config, caplog):
     """Test that run_pipeline continues after a frame processing failure."""
-    with patch("aquamvs.pipeline.setup_pipeline") as mock_setup:
+    with patch("aquamvs.pipeline.runner.build_pipeline_context") as mock_setup:
         mock_ctx = Mock()
         mock_setup.return_value = mock_ctx
 
-        with patch("aquamvs.pipeline.VideoSet") as mock_videoset:
+        with patch("aquamvs.pipeline.runner.VideoSet") as mock_videoset:
             # Mock VideoSet to yield 3 frames
             mock_videos = MagicMock()
             mock_videos.__enter__.return_value = mock_videos
@@ -353,7 +357,7 @@ def test_run_pipeline_handles_frame_failure(pipeline_config, caplog):
             ]
             mock_videoset.return_value = mock_videos
 
-            with patch("aquamvs.pipeline.process_frame") as mock_process:
+            with patch("aquamvs.pipeline.runner.process_frame") as mock_process:
                 # Make frame 1 fail
                 def process_side_effect(idx, images, ctx):
                     if idx == 1:
@@ -374,9 +378,10 @@ def test_pipeline_context_fields(pipeline_config, mock_calibration_data):
     """Test that PipelineContext has all required fields populated."""
     with (
         patch(
-            "aquamvs.pipeline.load_calibration_data", return_value=mock_calibration_data
+            "aquamvs.pipeline.builder.load_calibration_data",
+            return_value=mock_calibration_data,
         ),
-        patch("aquamvs.pipeline.select_pairs") as mock_select_pairs,
+        patch("aquamvs.pipeline.builder.select_pairs") as mock_select_pairs,
     ):
         mock_select_pairs.return_value = {"cam0": ["cam1"]}
 
@@ -410,22 +415,24 @@ def _mock_pipeline_stages():
     Yields a dict of mock objects keyed by short names.
     """
     with (
-        patch("aquamvs.pipeline.undistort_image") as m_undist,
-        patch("aquamvs.pipeline.extract_features_batch") as m_extract,
-        patch("aquamvs.pipeline.match_all_pairs") as m_match,
-        patch("aquamvs.pipeline.triangulate_all_pairs") as m_tri,
-        patch("aquamvs.pipeline.filter_sparse_cloud") as m_filter_sparse,
-        patch("aquamvs.pipeline.compute_depth_ranges") as m_ranges,
-        patch("aquamvs.pipeline._sparse_cloud_to_open3d") as m_sparse_to_o3d,
-        patch("aquamvs.pipeline.plane_sweep_stereo") as m_sweep,
-        patch("aquamvs.pipeline.extract_depth") as m_extr,
-        patch("aquamvs.pipeline.filter_all_depth_maps") as m_filter,
-        patch("aquamvs.pipeline.fuse_depth_maps") as m_fuse,
-        patch("aquamvs.pipeline.reconstruct_surface") as m_surf,
-        patch("aquamvs.pipeline.save_sparse_cloud") as m_save_sparse,
-        patch("aquamvs.pipeline.save_depth_map") as m_save_depth,
-        patch("aquamvs.pipeline.save_point_cloud") as m_save_pcd,
-        patch("aquamvs.pipeline.save_mesh") as m_save_mesh,
+        patch("aquamvs.pipeline.stages.undistortion.undistort_image") as m_undist,
+        patch(
+            "aquamvs.pipeline.stages.sparse_matching.extract_features_batch"
+        ) as m_extract,
+        patch("aquamvs.pipeline.stages.sparse_matching.match_all_pairs") as m_match,
+        patch("aquamvs.pipeline.stages.sparse_matching.triangulate_all_pairs") as m_tri,
+        patch("aquamvs.pipeline.stages.sparse_matching.filter_sparse_cloud") as m_filter_sparse,
+        patch("aquamvs.pipeline.stages.sparse_matching.compute_depth_ranges") as m_ranges,
+        patch("aquamvs.pipeline.helpers._sparse_cloud_to_open3d") as m_sparse_to_o3d,
+        patch("aquamvs.pipeline.stages.depth_estimation.plane_sweep_stereo") as m_sweep,
+        patch("aquamvs.pipeline.stages.depth_estimation.extract_depth") as m_extr,
+        patch("aquamvs.pipeline.stages.fusion.filter_all_depth_maps") as m_filter,
+        patch("aquamvs.pipeline.stages.fusion.fuse_depth_maps") as m_fuse,
+        patch("aquamvs.pipeline.stages.surface.reconstruct_surface") as m_surf,
+        patch("aquamvs.pipeline.stages.sparse_matching.save_sparse_cloud") as m_save_sparse,
+        patch("aquamvs.pipeline.stages.depth_estimation.save_depth_map") as m_save_depth,
+        patch("aquamvs.pipeline.stages.fusion.save_point_cloud") as m_save_pcd,
+        patch("aquamvs.pipeline.stages.surface.save_mesh") as m_save_mesh,
     ):
         m_undist.side_effect = lambda img, _: img  # Pass through
         m_extract.return_value = {
@@ -859,9 +866,9 @@ class TestOutputConfig:
 
         with _mock_pipeline_stages() as mocks:
             process_frame(0, _RAW_IMAGES.copy(), ctx)
-            assert mocks["save_sparse"].called, (
-                "save_sparse_cloud should always be called"
-            )
+            assert mocks[
+                "save_sparse"
+            ].called, "save_sparse_cloud should always be called"
 
 
 # ---------------------------------------------------------------------------
@@ -882,19 +889,19 @@ class TestSummaryViz:
             device=DeviceConfig(device="cpu"),
         )
 
-        with patch("aquamvs.pipeline.setup_pipeline") as mock_setup:
+        with patch("aquamvs.pipeline.runner.build_pipeline_context") as mock_setup:
             mock_ctx = Mock()
             mock_ctx.config = config
             mock_setup.return_value = mock_ctx
 
-            with patch("aquamvs.pipeline.VideoSet") as mock_videoset:
+            with patch("aquamvs.pipeline.runner.VideoSet") as mock_videoset:
                 mock_videos = MagicMock()
                 mock_videos.__enter__.return_value = mock_videos
                 mock_videos.iterate_frames.return_value = []  # No frames
                 mock_videoset.return_value = mock_videos
 
                 with (
-                    patch("aquamvs.pipeline.process_frame"),
+                    patch("aquamvs.pipeline.runner.process_frame"),
                     patch(
                         "aquamvs.pipeline._collect_height_maps",
                         return_value=[
@@ -920,19 +927,19 @@ class TestSummaryViz:
             device=DeviceConfig(device="cpu"),
         )
 
-        with patch("aquamvs.pipeline.setup_pipeline") as mock_setup:
+        with patch("aquamvs.pipeline.runner.build_pipeline_context") as mock_setup:
             mock_ctx = Mock()
             mock_ctx.config = config
             mock_setup.return_value = mock_ctx
 
-            with patch("aquamvs.pipeline.VideoSet") as mock_videoset:
+            with patch("aquamvs.pipeline.runner.VideoSet") as mock_videoset:
                 mock_videos = MagicMock()
                 mock_videos.__enter__.return_value = mock_videos
                 mock_videos.iterate_frames.return_value = []
                 mock_videoset.return_value = mock_videos
 
-                with patch("aquamvs.pipeline.process_frame"):
-                    with patch("aquamvs.pipeline._collect_height_maps") as m_collect:
+                with patch("aquamvs.pipeline.runner.process_frame"):
+                    with patch("aquamvs.pipeline.runner._collect_height_maps") as m_collect:
                         run_pipeline(config)
                         assert not m_collect.called
 
@@ -1025,7 +1032,7 @@ class TestSparseCloudFiltering:
         ctx = _make_ctx(config, mock_calibration_data)
 
         with _mock_pipeline_stages():
-            with patch("aquamvs.pipeline.filter_sparse_cloud") as mock_filter:
+            with patch("aquamvs.pipeline.stages.sparse_matching.filter_sparse_cloud") as mock_filter:
                 # Mock filter to return the input unchanged
                 mock_filter.side_effect = lambda cloud, **kwargs: cloud
 
@@ -1057,7 +1064,7 @@ class TestSparseCloudFiltering:
                 "scores": torch.zeros(100),
             }
 
-            with patch("aquamvs.pipeline.filter_sparse_cloud") as mock_filter:
+            with patch("aquamvs.pipeline.stages.sparse_matching.filter_sparse_cloud") as mock_filter:
                 # Mock filter to reduce points to 50
                 def filter_side_effect(cloud, **kwargs):
                     return {
@@ -1098,7 +1105,7 @@ class TestSparseCloudFiltering:
                 "scores": torch.zeros(100),
             }
 
-            with patch("aquamvs.pipeline.filter_sparse_cloud") as mock_filter:
+            with patch("aquamvs.pipeline.stages.sparse_matching.filter_sparse_cloud") as mock_filter:
                 # Mock filter to remove all points
                 def filter_side_effect(cloud, **kwargs):
                     return {
@@ -1379,10 +1386,10 @@ class TestMaskIntegration:
 
         with (
             patch(
-                "aquamvs.pipeline.load_calibration_data",
+                "aquamvs.pipeline.builder.load_calibration_data",
                 return_value=mock_calibration_data,
             ),
-            patch("aquamvs.pipeline.select_pairs") as mock_select_pairs,
+            patch("aquamvs.pipeline.builder.select_pairs") as mock_select_pairs,
         ):
             mock_select_pairs.return_value = {"cam0": ["cam1"]}
 

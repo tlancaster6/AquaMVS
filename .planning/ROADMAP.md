@@ -72,21 +72,20 @@ Plans:
 - [x] 02-02-PLAN.md — Update pipeline/CLI consumers, tqdm progress bars, --quiet flag
 
 ### Phase 3: Pipeline Decomposition and Modularization
-**Goal**: Monolithic pipeline.py is decomposed into maintainable modular package with clean public API
+**Goal**: Monolithic pipeline.py decomposed into maintainable modular package with clean public API
 **Depends on**: Phase 2
 **Requirements**: REF-01, REF-02, REF-03, REF-04
 **Success Criteria** (what must be TRUE):
   1. Pipeline code is organized into pipeline/ package with separate builder, runner, and stage modules
   2. Each execution path (lightglue+sparse, lightglue+full, roma+sparse, roma+full) is implemented as distinct stage module
-  3. AquaCal VideoSet usage is isolated behind adapter interface (not directly imported throughout codebase)
-  4. Feature extractors (SuperPoint, ALIKED, DISK, RoMa) are accessed via protocol interface enabling swappability
-  5. Pipeline class is primary programmatic entry point: `from aquamvs import Pipeline`
+  3. AquaCal VideoSet usage is isolated to runner.py only (REF-03 isolation point)
+  4. Pipeline class is primary programmatic entry point: `from aquamvs import Pipeline`
 **Plans:** 3 plans
 
 Plans:
-- [ ] 03-01-PLAN.md — Protocol interfaces (FrameSource, CalibrationProvider), pipeline package scaffold, builder extraction
-- [ ] 03-02-PLAN.md — Stage module extraction (undistortion, sparse/dense matching, depth, fusion, surface)
-- [ ] 03-03-PLAN.md — Pipeline class, runner, import wiring, test updates
+- [x] 03-01-PLAN.md — Protocol interfaces (FrameSource, CalibrationProvider), pipeline package scaffold, builder extraction
+- [x] 03-02-PLAN.md — Stage module extraction (undistortion, sparse/dense matching, depth, fusion, surface)
+- [x] 03-03-PLAN.md — Pipeline class, runner, import wiring, test updates
 
 ### Phase 4: Documentation and Examples
 **Goal**: Users can learn, install, and use AquaMVS through comprehensive documentation and working examples
@@ -127,6 +126,6 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5
 | 1. Dependency Resolution and Packaging Foundations | 2/2 | ✓ Complete | 2026-02-14 |
 | 01.1. Last-Minute Feature Additions | 2/2 | ✓ Complete | 2026-02-14 |
 | 2. Configuration and API Cleanup | 2/2 | ✓ Complete | 2026-02-14 |
-| 3. Pipeline Decomposition and Modularization | 0/TBD | Not started | - |
+| 3. Pipeline Decomposition and Modularization | 3/3 | ✓ Complete | 2026-02-15 |
 | 4. Documentation and Examples | 0/TBD | Not started | - |
 | 5. Performance and Optimization | 0/TBD | Not started | - |
