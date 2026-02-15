@@ -342,12 +342,17 @@ def run_command(
     run_pipeline(config)
 
 
-def benchmark_command(config_path: Path, frame: int = 0) -> None:
-    """Run benchmark sweep on a single frame.
+def benchmark_command(
+    config_path: Path,
+    compare: list[Path] | None = None,
+    visualize: bool = False,
+) -> None:
+    """Run benchmark tests from a benchmark config YAML.
 
     Args:
-        config_path: Path to the pipeline config YAML file.
-        frame: Frame index to benchmark (default: 0).
+        config_path: Path to the benchmark config YAML file.
+        compare: Optional list of run directories for comparison (Plan 05 feature).
+        visualize: Whether to generate visualization plots (Plan 05 feature).
     """
     # 1. Configure logging
     logging.basicConfig(
@@ -360,13 +365,15 @@ def benchmark_command(config_path: Path, frame: int = 0) -> None:
     for name in ("matplotlib", "PIL", "open3d"):
         logging.getLogger(name).setLevel(logging.WARNING)
 
-    # 2. Load config
+    # 2. Load benchmark config
     if not config_path.exists():
         print(f"Error: Config file not found: {config_path}", file=sys.stderr)
         sys.exit(1)
 
     try:
-        config = PipelineConfig.from_yaml(config_path)
+        from aquamvs.benchmark.config import BenchmarkConfig
+
+        config = BenchmarkConfig.from_yaml(config_path)
     except ValueError as e:
         # Pydantic validation errors are already formatted
         print(f"Configuration validation failed:\n{e}", file=sys.stderr)
@@ -375,17 +382,26 @@ def benchmark_command(config_path: Path, frame: int = 0) -> None:
         print(f"Error: Failed to load config: {e}", file=sys.stderr)
         sys.exit(1)
 
-    # 4. Run benchmark
-    from aquamvs.benchmark import generate_report, run_benchmark
+    # 3. Run benchmark
+    from aquamvs.benchmark import run_benchmarks
 
     try:
-        results = run_benchmark(config, frame)
-        report_path = generate_report(results, Path(config.output_dir))
+        result = run_benchmarks(config)
 
-        # 5. Print summary
+        # 4. Print summary (already printed by run_benchmarks)
         print("\nBenchmark complete!")
-        print(f"Tested {len(results.results)} configuration(s) on frame {frame}")
-        print(f"Report: {report_path}\n")
+        print(f"Run ID: {result.run_id}")
+        print(f"Results directory: {result.run_dir}\n")
+
+        # 5. Handle --compare flag (Plan 05 placeholder)
+        if compare is not None and len(compare) > 0:
+            print("Comparison not yet implemented (planned for Phase 05 Plan 05)")
+            print(f"Would compare: {', '.join(str(p) for p in compare)}\n")
+
+        # 6. Handle --visualize flag (Plan 05 placeholder)
+        if visualize:
+            print("Visualization not yet implemented (planned for Phase 05 Plan 05)")
+            print("Would generate plots for benchmark results\n")
 
     except Exception as e:
         print(f"Error: Benchmark failed: {e}", file=sys.stderr)
@@ -616,18 +632,24 @@ def main() -> None:
     # benchmark subcommand
     benchmark_parser = subparsers.add_parser(
         "benchmark",
-        help="Run comparative benchmark of feature extraction configurations",
+        help="Run benchmark tests from benchmark config YAML",
     )
     benchmark_parser.add_argument(
         "config",
         type=Path,
-        help="Path to pipeline config YAML file",
+        help="Path to benchmark config YAML file",
     )
     benchmark_parser.add_argument(
-        "--frame",
-        type=int,
-        default=0,
-        help="Frame index to benchmark (default: 0)",
+        "--compare",
+        type=Path,
+        nargs="+",
+        default=None,
+        help="Compare multiple run directories (not yet implemented)",
+    )
+    benchmark_parser.add_argument(
+        "--visualize",
+        action="store_true",
+        help="Generate visualization plots (not yet implemented)",
     )
 
     # preprocess subcommand
@@ -729,7 +751,8 @@ def main() -> None:
     elif args.command == "benchmark":
         benchmark_command(
             config_path=args.config,
-            frame=args.frame,
+            compare=args.compare,
+            visualize=args.visualize,
         )
     elif args.command == "preprocess":
         preprocess_command(args)
