@@ -49,15 +49,33 @@ def _legacy_visualizer_available() -> bool:
         return False
 
 
-OFFSCREEN_AVAILABLE = _offscreen_available()
-LEGACY_VISUALIZER_AVAILABLE = not OFFSCREEN_AVAILABLE and _legacy_visualizer_available()
+_rendering_backend: str | None = None
 
-if OFFSCREEN_AVAILABLE:
-    logger.debug("Using OffscreenRenderer for 3D rendering")
-elif LEGACY_VISUALIZER_AVAILABLE:
-    logger.debug("OffscreenRenderer unavailable; using legacy Visualizer fallback")
-else:
-    logger.debug("No 3D rendering backend available")
+
+def _detect_rendering_backend() -> str:
+    """Detect the best available Open3D rendering backend.
+
+    Runs once on first call, caches the result. Deferred from module level
+    to avoid segfaulting on headless CI where OffscreenRenderer crashes
+    before Python's try/except can intercept.
+
+    Returns:
+        One of "offscreen", "legacy", or "none".
+    """
+    global _rendering_backend
+    if _rendering_backend is not None:
+        return _rendering_backend
+
+    if _offscreen_available():
+        _rendering_backend = "offscreen"
+        logger.debug("Using OffscreenRenderer for 3D rendering")
+    elif _legacy_visualizer_available():
+        _rendering_backend = "legacy"
+        logger.debug("OffscreenRenderer unavailable; using legacy Visualizer fallback")
+    else:
+        _rendering_backend = "none"
+        logger.debug("No 3D rendering backend available")
+    return _rendering_backend
 
 
 def compute_canonical_viewpoints(
@@ -227,7 +245,9 @@ def render_geometry(
     output_path = Path(output_path)
     output_path.parent.mkdir(parents=True, exist_ok=True)
 
-    if OFFSCREEN_AVAILABLE:
+    backend = _detect_rendering_backend()
+
+    if backend == "offscreen":
         _render_offscreen(
             geometry,
             eye,
@@ -239,7 +259,7 @@ def render_geometry(
             background_color,
             point_size,
         )
-    elif LEGACY_VISUALIZER_AVAILABLE:
+    elif backend == "legacy":
         _render_legacy(
             geometry,
             eye,

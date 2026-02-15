@@ -8,15 +8,14 @@ import open3d as o3d
 import pytest
 
 from aquamvs.visualization.scene import (
-    LEGACY_VISUALIZER_AVAILABLE,
-    OFFSCREEN_AVAILABLE,
+    _detect_rendering_backend,
     compute_canonical_viewpoints,
     render_all_scenes,
     render_geometry,
     render_scene,
 )
 
-RENDERING_AVAILABLE = OFFSCREEN_AVAILABLE or LEGACY_VISUALIZER_AVAILABLE
+RENDERING_AVAILABLE = _detect_rendering_backend() != "none"
 
 
 class TestComputeCanonicalViewpoints:
@@ -349,8 +348,7 @@ class TestOffscreenUnavailable:
         # Temporarily patch both backends to False
         import aquamvs.visualization.scene as scene_module
 
-        monkeypatch.setattr(scene_module, "OFFSCREEN_AVAILABLE", False)
-        monkeypatch.setattr(scene_module, "LEGACY_VISUALIZER_AVAILABLE", False)
+        monkeypatch.setattr(scene_module, "_rendering_backend", "none")
 
         # Create point cloud
         points = np.array([[0.0, 0.0, 0.0]]).astype(np.float64)
