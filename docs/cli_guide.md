@@ -260,11 +260,20 @@ runtime:
 
 ### Quality vs. Speed
 
-Increase depth hypotheses for higher quality (slower):
+Use a quality preset for one-line tuning:
+
+```yaml
+quality_preset: fast       # Fewer depth planes, larger batches — quickest results
+# quality_preset: balanced # Default tradeoffs
+# quality_preset: quality  # Maximum depth planes, smallest batches — best accuracy
+```
+
+Or manually increase depth hypotheses for higher quality (slower):
 
 ```yaml
 reconstruction:
   num_depth_hypotheses: 128  # Default: 64, higher = better quality, longer runtime
+  depth_batch_size: 8        # Process depth planes in batches (GPU speedup)
 ```
 
 ### Pipeline Mode
