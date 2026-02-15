@@ -10,18 +10,18 @@ See: .planning/PROJECT.md (updated 2026-02-14)
 ## Current Position
 
 Phase: 03 (Pipeline Decomposition and Modularization)
-Plan: 2 of 3 plans complete
-Status: In progress — executing phase 03
-Last activity: 2026-02-14 - Phase 03 Plan 02 complete
+Plan: 3 of 3 plans complete
+Status: Complete — phase 03 finished
+Last activity: 2026-02-15 - Phase 03 Plan 03 complete
 
-Progress: [███████░░░] 67% (3 of 5 phases complete, phase 03 2/3)
+Progress: [████████░░] 80% (4 of 5 phases complete)
 
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 8
-- Average duration: 7.5 min
-- Total execution time: 1.0 hours
+- Total plans completed: 9
+- Average duration: 7.1 min
+- Total execution time: 1.1 hours
 
 **By Phase:**
 
@@ -30,13 +30,15 @@ Progress: [███████░░░] 67% (3 of 5 phases complete, phase 03
 | 01    | 2     | 20min | 10min    |
 | 01.1  | 2     | 17min | 8.5min   |
 | 02    | 2     | 16min | 8min     |
-| 03    | 2     | 8min  | 4min     |
+| 03    | 3     | 16min | 5.3min   |
 
 **Recent Trend:**
-- Last 5 plans: 02-01 (5min), 02-02 (11min), 03-01 (4min), 03-02 (4min)
-- Trend: Refactoring/extraction tasks very fast (4min), comprehensive updates moderate (11min)
+- Last 5 plans: 02-02 (11min), 03-01 (4min), 03-02 (4min), 03-03 (8min)
+- Trend: Extraction/scaffolding fast (4min), integration moderate (8-11min)
 | Phase 03 P01 | 4 | 2 tasks | 6 files |
 | Phase 03 P02 | 4 | 2 tasks | 7 files |
+| Phase 03 P03 | 8 | 2 tasks | 5 files |
+| Phase 03 P03 | 8 | 2 tasks | 5 files |
 
 ## Accumulated Context
 
@@ -102,6 +104,13 @@ Recent decisions affecting current work:
 - Each execution path (lightglue+sparse, lightglue+full, roma+sparse, roma+full) traceable through distinct stage functions
 - Visualization and I/O embedded in owning stages, gated by _should_viz and config flags
 
+**Phase 03 Plan 03 (2026-02-15):**
+- Pipeline class is primary programmatic API: Pipeline(config).run()
+- process_frame orchestrates all 4 execution paths via stage function composition
+- AquaCal VideoSet isolated to runner.py only (REF-03 requirement satisfied)
+- Top-level import works: from aquamvs import Pipeline
+- Test imports and patches updated to new module locations (builder, stages, runner, helpers)
+
 ### Roadmap Evolution
 
 - Phase 1.1 inserted after Phase 1: Last-Minute Feature Additions (URGENT)
@@ -129,6 +138,6 @@ approved
 
 ## Session Continuity
 
-Last session: 2026-02-14 (phase 03 execution)
-Stopped at: Completed 03-02-PLAN.md
+Last session: 2026-02-15 (phase 03 execution)
+Stopped at: Completed 03-03-PLAN.md (Phase 03 complete)
 Resume file: None
