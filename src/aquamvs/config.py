@@ -1,6 +1,7 @@
 """Configuration management for AquaMVS pipeline."""
 
 import logging
+from enum import Enum
 from pathlib import Path
 from typing import Any, Literal
 
@@ -21,6 +22,48 @@ VALID_COLOR_NORM_METHODS = ["gain", "histogram"]
 VALID_VIZ_STAGES = ["depth", "features", "scene", "rig", "summary"]
 VALID_EXTRACTORS = ["superpoint", "aliked", "disk"]
 VALID_MATCHERS = ["lightglue", "roma"]
+
+
+class QualityPreset(str, Enum):
+    """Quality presets for reconstruction pipeline.
+
+    Each preset provides a different speed/accuracy tradeoff:
+    - FAST: Fastest processing, lower quality (fewer depths, smaller windows, larger voxels)
+    - BALANCED: Good balance of speed and quality (default settings)
+    - QUALITY: Highest quality, slower processing (more depths, larger windows, smaller voxels)
+    """
+
+    FAST = "fast"
+    BALANCED = "balanced"
+    QUALITY = "quality"
+
+
+PRESET_CONFIGS = {
+    QualityPreset.FAST: {
+        "num_depths": 64,
+        "window_size": 7,
+        "depth_batch_size": 8,
+        "max_keypoints": 1024,
+        "voxel_size": 0.002,
+        "poisson_depth": 8,
+    },
+    QualityPreset.BALANCED: {
+        "num_depths": 128,
+        "window_size": 11,
+        "depth_batch_size": 4,
+        "max_keypoints": 2048,
+        "voxel_size": 0.001,
+        "poisson_depth": 9,
+    },
+    QualityPreset.QUALITY: {
+        "num_depths": 256,
+        "window_size": 15,
+        "depth_batch_size": 1,
+        "max_keypoints": 4096,
+        "voxel_size": 0.0005,
+        "poisson_depth": 10,
+    },
+}
 
 
 class PreprocessingConfig(BaseModel):
@@ -135,6 +178,7 @@ class ReconstructionConfig(BaseModel):
         cost_function: Photometric cost function.
         window_size: Local window size for cost computation (pixels, must be odd).
         depth_margin: Margin added to sparse depth range [d_min, d_max] (meters).
+        depth_batch_size: Number of depth planes to process per batch in plane sweep (1 = no batching).
         min_consistent_views: Minimum number of views that must agree for a point to survive.
         depth_tolerance: Maximum depth disagreement for consistency (meters).
         roma_depth_tolerance: Maximum depth disagreement for RoMa pairwise depth aggregation (meters).
@@ -157,6 +201,7 @@ class ReconstructionConfig(BaseModel):
     cost_function: Literal["ncc", "ssim"] = "ncc"
     window_size: int = 11
     depth_margin: float = 0.05
+    depth_batch_size: int = 4
 
     # Fusion
     min_consistent_views: int = 3
@@ -291,6 +336,7 @@ class PipelineConfig(BaseModel):
         mask_dir: Optional directory containing per-camera ROI mask PNGs.
         pipeline_mode: Pipeline execution mode ("sparse" or "full").
         matcher_type: Matcher backend ("lightglue" or "roma").
+        quality_preset: Optional quality preset (fast/balanced/quality) to apply default values.
         preprocessing: Preprocessing configuration.
         sparse_matching: Sparse matching configuration.
         dense_matching: Dense matching configuration.
@@ -309,6 +355,7 @@ class PipelineConfig(BaseModel):
     mask_dir: str | None = None
     pipeline_mode: Literal["sparse", "full"] = "full"
     matcher_type: Literal["lightglue", "roma"] = "lightglue"
+    quality_preset: QualityPreset | None = None
 
     # Sub-configs
     preprocessing: PreprocessingConfig = Field(default_factory=PreprocessingConfig)
@@ -318,6 +365,59 @@ class PipelineConfig(BaseModel):
     runtime: RuntimeConfig = Field(default_factory=RuntimeConfig)
 
     @model_validator(mode="after")
+    def apply_preset(self, preset: QualityPreset) -> "PipelineConfig":
+        """Apply a quality preset to this configuration.
+
+        Only applies preset values to parameters that are still at their defaults.
+        User-specified values take precedence and are not overridden.
+
+        Args:
+            preset: Quality preset to apply.
+
+        Returns:
+            Self for method chaining.
+        """
+        if preset not in PRESET_CONFIGS:
+            logger.warning(f"Unknown quality preset: {preset}")
+            return self
+
+        preset_values = PRESET_CONFIGS[preset]
+
+        # Get default configs for comparison
+        default_reconstruction = ReconstructionConfig()
+        default_sparse = SparseMatchingConfig()
+
+        # Apply reconstruction params if they're at defaults
+        for key in [
+            "num_depths",
+            "window_size",
+            "depth_batch_size",
+            "voxel_size",
+            "poisson_depth",
+        ]:
+            if key in preset_values:
+                current_value = getattr(self.reconstruction, key)
+                default_value = getattr(default_reconstruction, key)
+                if current_value == default_value:
+                    setattr(self.reconstruction, key, preset_values[key])
+
+        # Apply sparse matching params if they're at defaults
+        if "max_keypoints" in preset_values and self.sparse_matching.max_keypoints == default_sparse.max_keypoints:
+            self.sparse_matching.max_keypoints = preset_values["max_keypoints"]
+        if "max_keypoints" in preset_values and self.sparse_matching.max_keypoints == default_sparse.max_keypoints:
+            self.sparse_matching.max_keypoints = preset_values["max_keypoints"]
+        if "max_keypoints" in preset_values and self.sparse_matching.max_keypoints == default_sparse.max_keypoints:
+            self.sparse_matching.max_keypoints = preset_values["max_keypoints"]
+
+        return self
+
+    @model_validator(mode="after")
+    def auto_apply_preset(self) -> "PipelineConfig":
+        """Auto-apply quality preset if specified."""
+        if self.quality_preset is not None:
+            self.apply_preset(self.quality_preset)
+        return self
+
     def check_cross_stage_constraints(self) -> "PipelineConfig":
         """Validate cross-stage constraints and warn about extra fields."""
         # Warn about RoMa with low certainty threshold

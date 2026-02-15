@@ -728,3 +728,161 @@ class TestImports:
         assert DeviceConfig is not None
         assert BenchmarkConfig is not None
         assert EvaluationConfig is not None
+
+
+class TestQualityPresets:
+    """Tests for quality preset system."""
+
+    def test_quality_preset_enum_values(self):
+        """Test that QualityPreset enum has expected values."""
+        from aquamvs.config import QualityPreset
+
+        assert QualityPreset.FAST == "fast"
+        assert QualityPreset.BALANCED == "balanced"
+        assert QualityPreset.QUALITY == "quality"
+
+    def test_fast_preset_sets_expected_values(self):
+        """Test that fast preset sets expected parameter values."""
+        from aquamvs.config import PipelineConfig, QualityPreset
+
+        config = PipelineConfig(quality_preset=QualityPreset.FAST)
+
+        # Dense stereo
+        assert config.reconstruction.num_depths == 64
+        assert config.reconstruction.window_size == 7
+        assert config.reconstruction.depth_batch_size == 8
+
+        # Sparse matching
+        assert config.sparse_matching.max_keypoints == 1024
+
+        # Fusion
+        assert config.reconstruction.voxel_size == 0.002
+
+        # Surface
+        assert config.reconstruction.poisson_depth == 8
+
+    def test_balanced_preset_sets_expected_values(self):
+        """Test that balanced preset sets expected parameter values."""
+        from aquamvs.config import PipelineConfig, QualityPreset
+
+        config = PipelineConfig(quality_preset=QualityPreset.BALANCED)
+
+        # Dense stereo
+        assert config.reconstruction.num_depths == 128
+        assert config.reconstruction.window_size == 11
+        assert config.reconstruction.depth_batch_size == 4
+
+        # Sparse matching
+        assert config.sparse_matching.max_keypoints == 2048
+
+        # Fusion
+        assert config.reconstruction.voxel_size == 0.001
+
+        # Surface
+        assert config.reconstruction.poisson_depth == 9
+
+    def test_quality_preset_sets_expected_values(self):
+        """Test that quality preset sets expected parameter values."""
+        from aquamvs.config import PipelineConfig, QualityPreset
+
+        config = PipelineConfig(quality_preset=QualityPreset.QUALITY)
+
+        # Dense stereo
+        assert config.reconstruction.num_depths == 256
+        assert config.reconstruction.window_size == 15
+        assert config.reconstruction.depth_batch_size == 1
+
+        # Sparse matching
+        assert config.sparse_matching.max_keypoints == 4096
+
+        # Fusion
+        assert config.reconstruction.voxel_size == 0.0005
+
+        # Surface
+        assert config.reconstruction.poisson_depth == 10
+
+    def test_explicit_values_override_preset(self):
+        """Test that explicitly set values are NOT overridden by preset."""
+        from aquamvs.config import (
+            PipelineConfig,
+            QualityPreset,
+            ReconstructionConfig,
+            SparseMatchingConfig,
+        )
+
+        config = PipelineConfig(
+            quality_preset=QualityPreset.FAST,
+            reconstruction=ReconstructionConfig(num_depths=512),
+            sparse_matching=SparseMatchingConfig(max_keypoints=8192),
+        )
+
+        # Explicit values should be preserved
+        assert config.reconstruction.num_depths == 512
+        assert config.sparse_matching.max_keypoints == 8192
+
+        # Other preset values should still apply
+        assert config.reconstruction.window_size == 7
+        assert config.reconstruction.depth_batch_size == 8
+
+    def test_partial_override_preset(self):
+        """Test that partially overridden configs preserve user values."""
+        from aquamvs.config import PipelineConfig, QualityPreset, ReconstructionConfig
+
+        config = PipelineConfig(
+            quality_preset=QualityPreset.QUALITY,
+            reconstruction=ReconstructionConfig(num_depths=200),
+        )
+
+        # User-specified value preserved
+        assert config.reconstruction.num_depths == 200
+
+        # Other preset values applied
+        assert config.reconstruction.window_size == 15
+        assert config.reconstruction.voxel_size == 0.0005
+        assert config.sparse_matching.max_keypoints == 4096
+
+    def test_preset_round_trip_yaml(self, tmp_path):
+        """Test that preset round-trips correctly through YAML."""
+        from aquamvs.config import PipelineConfig, QualityPreset
+
+        config_path = tmp_path / "config.yaml"
+
+        original = PipelineConfig(
+            calibration_path="/path/to/calibration.json",
+            output_dir="/path/to/output",
+            camera_video_map={"cam1": "/video1.mp4"},
+            quality_preset=QualityPreset.FAST,
+        )
+
+        # Save and load
+        original.to_yaml(config_path)
+        loaded = PipelineConfig.from_yaml(config_path)
+
+        # Preset should be preserved
+        assert loaded.quality_preset == QualityPreset.FAST
+
+        # Preset values should be applied
+        assert loaded.reconstruction.num_depths == 64
+        assert loaded.reconstruction.window_size == 7
+        assert loaded.sparse_matching.max_keypoints == 1024
+
+    def test_preset_from_string(self):
+        """Test that preset can be specified as string in construction."""
+        from aquamvs.config import PipelineConfig, QualityPreset
+
+        config = PipelineConfig(quality_preset="balanced")
+
+        assert config.quality_preset == QualityPreset.BALANCED
+        assert config.reconstruction.num_depths == 128
+
+    def test_no_preset_uses_defaults(self):
+        """Test that no preset uses default values."""
+        from aquamvs.config import PipelineConfig
+
+        config = PipelineConfig()
+
+        assert config.quality_preset is None
+        assert config.reconstruction.num_depths == 128  # Default value
+        assert config.reconstruction.window_size == 11  # Default value
+        assert config.reconstruction.depth_batch_size == 4  # Default value
+        assert config.sparse_matching.max_keypoints == 2048  # Default value
