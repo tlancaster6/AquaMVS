@@ -1,13 +1,13 @@
-# Contributing to AquaCal
+# Contributing to AquaMVS
 
-Thank you for your interest in contributing to AquaCal. This guide will help you get started with development.
+Thank you for your interest in contributing to AquaMVS. This guide will help you get started with development.
 
 ## Development Setup
 
 1. Clone the repository:
    ```bash
-   git clone https://github.com/tlancaster6/AquaCal.git
-   cd AquaCal
+   git clone https://github.com/tlancaster6/AquaMVS.git
+   cd AquaMVS
    ```
 
 2. Create and activate a virtual environment:
@@ -35,7 +35,7 @@ Thank you for your interest in contributing to AquaCal. This guide will help you
 - **Imports ordering**:
   1. Standard library imports
   2. Third-party imports (numpy, scipy, opencv, etc.)
-  3. Local imports (from aquacal)
+  3. Local imports (from aquamvs)
 
   Separate each group with a blank line.
 
@@ -55,7 +55,7 @@ python -m pytest tests/ -m "not slow"
 
 Run a single test file:
 ```bash
-python -m pytest tests/unit/test_camera.py -v
+python -m pytest tests/test_calibration.py -v
 ```
 
 ## Submitting Changes
@@ -96,7 +96,7 @@ This project uses [Conventional Commits](https://www.conventionalcommits.org/) f
 
 ## Deprecation Policy
 
-When deprecating functionality in AquaCal:
+When deprecating functionality in AquaMVS:
 
 1. **Add a deprecation warning** using `warnings.warn()` with `DeprecationWarning`:
    ```python
