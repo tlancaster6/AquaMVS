@@ -342,6 +342,77 @@ def run_command(
     run_pipeline(config)
 
 
+def profile_command(
+    config_path: Path,
+    frame: int = 0,
+    output_dir: Path | None = None,
+) -> None:
+    """Profile pipeline performance and identify bottlenecks.
+
+    Args:
+        config_path: Path to the pipeline config YAML file.
+        frame: Frame index to profile (default: 0).
+        output_dir: Optional output directory for Chrome trace JSON.
+    """
+    # 1. Configure logging
+    logging.basicConfig(
+        level=logging.INFO,
+        format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
+        datefmt="%H:%M:%S",
+    )
+
+    # Silence noisy third-party loggers
+    for name in ("matplotlib", "PIL", "open3d"):
+        logging.getLogger(name).setLevel(logging.WARNING)
+
+    # 2. Load config
+    if not config_path.exists():
+        print(f"Error: Config file not found: {config_path}", file=sys.stderr)
+        sys.exit(1)
+
+    try:
+        config = PipelineConfig.from_yaml(config_path)
+    except ValueError as e:
+        # Pydantic validation errors are already formatted
+        print(f"Configuration validation failed:\n{e}", file=sys.stderr)
+        sys.exit(1)
+    except Exception as e:
+        print(f"Error: Failed to load config: {e}", file=sys.stderr)
+        sys.exit(1)
+
+    # 3. Run profiler
+    from aquamvs.profiling import format_report, profile_pipeline
+
+    try:
+        print(f"\nProfiling frame {frame}...\n")
+        report = profile_pipeline(config, frame)
+
+        # 4. Print report
+        print(format_report(report))
+
+        # 5. Export Chrome trace if requested
+        if output_dir is not None:
+            output_dir.mkdir(parents=True, exist_ok=True)
+            trace_path = output_dir / "profile_trace.json"
+            # Note: profile_pipeline would need to return profiler instance
+            # for this to work. For now, this is a placeholder.
+            print(f"\nChrome trace export to {trace_path} (not yet implemented)\n")
+
+    except NotImplementedError as e:
+        print(f"Error: {e}", file=sys.stderr)
+        print("\nNote: profile_pipeline integration is pending.", file=sys.stderr)
+        print(
+            "Use PipelineProfiler directly in Python code for now.\n", file=sys.stderr
+        )
+        sys.exit(1)
+    except Exception as e:
+        print(f"Error: Profiling failed: {e}", file=sys.stderr)
+        import traceback
+
+        traceback.print_exc()
+        sys.exit(1)
+
+
 def benchmark_command(
     config_path: Path,
     compare: list[Path] | None = None,
@@ -650,6 +721,29 @@ def main() -> None:
         help="Frame index to export (default: 0)",
     )
 
+    # profile subcommand
+    profile_parser = subparsers.add_parser(
+        "profile",
+        help="Profile pipeline performance and identify bottlenecks",
+    )
+    profile_parser.add_argument(
+        "config",
+        type=Path,
+        help="Path to pipeline config YAML file",
+    )
+    profile_parser.add_argument(
+        "--frame",
+        type=int,
+        default=0,
+        help="Frame index to profile (default: 0)",
+    )
+    profile_parser.add_argument(
+        "--output-dir",
+        type=Path,
+        default=None,
+        help="Output directory for Chrome trace JSON (optional)",
+    )
+
     # benchmark subcommand
     benchmark_parser = subparsers.add_parser(
         "benchmark",
@@ -768,6 +862,12 @@ def main() -> None:
         export_refs_command(
             config_path=args.config,
             frame=args.frame,
+        )
+    elif args.command == "profile":
+        profile_command(
+            config_path=args.config,
+            frame=args.frame,
+            output_dir=args.output_dir,
         )
     elif args.command == "benchmark":
         benchmark_command(

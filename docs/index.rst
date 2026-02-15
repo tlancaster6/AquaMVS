@@ -16,6 +16,7 @@ a flat water surface, with Snell's law refraction modeling.
 
    tutorial/index
    cli_guide
+   benchmarks
 
 .. toctree::
    :maxdepth: 2
