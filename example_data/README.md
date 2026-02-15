@@ -13,7 +13,7 @@ The example dataset includes:
 
 The example dataset is available for download from:
 
-**[Coming soon: Zenodo or GitHub Releases URL]**
+**[https://github.com/tlancaster6/AquaMVS/releases/download/v0.1.0-example-data/aquamvs-example-dataset.zip](https://github.com/tlancaster6/AquaMVS/releases/download/v0.1.0-example-data/aquamvs-example-dataset.zip)**
 
 Download size: ~15 MB (13 PNG images + calibration data)
 

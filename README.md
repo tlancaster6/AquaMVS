@@ -67,8 +67,12 @@ Topics include:
 If you use AquaMVS in your research, please cite:
 
 ```
-Coming soon: Zenodo DOI
+Lancaster, T. (2026). AquaMVS: Multi-view stereo reconstruction with refractive geometry.
+GitHub: https://github.com/tlancaster6/AquaMVS
+Example dataset: https://github.com/tlancaster6/AquaMVS/releases/tag/v0.1.0-example-data
 ```
+
+A Zenodo DOI will be added in a future release.
 
 ## License
 
