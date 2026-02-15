@@ -4,6 +4,7 @@ import logging
 
 import numpy as np
 import torch
+from torch.profiler import record_function
 
 from ...calibration import undistort_image
 from ..context import PipelineContext
@@ -30,39 +31,40 @@ def run_undistortion_stage(
             - undistorted_tensors: Dict of undistorted BGR images as torch.Tensor.
             - camera_centers: Dict of camera positions in world frame, shape (3,) float64.
     """
-    config = ctx.config
+    with record_function("undistortion"):
+        config = ctx.config
 
-    # Filter out None images (cameras that failed to read)
-    images = {name: img for name, img in raw_images.items() if img is not None}
-    if not images:
-        logger.warning("Frame %d: no valid images, skipping", frame_idx)
-        return {}, {}, {}
+        # Filter out None images (cameras that failed to read)
+        images = {name: img for name, img in raw_images.items() if img is not None}
+        if not images:
+            logger.warning("Frame %d: no valid images, skipping", frame_idx)
+            return {}, {}, {}
 
-    # --- Stage 1: Undistort ---
-    logger.info("Frame %d: undistorting images", frame_idx)
-    undistorted = {}
-    for name, img in images.items():
-        if name in ctx.undistortion_maps:
-            undistorted[name] = undistort_image(img, ctx.undistortion_maps[name])
+        # --- Stage 1: Undistort ---
+        logger.info("Frame %d: undistorting images", frame_idx)
+        undistorted = {}
+        for name, img in images.items():
+            if name in ctx.undistortion_maps:
+                undistorted[name] = undistort_image(img, ctx.undistortion_maps[name])
 
-    # --- Stage 1b: Color normalization (if enabled) ---
-    if config.preprocessing.color_norm_enabled:
-        from ...coloring import normalize_colors
+        # --- Stage 1b: Color normalization (if enabled) ---
+        if config.preprocessing.color_norm_enabled:
+            from ...coloring import normalize_colors
 
-        logger.info("Frame %d: normalizing colors across cameras", frame_idx)
-        undistorted = normalize_colors(
-            undistorted, method=config.preprocessing.color_norm_method
-        )
+            logger.info("Frame %d: normalizing colors across cameras", frame_idx)
+            undistorted = normalize_colors(
+                undistorted, method=config.preprocessing.color_norm_method
+            )
 
-    # Convert to tensors for feature extraction
-    undistorted_tensors = {
-        name: torch.from_numpy(img) for name, img in undistorted.items()
-    }
+        # Convert to tensors for feature extraction
+        undistorted_tensors = {
+            name: torch.from_numpy(img) for name, img in undistorted.items()
+        }
 
-    # Compute camera centers once for coloring (used by sparse cloud and mesh coloring)
-    camera_centers = {
-        name: pos.cpu().numpy()
-        for name, pos in ctx.calibration.camera_positions().items()
-    }
+        # Compute camera centers once for coloring (used by sparse cloud and mesh coloring)
+        camera_centers = {
+            name: pos.cpu().numpy()
+            for name, pos in ctx.calibration.camera_positions().items()
+        }
 
-    return undistorted, undistorted_tensors, camera_centers
+        return undistorted, undistorted_tensors, camera_centers

@@ -115,28 +115,45 @@ class PipelineProfiler:
 def profile_pipeline(config: PipelineConfig, frame: int = 0) -> ProfileReport:
     """Convenience function to profile a single-frame pipeline run.
 
-    Note: This is a placeholder function. Full implementation would require
-    running the actual pipeline with profiler instrumentation. For now,
-    this function demonstrates the intended usage pattern.
-
     Args:
         config: Pipeline configuration.
         frame: Frame index to profile (default 0).
 
     Returns:
         ProfileReport with performance metrics.
-
-    Raises:
-        NotImplementedError: This is a placeholder for future integration.
     """
-    # Future implementation would:
-    # 1. Create PipelineProfiler
-    # 2. Run single-frame pipeline within profiler context
-    # 3. Wrap each pipeline stage with record_function labels
-    # 4. Return ProfileReport
-    #
-    # For now, raise NotImplementedError to indicate this is a stub.
-    raise NotImplementedError(
-        "profile_pipeline requires integration with pipeline.Pipeline class. "
-        "Use PipelineProfiler directly via context manager instead."
-    )
+    from aquacal.io.video import VideoSet
+
+    from ..io import ImageDirectorySet, detect_input_type
+    from ..pipeline.builder import build_pipeline_context
+    from ..pipeline.runner import process_frame
+
+    # CUDA sync before profiling
+    if torch.cuda.is_available():
+        torch.cuda.synchronize()
+
+    # Build pipeline context
+    ctx = build_pipeline_context(config)
+
+    # Detect input type and open appropriate reader
+    input_type = detect_input_type(config)
+
+    if input_type == "video":
+        video_set = VideoSet.from_config(config.camera_video_map)
+        with video_set:
+            raw_images = video_set.read_frame(frame)
+    else:  # image directory
+        image_set = ImageDirectorySet.from_config(config)
+        raw_images = image_set.read_frame(frame)
+
+    # Create profiler and run single frame
+    profiler = PipelineProfiler(output_dir=Path(config.output_dir))
+
+    with profiler:
+        process_frame(frame, raw_images, ctx)
+
+    # CUDA sync after profiling
+    if torch.cuda.is_available():
+        torch.cuda.synchronize()
+
+    return profiler.get_report()
