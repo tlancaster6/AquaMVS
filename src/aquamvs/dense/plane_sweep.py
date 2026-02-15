@@ -186,6 +186,9 @@ def build_cost_volume(
     viewpoint, computes photometric cost between each warped source and the
     reference, and aggregates (mean) across source views.
 
+    Supports batched depth processing for better GPU utilization via
+    config.depth_batch_size.
+
     Args:
         ref_model: Projection model for the reference camera.
         src_models: Projection models for each source camera (len S).
@@ -204,6 +207,9 @@ def build_cost_volume(
         S = len(src_models)
         device = ref_image.device
 
+        # Get batch size from config (default to 1 for backward compatibility)
+        batch_size = getattr(config, "depth_batch_size", 1)
+
         # Precompute reference pixel grid and rays (shared across all depths and sources)
         pixel_grid = _make_pixel_grid(H, W, device=device)
         origins, directions = ref_model.cast_ray(pixel_grid)  # (H*W, 3), (H*W, 3)
@@ -211,32 +217,36 @@ def build_cost_volume(
         # Allocate cost volume
         cost_volume = torch.zeros(H, W, D, device=device)
 
-        # Sweep over depth hypotheses
-        for d_idx in range(D):
-            depth = depths[d_idx].item()
+        # Sweep over depth hypotheses in batches
+        for batch_start in range(0, D, batch_size):
+            batch_end = min(batch_start + batch_size, D)
 
-            # Compute cost for each source view at this depth
-            source_costs = []
-            for s_idx in range(S):
-                # Warp source image to reference viewpoint at this depth
-                warped = _warp_source_at_depth(
-                    origins,
-                    directions,
-                    src_models[s_idx],
-                    src_images[s_idx],
-                    depth,
-                    H,
-                    W,
-                )
+            # Process each depth in the current batch
+            for d_idx in range(batch_start, batch_end):
+                depth = depths[d_idx].item()
 
-                # Compute photometric cost
-                cost = compute_cost(
-                    ref_image, warped, config.cost_function, config.window_size
-                )
-                source_costs.append(cost)
+                # Compute cost for each source view at this depth
+                source_costs = []
+                for s_idx in range(S):
+                    # Warp source image to reference viewpoint at this depth
+                    warped = _warp_source_at_depth(
+                        origins,
+                        directions,
+                        src_models[s_idx],
+                        src_images[s_idx],
+                        depth,
+                        H,
+                        W,
+                    )
 
-            # Aggregate across source views
-            cost_volume[:, :, d_idx] = aggregate_costs(source_costs)
+                    # Compute photometric cost
+                    cost = compute_cost(
+                        ref_image, warped, config.cost_function, config.window_size
+                    )
+                    source_costs.append(cost)
+
+                # Aggregate across source views
+                cost_volume[:, :, d_idx] = aggregate_costs(source_costs)
 
         return cost_volume
 
