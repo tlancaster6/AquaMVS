@@ -15,7 +15,7 @@ Decimal phases appear between their surrounding integers in numeric order.
 - [x] **Phase 1: Dependency Resolution and Packaging Foundations** - Resolve PyPI blockers, establish clean wheel, set up CI/CD
 - [x] **Phase 01.1: Last-Minute Feature Additions** - Temporal median, mesh export, outlier removal, consistency maps, image input
 - [x] **Phase 2: Configuration and API Cleanup** - Consolidate config, validate inputs, establish type hints and deprecation patterns
-- [ ] **Phase 3: Pipeline Decomposition and Modularization** - Refactor 995-line pipeline.py into modular package with protocols
+- [x] **Phase 3: Pipeline Decomposition and Modularization** - Refactor 995-line pipeline.py into modular package with protocols
 - [ ] **Phase 4: Documentation and Examples** - Sphinx docs, Jupyter tutorials, example datasets, ReadTheDocs hosting
 - [ ] **Phase 5: Performance and Optimization** - Benchmark suite, profiling, optimization based on measurements
 ## Phase Details
@@ -97,10 +97,14 @@ Plans:
   3. At least one Jupyter notebook tutorial demonstrates complete reconstruction workflow from videos to mesh
   4. Example dataset is available (bundled or downloadable) for users to test pipeline without preparing their own data
   5. Sphinx documentation is hosted on ReadTheDocs with auto-generated API reference from docstrings
-**Plans**: TBD
+**Plans:** 5 plans
 
 Plans:
-- TBD during planning
+- [ ] 04-01-PLAN.md — Sphinx infrastructure (Furo theme, ReadTheDocs config, installation guide)
+- [ ] 04-02-PLAN.md — README overhaul (visual-first layout, badges) + API reference pages
+- [ ] 04-03-PLAN.md — Theory/concepts section (refractive geometry, dense stereo, fusion)
+- [ ] 04-04-PLAN.md — Jupyter tutorial + CLI guide
+- [ ] 04-05-PLAN.md — Example dataset packaging, hero image, final build verification
 
 ### Phase 5: Performance and Optimization
 **Goal**: Performance bottlenecks identified and optimized based on measurements, with benchmarking infrastructure for tracking
