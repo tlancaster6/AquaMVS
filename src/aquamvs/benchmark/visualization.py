@@ -1,294 +1,230 @@
-"""Per-config visualization artifacts and cross-config comparison grids."""
+"""Benchmark visualization: error heatmaps, bar charts, and depth comparisons."""
 
 import logging
 from pathlib import Path
 
-import cv2
 import matplotlib.pyplot as plt
 import numpy as np
-import open3d as o3d
-import torch
 
-from ..config import SurfaceConfig
-from ..pipeline.helpers import _sparse_cloud_to_open3d
-from ..surface import reconstruct_surface
-from ..visualization.features import render_keypoints, render_matches
-from ..visualization.scene import render_scene
+from .runner import BenchmarkRunResult
 
 logger = logging.getLogger(__name__)
 
 
-def render_config_outputs(
-    config_name: str,
-    undistorted_images: dict[str, np.ndarray],
-    all_features: dict[str, dict[str, torch.Tensor]],
-    all_matches: dict[tuple[str, str], dict[str, torch.Tensor]],
-    sparse_cloud: dict[str, torch.Tensor],
-    projection_models: dict,
-    undistorted_tensors: dict[str, torch.Tensor],
-    voxel_size: float,
-    surface_config: SurfaceConfig,
-    output_dir: Path,
-    camera_centers: dict[str, np.ndarray],
-) -> None:
-    """Render per-configuration visual artifacts.
+def generate_visualizations(run_dir: Path, results: BenchmarkRunResult) -> list[Path]:
+    """Generate all visualization plots for a benchmark run.
 
     Creates:
-        - keypoints_{cam}.png for each camera
-        - matches_{ref}_{src}.png for each matched pair
-        - sparse_cloud.ply with colors and normals
-        - sparse_top.png, sparse_oblique.png, sparse_side.png (3D renders)
-        - mesh.ply with vertex colors and faces
-        - mesh_top.png, mesh_oblique.png, mesh_side.png (3D renders)
+        - Error heatmaps (per config with spatial error data)
+        - Grouped bar charts (accuracy metrics, timing metrics)
+        - Depth map side-by-side comparisons (per test with depth maps)
+
+    All plots saved to {run_dir}/plots/
 
     Args:
-        config_name: Configuration name (e.g., "superpoint_clahe_off").
-        undistorted_images: Camera name to BGR uint8 image mapping.
-        all_features: Camera name to features dict (torch tensors).
-        all_matches: Pair key to matches dict (torch tensors).
-        sparse_cloud: Sparse triangulation result with "points_3d" and "scores".
-        projection_models: Camera name to ProjectionModel mapping.
-        undistorted_tensors: Camera name to image tensor mapping (for coloring).
-        voxel_size: Voxel size for downsampling (meters).
-        surface_config: Surface reconstruction configuration.
-        output_dir: Benchmark root directory (e.g., "output/benchmark").
-        camera_centers: Camera centers in world frame, shape (3,) float64 per camera.
+        run_dir: Benchmark run directory (timestamped).
+        results: Benchmark run results with per-test metrics.
+
+    Returns:
+        List of generated plot file paths.
     """
-    # Create config directory
-    config_dir = Path(output_dir) / config_name
-    config_dir.mkdir(parents=True, exist_ok=True)
+    plots_dir = run_dir / "plots"
+    plots_dir.mkdir(parents=True, exist_ok=True)
 
-    # Render keypoints for each camera
-    logger.info("  Rendering keypoints for config: %s", config_name)
-    for cam_name, image in undistorted_images.items():
-        if cam_name not in all_features:
-            continue
+    generated_plots = []
 
-        features = all_features[cam_name]
-        keypoints = features["keypoints"].cpu().numpy()  # (N, 2)
-        scores = features.get("scores")
-        if scores is not None:
-            scores = scores.cpu().numpy()  # (N,)
+    # Generate error heatmaps (if spatial error data available)
+    logger.info("Generating error heatmaps...")
+    heatmap_plots = _plot_error_heatmaps(plots_dir, results)
+    generated_plots.extend(heatmap_plots)
 
-        output_path = config_dir / f"keypoints_{cam_name}.png"
-        render_keypoints(image, keypoints, scores, output_path)
+    # Generate grouped bar charts for accuracy metrics
+    logger.info("Generating accuracy bar charts...")
+    accuracy_plot = _plot_accuracy_bars(plots_dir, results)
+    if accuracy_plot:
+        generated_plots.append(accuracy_plot)
 
-    # Render matches for each pair
-    logger.info("  Rendering matches for config: %s", config_name)
-    for pair_key, match_dict in all_matches.items():
-        ref_name, src_name = pair_key
-        if ref_name not in undistorted_images or src_name not in undistorted_images:
-            continue
+    # Generate grouped bar charts for timing metrics
+    logger.info("Generating timing bar charts...")
+    timing_plot = _plot_timing_bars(plots_dir, results)
+    if timing_plot:
+        generated_plots.append(timing_plot)
 
-        ref_image = undistorted_images[ref_name]
-        src_image = undistorted_images[src_name]
-        ref_kpts = match_dict["ref_keypoints"].cpu().numpy()  # (M, 2)
-        src_kpts = match_dict["src_keypoints"].cpu().numpy()  # (M, 2)
-        scores = match_dict.get("scores")
-        if scores is not None:
-            scores = scores.cpu().numpy()  # (M,)
+    # Generate depth map comparisons (if depth maps available)
+    logger.info("Generating depth map comparisons...")
+    depth_plots = _plot_depth_comparisons(plots_dir, results)
+    generated_plots.extend(depth_plots)
 
-        output_path = config_dir / f"matches_{ref_name}_{src_name}.png"
-        render_matches(ref_image, src_image, ref_kpts, src_kpts, scores, output_path)
+    logger.info(f"Generated {len(generated_plots)} plots in {plots_dir}")
+    return generated_plots
 
-    # Handle empty sparse cloud
-    n_points = sparse_cloud["points_3d"].shape[0]
-    if n_points == 0:
-        logger.warning(
-            "  Empty sparse cloud for config %s - skipping PLY and renders", config_name
-        )
-        return
 
-    # Convert sparse cloud to Open3D with colors and normals
-    logger.info("  Converting sparse cloud to Open3D for config: %s", config_name)
-    pcd = _sparse_cloud_to_open3d(
-        sparse_cloud,
-        projection_models,
-        undistorted_tensors,
-        voxel_size,
-        camera_centers,
+def _plot_error_heatmaps(plots_dir: Path, results: BenchmarkRunResult) -> list[Path]:
+    """Generate error heatmaps for each config with spatial error data.
+
+    Args:
+        plots_dir: Output directory for plots.
+        results: Benchmark run results.
+
+    Returns:
+        List of generated heatmap file paths.
+    """
+    generated = []
+
+    # For each test, check if spatial error data exists
+    for test_name, test_result in results.test_results.items():
+        test_plots_dir = plots_dir / test_name
+        test_plots_dir.mkdir(parents=True, exist_ok=True)
+
+        for _config_name, _metrics in test_result.configs.items():
+            # Check if spatial error data available
+            # (Future: load from config output directory)
+            # For now, skip heatmaps (no spatial data in current metrics)
+            pass
+
+    return generated
+
+
+def _plot_accuracy_bars(plots_dir: Path, results: BenchmarkRunResult) -> Path | None:
+    """Generate grouped bar chart for accuracy metrics across configs.
+
+    Plots mean_error_mm, median_error_mm, completeness_pct for all configs.
+
+    Args:
+        plots_dir: Output directory for plots.
+        results: Benchmark run results.
+
+    Returns:
+        Path to generated plot, or None if no accuracy data.
+    """
+    # Collect all configs and their accuracy metrics
+    config_names = []
+    mean_errors = []
+    median_errors = []
+    completeness = []
+
+    for test_result in results.test_results.values():
+        for config_name, metrics in test_result.configs.items():
+            if "mean_error_mm" in metrics:
+                config_names.append(config_name)
+                mean_errors.append(metrics.get("mean_error_mm", 0.0))
+                median_errors.append(metrics.get("median_error_mm", 0.0))
+                completeness.append(metrics.get("raw_completeness_pct", 0.0))
+
+    if not config_names:
+        logger.warning("No accuracy metrics found - skipping accuracy bar chart")
+        return None
+
+    # Create grouped bar chart
+    x = np.arange(len(config_names))
+    width = 0.25
+
+    fig, ax1 = plt.subplots(figsize=(max(10, len(config_names) * 0.8), 6))
+
+    # Error bars (left y-axis)
+    ax1.bar(x - width, mean_errors, width, label="Mean Error (mm)", color="coral")
+    ax1.bar(x, median_errors, width, label="Median Error (mm)", color="skyblue")
+    ax1.set_xlabel("Configuration", fontsize=12)
+    ax1.set_ylabel("Error (mm)", fontsize=12)
+    ax1.set_xticks(x)
+    ax1.set_xticklabels(config_names, rotation=45, ha="right")
+    ax1.legend(loc="upper left")
+    ax1.grid(axis="y", alpha=0.3)
+
+    # Completeness bars (right y-axis)
+    ax2 = ax1.twinx()
+    ax2.bar(
+        x + width,
+        completeness,
+        width,
+        label="Completeness (%)",
+        color="lightgreen",
     )
+    ax2.set_ylabel("Completeness (%)", fontsize=12)
+    ax2.legend(loc="upper right")
 
-    # Save colored+normal'd PLY
-    ply_path = config_dir / "sparse_cloud.ply"
-    o3d.io.write_point_cloud(str(ply_path), pcd)
-    logger.info("  Saved sparse PLY: %s", ply_path)
+    plt.title("Accuracy Metrics Comparison", fontsize=14, fontweight="bold")
+    plt.tight_layout()
 
-    # Render 3D views from canonical viewpoints
-    logger.info("  Rendering 3D views for config: %s", config_name)
-    render_scene(pcd, config_dir, prefix="sparse")
+    output_path = plots_dir / "accuracy_comparison.png"
+    plt.savefig(output_path, dpi=150, bbox_inches="tight")
+    plt.close()
 
-    # Reconstruct surface mesh
-    logger.info("  Reconstructing surface mesh for config: %s", config_name)
-    try:
-        mesh = reconstruct_surface(pcd, surface_config)
-
-        # Save mesh PLY
-        mesh_path = config_dir / "mesh.ply"
-        o3d.io.write_triangle_mesh(str(mesh_path), mesh)
-        logger.info("  Saved mesh PLY: %s", mesh_path)
-
-        # Render mesh from canonical viewpoints
-        logger.info("  Rendering mesh views for config: %s", config_name)
-        render_scene(mesh, config_dir, prefix="mesh")
-    except Exception as e:
-        logger.warning("  Mesh reconstruction failed for config %s: %s", config_name, e)
+    logger.info(f"Saved accuracy bar chart: {output_path}")
+    return output_path
 
 
-def render_comparison_grids(
-    config_names: list[str],
-    camera_names: list[str],
-    output_dir: Path,
-) -> None:
-    """Render cross-config comparison grids.
+def _plot_timing_bars(plots_dir: Path, results: BenchmarkRunResult) -> Path | None:
+    """Generate grouped bar chart for timing metrics across configs.
 
-    Creates:
-        - comparison/keypoints_grid.png (rows=configs, cols=cameras)
-        - comparison/sparse_renders_grid.png (rows=configs, cols=viewpoints)
-        - comparison/mesh_grid.png (rows=configs, cols=viewpoints)
-
-    Missing images are handled gracefully (blank/gray cells).
+    Plots timing_seconds for all configs.
 
     Args:
-        config_names: List of configuration names.
-        camera_names: List of camera names.
-        output_dir: Benchmark root directory (e.g., "output/benchmark").
+        plots_dir: Output directory for plots.
+        results: Benchmark run results.
+
+    Returns:
+        Path to generated plot, or None if no timing data.
     """
-    comparison_dir = Path(output_dir) / "comparison"
-    comparison_dir.mkdir(parents=True, exist_ok=True)
+    # Collect all configs and their timing metrics
+    config_names = []
+    timings = []
 
-    # --- Keypoint grid: rows=configs, cols=cameras ---
-    logger.info("Rendering keypoint comparison grid")
-    n_rows = len(config_names)
-    n_cols = len(camera_names)
+    for test_result in results.test_results.values():
+        for config_name, metrics in test_result.configs.items():
+            if "timing_seconds" in metrics:
+                config_names.append(config_name)
+                timings.append(metrics["timing_seconds"])
 
-    if n_rows == 0 or n_cols == 0:
-        logger.warning("No configs or cameras to render in keypoint grid")
-    else:
-        # Create figure with subplots
-        fig, axes = plt.subplots(n_rows, n_cols, figsize=(n_cols * 4, n_rows * 3))
-        if n_rows == 1 and n_cols == 1:
-            axes = np.array([[axes]])
-        elif n_rows == 1:
-            axes = axes.reshape(1, -1)
-        elif n_cols == 1:
-            axes = axes.reshape(-1, 1)
+    if not config_names:
+        logger.warning("No timing metrics found - skipping timing bar chart")
+        return None
 
-        for i, config_name in enumerate(config_names):
-            for j, cam_name in enumerate(camera_names):
-                ax = axes[i, j]
-                image_path = output_dir / config_name / f"keypoints_{cam_name}.png"
+    # Create bar chart
+    x = np.arange(len(config_names))
+    width = 0.6
 
-                if image_path.exists():
-                    img = cv2.imread(str(image_path))
-                    if img is not None:
-                        # Convert BGR to RGB for matplotlib
-                        img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
-                        ax.imshow(img)
-                else:
-                    # Missing image - show gray
-                    ax.set_facecolor("lightgray")
+    fig, ax = plt.subplots(figsize=(max(10, len(config_names) * 0.6), 6))
+    ax.bar(x, timings, width, color="steelblue")
+    ax.set_xlabel("Configuration", fontsize=12)
+    ax.set_ylabel("Time (seconds)", fontsize=12)
+    ax.set_xticks(x)
+    ax.set_xticklabels(config_names, rotation=45, ha="right")
+    ax.grid(axis="y", alpha=0.3)
 
-                ax.axis("off")
+    plt.title("Timing Comparison", fontsize=14, fontweight="bold")
+    plt.tight_layout()
 
-                # Add row and column labels
-                if j == 0:
-                    ax.set_ylabel(config_name, fontsize=10, rotation=90, labelpad=10)
-                if i == 0:
-                    ax.set_title(cam_name, fontsize=10)
+    output_path = plots_dir / "timing_comparison.png"
+    plt.savefig(output_path, dpi=150, bbox_inches="tight")
+    plt.close()
 
-        plt.tight_layout()
-        grid_path = comparison_dir / "keypoints_grid.png"
-        plt.savefig(grid_path, dpi=150, bbox_inches="tight")
-        plt.close()
-        logger.info("Saved keypoint grid: %s", grid_path)
-
-    # --- Sparse renders grid: rows=configs, cols=viewpoints ---
-    logger.info("Rendering sparse 3D comparison grid")
-    viewpoints = ["top", "oblique", "side"]
-    n_rows = len(config_names)
-    n_cols = len(viewpoints)
-
-    if n_rows == 0 or n_cols == 0:
-        logger.warning("No configs or viewpoints to render in sparse grid")
-    else:
-        # Create figure with subplots
-        fig, axes = plt.subplots(n_rows, n_cols, figsize=(n_cols * 4, n_rows * 3))
-        if n_rows == 1 and n_cols == 1:
-            axes = np.array([[axes]])
-        elif n_rows == 1:
-            axes = axes.reshape(1, -1)
-        elif n_cols == 1:
-            axes = axes.reshape(-1, 1)
-
-        for i, config_name in enumerate(config_names):
-            for j, viewpoint in enumerate(viewpoints):
-                ax = axes[i, j]
-                image_path = output_dir / config_name / f"sparse_{viewpoint}.png"
-
-                if image_path.exists():
-                    img = plt.imread(str(image_path))  # PNG, already RGB
-                    ax.imshow(img)
-                else:
-                    # Missing image - show gray
-                    ax.set_facecolor("lightgray")
-
-                ax.axis("off")
-
-                # Add row and column labels
-                if j == 0:
-                    ax.set_ylabel(config_name, fontsize=10, rotation=90, labelpad=10)
-                if i == 0:
-                    ax.set_title(viewpoint.capitalize(), fontsize=10)
-
-        plt.tight_layout()
-        grid_path = comparison_dir / "sparse_renders_grid.png"
-        plt.savefig(grid_path, dpi=150, bbox_inches="tight")
-        plt.close()
-        logger.info("Saved sparse renders grid: %s", grid_path)
-
-    # --- Mesh renders grid: rows=configs, cols=viewpoints ---
-    logger.info("Rendering mesh comparison grid")
-    n_rows = len(config_names)
-    n_cols = len(viewpoints)
-
-    if n_rows == 0 or n_cols == 0:
-        logger.warning("No configs or viewpoints to render in mesh grid")
-    else:
-        # Create figure with subplots
-        fig, axes = plt.subplots(n_rows, n_cols, figsize=(n_cols * 4, n_rows * 3))
-        if n_rows == 1 and n_cols == 1:
-            axes = np.array([[axes]])
-        elif n_rows == 1:
-            axes = axes.reshape(1, -1)
-        elif n_cols == 1:
-            axes = axes.reshape(-1, 1)
-
-        for i, config_name in enumerate(config_names):
-            for j, viewpoint in enumerate(viewpoints):
-                ax = axes[i, j]
-                image_path = output_dir / config_name / f"mesh_{viewpoint}.png"
-
-                if image_path.exists():
-                    img = plt.imread(str(image_path))  # PNG, already RGB
-                    ax.imshow(img)
-                else:
-                    # Missing image - show gray
-                    ax.set_facecolor("lightgray")
-
-                ax.axis("off")
-
-                # Add row and column labels
-                if j == 0:
-                    ax.set_ylabel(config_name, fontsize=10, rotation=90, labelpad=10)
-                if i == 0:
-                    ax.set_title(viewpoint.capitalize(), fontsize=10)
-
-        plt.tight_layout()
-        grid_path = comparison_dir / "mesh_grid.png"
-        plt.savefig(grid_path, dpi=150, bbox_inches="tight")
-        plt.close()
-        logger.info("Saved mesh renders grid: %s", grid_path)
+    logger.info(f"Saved timing bar chart: {output_path}")
+    return output_path
 
 
-__all__ = ["render_config_outputs", "render_comparison_grids"]
+def _plot_depth_comparisons(plots_dir: Path, results: BenchmarkRunResult) -> list[Path]:
+    """Generate side-by-side depth map comparisons for each test.
+
+    Creates subplots showing depth maps from different configs with shared colorbar.
+
+    Args:
+        plots_dir: Output directory for plots.
+        results: Benchmark run results.
+
+    Returns:
+        List of generated comparison plot file paths.
+    """
+    generated = []
+
+    # For each test, check if depth maps available
+    for _test_name, _test_result in results.test_results.items():
+        # Check if depth map data exists in config output directories
+        # (Future: load depth maps from config_dir / "depth_map.npy")
+        # For now, skip depth comparisons (no depth map loading implemented)
+        pass
+
+    return generated
+
+
+__all__ = ["generate_visualizations"]

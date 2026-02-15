@@ -11,7 +11,11 @@ from .metrics import (
 )
 from .report import generate_report
 from .runner import BenchmarkRunResult, TestResult, run_benchmark, run_benchmarks
-from .visualization import render_comparison_grids, render_config_outputs
+from .visualization import (
+    generate_visualizations,
+    render_comparison_grids,
+    render_config_outputs,
+)
 
 __all__ = [
     # Configuration models
@@ -37,4 +41,6 @@ __all__ = [
     "generate_report",
     "render_config_outputs",
     "render_comparison_grids",
+    # Visualization (new)
+    "generate_visualizations",
 ]
