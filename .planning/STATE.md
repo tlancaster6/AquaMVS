@@ -10,18 +10,18 @@ See: .planning/PROJECT.md (updated 2026-02-14)
 ## Current Position
 
 Phase: 05 (Performance and Optimization)
-Plan: 6 of 6 plans complete
-Status: Complete
-Last activity: 2026-02-15 - Completed 05-06-PLAN.md (CI benchmarks, profiling CLI, and documentation)
+Plan: 7 of 8 plans complete
+Status: In Progress
+Last activity: 2026-02-15 - Completed 05-07-PLAN.md (Benchmark and profiling wiring fixes)
 
-Progress: [████████████] 100% (6 of 6 Phase 05 plans complete)
+Progress: [███████████░] 87.5% (7 of 8 Phase 05 plans complete)
 
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 19
-- Average duration: 5.8 min
-- Total execution time: 1.85 hours
+- Total plans completed: 20
+- Average duration: 5.5 min
+- Total execution time: 1.93 hours
 
 **By Phase:**
 
@@ -32,11 +32,11 @@ Progress: [████████████] 100% (6 of 6 Phase 05 plans com
 | 02    | 2     | 16min | 8min     |
 | 03    | 3     | 16min | 5.3min   |
 | 04    | 7     | 24min | 3.4min   |
-| 05    | 6     | 34min | 5.7min   |
+| 05    | 7     | 37min | 5.3min   |
 
 **Recent Trend:**
-- Last 5 plans: 05-01 (7min), 05-03 (12min), 05-02 (4min), 05-05 (5min), 05-06 (5min)
-- Trend: Documentation tasks fast (3-7min), infrastructure tasks moderate (4-12min)
+- Last 5 plans: 05-03 (12min), 05-02 (4min), 05-05 (5min), 05-06 (5min), 05-07 (3min)
+- Trend: Gap closure tasks very fast (3min), infrastructure tasks moderate (4-12min)
 
 | Plan | Duration | Tasks | Files |
 |------|----------|-------|-------|
@@ -56,6 +56,7 @@ Progress: [████████████] 100% (6 of 6 Phase 05 plans com
 | Phase 05 P04 | 12 | 2 tasks | 4 files |
 | Phase 05 P05 | 5 | 2 tasks | 4 files |
 | Phase 05 P06 | 5 | 2 tasks | 7 files |
+| Phase 05 P07 | 3 | 2 tasks | 5 files |
 
 ## Accumulated Context
 
@@ -175,6 +176,11 @@ Recent decisions affecting current work:
 - [Phase 05-02]: CLAHE test compares SuperPoint, ALIKED, DISK, and RoMa in sparse mode only
 - [Phase 05-02]: Old benchmark command fully replaced (no backward compatibility concern per user decision)
 
+**Phase 05 Plan 07 (2026-02-15):**
+- Removed generate_ground_truth_depth_maps calls from synthetic loaders (incompatible signatures - requires ProjectionModel instances)
+- Store analytic_fn on DatasetContext instead of pre-computed depth maps for synthetic scenes
+- Load point clouds from fused_points.ply or sparse_cloud.ply via glob pattern for flexibility
+
 ### Roadmap Evolution
 
 - Phase 1.1 inserted after Phase 1: Last-Minute Feature Additions (URGENT)
@@ -207,5 +213,5 @@ approved
 ## Session Continuity
 
 Last session: 2026-02-15 (plan execution)
-Stopped at: Completed 05-06-PLAN.md (CI benchmarks, profiling CLI, and documentation) - Phase 05 Complete
+Stopped at: Completed 05-07-PLAN.md (Benchmark and profiling wiring fixes)
 Resume file: None
