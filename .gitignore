@@ -214,3 +214,10 @@ CLAUDE.md
 # Example data files (keep README only)
 example_data/*
 !example_data/README.md
+
+# Benchmark results (local only, not committed)
+.benchmarks/
+
+# Profiling artifacts
+*.prof
+*.chrome_trace.json

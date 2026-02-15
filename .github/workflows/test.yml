@@ -48,6 +48,10 @@ jobs:
           token: ${{ secrets.CODECOV_TOKEN }}
           fail_ci_if_error: false
 
+      - name: Run benchmark tests
+        run: pytest tests/benchmarks/ -m benchmark --timeout=120 -v
+        continue-on-error: true
+
   pre-commit:
     runs-on: ubuntu-latest
 
