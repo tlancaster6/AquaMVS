@@ -1,6 +1,7 @@
 """Benchmark suite for comparing feature extraction configurations and reconstruction accuracy."""
 
 from .config import BenchmarkConfig, BenchmarkDataset, BenchmarkTests
+from .datasets import DatasetContext, load_charuco_ground_truth, load_dataset
 from .metrics import (
     BenchmarkResults,
     ConfigResult,
@@ -9,7 +10,7 @@ from .metrics import (
     compute_plane_fit_metrics,
 )
 from .report import generate_report
-from .runner import run_benchmark
+from .runner import BenchmarkRunResult, TestResult, run_benchmark, run_benchmarks
 from .visualization import render_comparison_grids, render_config_outputs
 
 __all__ = [
@@ -17,10 +18,18 @@ __all__ = [
     "BenchmarkConfig",
     "BenchmarkDataset",
     "BenchmarkTests",
+    # Dataset loaders
+    "DatasetContext",
+    "load_dataset",
+    "load_charuco_ground_truth",
     # Accuracy metrics (new)
     "compute_accuracy_metrics",
     "compute_charuco_metrics",
     "compute_plane_fit_metrics",
+    # Benchmark orchestration (new)
+    "run_benchmarks",
+    "BenchmarkRunResult",
+    "TestResult",
     # Feature extraction benchmark (legacy)
     "run_benchmark",
     "ConfigResult",
