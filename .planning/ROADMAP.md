@@ -117,10 +117,15 @@ Plans:
   2. Runtime profiling identifies and documents the top 3 performance bottlenecks with specific measurements
   3. At least one optimization targeting a measured bottleneck (RoMa or plane sweep) is implemented and verified
   4. Benchmark suite (asv or pytest-benchmark) tracks performance across code changes to detect regressions
-**Plans**: TBD
+**Plans:** 6 plans
 
 Plans:
-- TBD during planning
+- [ ] 05-01-PLAN.md — Benchmark config models, accuracy metrics, and synthetic scene generation
+- [ ] 05-02-PLAN.md — Benchmark runner and CLI replacement
+- [ ] 05-03-PLAN.md — Profiling infrastructure (torch.profiler wrapper, stage instrumentation)
+- [ ] 05-04-PLAN.md — Quality presets and plane sweep optimization
+- [ ] 05-05-PLAN.md — Visualization, comparison diff, and regression detection
+- [ ] 05-06-PLAN.md — CI benchmarks, profiling CLI, and Sphinx docs page
 
 ## Progress
 
@@ -133,5 +138,5 @@ Phases execute in numeric order: 1 -> 2 -> 3 -> 4 -> 5
 | 01.1. Last-Minute Feature Additions | 2/2 | Complete | 2026-02-14 |
 | 2. Configuration and API Cleanup | 2/2 | Complete | 2026-02-14 |
 | 3. Pipeline Decomposition and Modularization | 3/3 | Complete | 2026-02-15 |
-| 4. Documentation and Examples | 5/7 | Gap closure | - |
-| 5. Performance and Optimization | 0/TBD | Not started | - |
+| 4. Documentation and Examples | 7/7 | Complete | - |
+| 5. Performance and Optimization | 0/6 | Planning complete | - |
