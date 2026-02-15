@@ -6,7 +6,7 @@ import numpy as np
 import pytest
 import torch
 
-from aquamvs.config import DenseMatchingConfig, FusionConfig
+from aquamvs.config import DenseMatchingConfig, ReconstructionConfig
 from aquamvs.dense.roma_depth import (
     aggregate_pairwise_depths,
     roma_warps_to_depth_maps,
@@ -347,7 +347,7 @@ class TestRomaWarpsToDepthMaps:
         ring_cameras = ["cam0"]
 
         dense_matching_config = DenseMatchingConfig(certainty_threshold=0.5)
-        fusion_config = FusionConfig(
+        reconstruction_config = ReconstructionConfig(
             depth_tolerance=0.01,
             min_consistent_views=2,
         )
@@ -358,7 +358,7 @@ class TestRomaWarpsToDepthMaps:
             all_warps=all_warps,
             projection_models=projection_models,
             dense_matching_config=dense_matching_config,
-            fusion_config=fusion_config,
+            reconstruction_config=reconstruction_config,
             image_size=(100, 100),
             masks=None,
         )
@@ -411,7 +411,7 @@ class TestRomaWarpsToDepthMaps:
         masks = {"cam0": mask}
 
         dense_matching_config = DenseMatchingConfig(certainty_threshold=0.5)
-        fusion_config = FusionConfig(
+        reconstruction_config = ReconstructionConfig(
             depth_tolerance=0.01,
             min_consistent_views=1,
         )
@@ -422,7 +422,7 @@ class TestRomaWarpsToDepthMaps:
             all_warps=all_warps,
             projection_models=projection_models,
             dense_matching_config=dense_matching_config,
-            fusion_config=fusion_config,
+            reconstruction_config=reconstruction_config,
             image_size=(100, 100),
             masks=masks,
         )
@@ -439,7 +439,7 @@ class TestRomaWarpsToDepthMaps:
         ring_cameras = ["cam0"]
 
         dense_matching_config = DenseMatchingConfig()
-        fusion_config = FusionConfig()
+        reconstruction_config = ReconstructionConfig()
 
         depth_maps, confidence_maps = roma_warps_to_depth_maps(
             ring_cameras=ring_cameras,
@@ -447,7 +447,7 @@ class TestRomaWarpsToDepthMaps:
             all_warps=all_warps,
             projection_models=projection_models,
             dense_matching_config=dense_matching_config,
-            fusion_config=fusion_config,
+            reconstruction_config=reconstruction_config,
             image_size=(100, 100),
             masks=None,
         )

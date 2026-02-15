@@ -7,8 +7,9 @@ import numpy as np
 import pytest
 import torch
 from lightglue import ALIKED, DISK, SuperPoint
+from pydantic import ValidationError
 
-from aquamvs.config import FeatureExtractionConfig
+from aquamvs.config import SparseMatchingConfig
 from aquamvs.features import (
     create_extractor,
     extract_features,
@@ -47,7 +48,7 @@ class TestImageConversion:
 
     def test_grayscale_uint8_tensor(self):
         """Test conversion from grayscale uint8 tensor."""
-        config = FeatureExtractionConfig()
+        config = SparseMatchingConfig()
         # Create a synthetic extractor mock for testing conversion only
         # We'll just verify the conversion doesn't crash
         image = torch.randint(0, 256, (100, 100), dtype=torch.uint8)
@@ -68,7 +69,7 @@ class TestImageConversion:
 
     def test_bgr_uint8_tensor(self):
         """Test conversion from BGR uint8 tensor."""
-        config = FeatureExtractionConfig()
+        config = SparseMatchingConfig()
         image = torch.randint(0, 256, (100, 100, 3), dtype=torch.uint8)
 
         try:
@@ -81,7 +82,7 @@ class TestImageConversion:
 
     def test_grayscale_float32_tensor(self):
         """Test conversion from grayscale float32 tensor."""
-        config = FeatureExtractionConfig()
+        config = SparseMatchingConfig()
         image = torch.rand(100, 100, dtype=torch.float32)
 
         try:
@@ -94,7 +95,7 @@ class TestImageConversion:
 
     def test_numpy_uint8_array(self):
         """Test conversion from numpy uint8 array."""
-        config = FeatureExtractionConfig()
+        config = SparseMatchingConfig()
         image = np.random.randint(0, 256, (100, 100, 3), dtype=np.uint8)
 
         try:
@@ -107,7 +108,7 @@ class TestImageConversion:
 
     def test_invalid_shape_raises(self):
         """Test that invalid image shapes raise ValueError."""
-        config = FeatureExtractionConfig()
+        config = SparseMatchingConfig()
         # 4D tensor is invalid
         image = torch.rand(1, 100, 100, 3)
 
@@ -163,27 +164,26 @@ class TestCreateExtractor:
 
     def test_create_extractor_superpoint(self):
         """Test that create_extractor returns SuperPoint instance."""
-        config = FeatureExtractionConfig(extractor_type="superpoint")
+        config = SparseMatchingConfig(extractor_type="superpoint")
         extractor = create_extractor(config, device="cpu")
         assert isinstance(extractor, SuperPoint)
 
     def test_create_extractor_aliked(self):
         """Test that create_extractor returns ALIKED instance."""
-        config = FeatureExtractionConfig(extractor_type="aliked")
+        config = SparseMatchingConfig(extractor_type="aliked")
         extractor = create_extractor(config, device="cpu")
         assert isinstance(extractor, ALIKED)
 
     def test_create_extractor_disk(self):
         """Test that create_extractor returns DISK instance."""
-        config = FeatureExtractionConfig(extractor_type="disk")
+        config = SparseMatchingConfig(extractor_type="disk")
         extractor = create_extractor(config, device="cpu")
         assert isinstance(extractor, DISK)
 
     def test_create_extractor_invalid(self):
-        """Test that create_extractor raises ValueError for invalid type."""
-        config = FeatureExtractionConfig(extractor_type="invalid")
-        with pytest.raises(ValueError, match="Unknown extractor_type"):
-            create_extractor(config, device="cpu")
+        """Test that create_extractor raises ValidationError for invalid type."""
+        with pytest.raises(ValidationError):
+            SparseMatchingConfig(extractor_type="invalid")
 
 
 @pytest.mark.slow
@@ -192,7 +192,7 @@ class TestExtractorOutputFormat:
 
     def test_extract_features_output_format_aliked(self, device):
         """Test ALIKED produces correct output format."""
-        config = FeatureExtractionConfig(extractor_type="aliked")
+        config = SparseMatchingConfig(extractor_type="aliked")
         image = torch.randint(0, 256, (480, 640, 3), dtype=torch.uint8)
 
         result = extract_features(image, config, device=str(device))
@@ -214,7 +214,7 @@ class TestExtractorOutputFormat:
 
     def test_extract_features_output_format_disk(self, device):
         """Test DISK produces correct output format."""
-        config = FeatureExtractionConfig(extractor_type="disk")
+        config = SparseMatchingConfig(extractor_type="disk")
         image = torch.randint(0, 256, (480, 640, 3), dtype=torch.uint8)
 
         result = extract_features(image, config, device=str(device))
@@ -241,7 +241,7 @@ class TestSuperPointExtraction:
 
     def test_output_structure(self, device):
         """Test that extract_features returns correct structure."""
-        config = FeatureExtractionConfig()
+        config = SparseMatchingConfig()
         image = torch.randint(0, 256, (480, 640, 3), dtype=torch.uint8)
 
         result = extract_features(image, config, device=str(device))
@@ -267,7 +267,7 @@ class TestSuperPointExtraction:
     def test_max_keypoints_respected(self, device):
         """Test that max_keypoints config is respected."""
         max_kp = 512
-        config = FeatureExtractionConfig(max_keypoints=max_kp)
+        config = SparseMatchingConfig(max_keypoints=max_kp)
         image = torch.randint(0, 256, (480, 640, 3), dtype=torch.uint8)
 
         result = extract_features(image, config, device=str(device))
@@ -277,7 +277,7 @@ class TestSuperPointExtraction:
 
     def test_extractor_reuse(self, device):
         """Test that providing extractor reuses the same model."""
-        config = FeatureExtractionConfig()
+        config = SparseMatchingConfig()
         extractor = create_extractor(config, device=str(device))
 
         # Use structured images that will produce features
@@ -298,7 +298,7 @@ class TestSuperPointExtraction:
 
     def test_batch_extraction(self, device):
         """Test batch extraction produces same results as individual extraction."""
-        config = FeatureExtractionConfig()
+        config = SparseMatchingConfig()
 
         # Create structured test images with different patterns
         images = {
@@ -333,8 +333,8 @@ class TestSuperPointExtraction:
     def test_detection_threshold(self, device):
         """Test that detection threshold affects number of features."""
         # Lower threshold should give more features
-        config_low = FeatureExtractionConfig(detection_threshold=0.001)
-        config_high = FeatureExtractionConfig(detection_threshold=0.01)
+        config_low = SparseMatchingConfig(detection_threshold=0.001)
+        config_high = SparseMatchingConfig(detection_threshold=0.01)
 
         image = create_checkerboard_image(480, 640, 40)
 
@@ -352,7 +352,7 @@ class TestSuperPointExtraction:
 
     def test_grayscale_and_color_equivalent(self, device):
         """Test that grayscale and color versions of same image give same features."""
-        config = FeatureExtractionConfig()
+        config = SparseMatchingConfig()
 
         # Create structured grayscale image
         gray = create_checkerboard_image(480, 640, 40)
@@ -376,7 +376,7 @@ class TestIntegration:
 
     def test_extract_save_load_workflow(self, device):
         """Test complete workflow: extract, save, load."""
-        config = FeatureExtractionConfig()
+        config = SparseMatchingConfig()
         image = torch.randint(0, 256, (480, 640, 3), dtype=torch.uint8)
 
         # Extract features
@@ -398,7 +398,7 @@ class TestIntegration:
 
     def test_batch_extract_save_load(self, device):
         """Test batch extraction with save/load."""
-        config = FeatureExtractionConfig()
+        config = SparseMatchingConfig()
         images = {
             "cam1": torch.randint(0, 256, (480, 640, 3), dtype=torch.uint8),
             "cam2": torch.randint(0, 256, (480, 640, 3), dtype=torch.uint8),
@@ -502,7 +502,7 @@ class TestCLAHEIntegration:
 
     def test_clahe_disabled_passthrough(self, device):
         """Test that CLAHE disabled produces deterministic results."""
-        config = FeatureExtractionConfig(clahe_enabled=False)
+        config = SparseMatchingConfig(clahe_enabled=False)
         image = create_checkerboard_image(480, 640, 40)
 
         # Extract features twice with CLAHE disabled
@@ -521,8 +521,8 @@ class TestCLAHEIntegration:
         y_coords = torch.linspace(120, 130, height).unsqueeze(1).expand(height, width)
         image = y_coords.to(torch.uint8)
 
-        config_off = FeatureExtractionConfig(clahe_enabled=False)
-        config_on = FeatureExtractionConfig(clahe_enabled=True)
+        config_off = SparseMatchingConfig(clahe_enabled=False)
+        config_on = SparseMatchingConfig(clahe_enabled=True)
 
         result_off = extract_features(image, config_off, device=str(device))
         result_on = extract_features(image, config_on, device=str(device))
@@ -544,7 +544,7 @@ class TestCLAHEIntegration:
         image = create_checkerboard_image(480, 640, 40)
 
         for extractor_type in ["superpoint", "aliked", "disk"]:
-            config = FeatureExtractionConfig(
+            config = SparseMatchingConfig(
                 extractor_type=extractor_type,
                 clahe_enabled=True,
                 clahe_clip_limit=2.0,
@@ -565,8 +565,8 @@ class TestCLAHEIntegration:
         # Add subtle pattern
         image[::20, :] = 130
 
-        config_low = FeatureExtractionConfig(clahe_enabled=True, clahe_clip_limit=1.0)
-        config_high = FeatureExtractionConfig(clahe_enabled=True, clahe_clip_limit=4.0)
+        config_low = SparseMatchingConfig(clahe_enabled=True, clahe_clip_limit=1.0)
+        config_high = SparseMatchingConfig(clahe_enabled=True, clahe_clip_limit=4.0)
 
         result_low = extract_features(image, config_low, device="cpu")
         result_high = extract_features(image, config_high, device="cpu")

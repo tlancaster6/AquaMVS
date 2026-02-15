@@ -6,8 +6,9 @@ from pathlib import Path
 import numpy as np
 import open3d as o3d
 import pytest
+from pydantic import ValidationError
 
-from aquamvs.config import SurfaceConfig
+from aquamvs.config import ReconstructionConfig
 from aquamvs.surface import (
     load_mesh,
     reconstruct_bpa,
@@ -61,7 +62,7 @@ class TestPoissonReconstruction:
     def test_basic_reconstruction(self):
         """Test that Poisson reconstruction produces a valid mesh."""
         pcd = create_flat_plane_cloud(z=1.5, n_points=100)
-        config = SurfaceConfig(method="poisson", poisson_depth=6)
+        config = ReconstructionConfig(method="poisson", poisson_depth=6)
 
         mesh = reconstruct_poisson(pcd, config)
 
@@ -83,7 +84,7 @@ class TestPoissonReconstruction:
         pcd.points = o3d.utility.Vector3dVector(np.random.rand(100, 3))
         # No normals set
 
-        config = SurfaceConfig(method="poisson")
+        config = ReconstructionConfig(method="poisson")
 
         with pytest.raises(ValueError, match="normals"):
             reconstruct_poisson(pcd, config)
@@ -107,7 +108,7 @@ class TestPoissonReconstruction:
         pcd.normals = o3d.utility.Vector3dVector(normals)
         pcd.colors = o3d.utility.Vector3dVector(colors)
 
-        config = SurfaceConfig(method="poisson", poisson_depth=6)
+        config = ReconstructionConfig(method="poisson", poisson_depth=6)
         mesh = reconstruct_poisson(pcd, config)
 
         # Verify mesh exists and is non-trivial
@@ -126,7 +127,7 @@ class TestHeightfieldReconstruction:
     def test_known_surface(self):
         """Test reconstruction of a known sine surface."""
         pcd = create_sine_surface_cloud(n_points=300)
-        config = SurfaceConfig(method="heightfield", grid_resolution=0.01)
+        config = ReconstructionConfig(method="heightfield", grid_resolution=0.01)
 
         mesh = reconstruct_heightfield(pcd, config)
 
@@ -162,7 +163,7 @@ class TestHeightfieldReconstruction:
         pcd.points = o3d.utility.Vector3dVector(points)
         pcd.colors = o3d.utility.Vector3dVector(colors)
 
-        config = SurfaceConfig(method="heightfield", grid_resolution=0.01)
+        config = ReconstructionConfig(method="heightfield", grid_resolution=0.01)
         mesh = reconstruct_heightfield(pcd, config)
 
         # Verify mesh has colors
@@ -190,7 +191,7 @@ class TestHeightfieldReconstruction:
         pcd = o3d.geometry.PointCloud()
         pcd.points = o3d.utility.Vector3dVector(np.random.rand(2, 3))
 
-        config = SurfaceConfig(method="heightfield")
+        config = ReconstructionConfig(method="heightfield")
 
         with pytest.raises(ValueError, match="at least 4 points"):
             reconstruct_heightfield(pcd, config)
@@ -216,7 +217,7 @@ class TestHeightfieldReconstruction:
         pcd.colors = o3d.utility.Vector3dVector(colors)
 
         # Use a fine grid
-        config = SurfaceConfig(method="heightfield", grid_resolution=0.005)
+        config = ReconstructionConfig(method="heightfield", grid_resolution=0.005)
         mesh = reconstruct_heightfield(pcd, config)
 
         # Mesh should have vertices from both clusters
@@ -232,7 +233,7 @@ class TestHeightfieldReconstruction:
         """Test that empty point cloud returns empty mesh."""
         pcd = o3d.geometry.PointCloud()
 
-        config = SurfaceConfig(method="heightfield")
+        config = ReconstructionConfig(method="heightfield")
 
         # Should raise ValueError for < 4 points
         with pytest.raises(ValueError):
@@ -245,7 +246,7 @@ class TestBPAReconstruction:
     def test_basic_reconstruction(self):
         """Test that BPA reconstruction produces a valid mesh."""
         pcd = create_flat_plane_cloud(z=1.5, n_points=100)
-        config = SurfaceConfig(method="bpa", bpa_radii=[0.01, 0.02, 0.04])
+        config = ReconstructionConfig(method="bpa", bpa_radii=[0.01, 0.02, 0.04])
 
         mesh = reconstruct_bpa(pcd, config)
 
@@ -267,7 +268,7 @@ class TestBPAReconstruction:
         pcd.points = o3d.utility.Vector3dVector(np.random.rand(100, 3))
         # No normals set
 
-        config = SurfaceConfig(method="bpa")
+        config = ReconstructionConfig(method="bpa")
 
         with pytest.raises(ValueError, match="normals"):
             reconstruct_bpa(pcd, config)
@@ -275,7 +276,7 @@ class TestBPAReconstruction:
     def test_auto_radii(self):
         """Test that BPA auto-estimates radii when bpa_radii=None."""
         pcd = create_flat_plane_cloud(z=1.5, n_points=100)
-        config = SurfaceConfig(method="bpa", bpa_radii=None)
+        config = ReconstructionConfig(method="bpa", bpa_radii=None)
 
         mesh = reconstruct_bpa(pcd, config)
 
@@ -289,7 +290,7 @@ class TestBPAReconstruction:
     def test_explicit_radii(self):
         """Test BPA with explicit radii."""
         pcd = create_flat_plane_cloud(z=1.5, n_points=100)
-        config = SurfaceConfig(method="bpa", bpa_radii=[0.01, 0.02, 0.04])
+        config = ReconstructionConfig(method="bpa", bpa_radii=[0.01, 0.02, 0.04])
 
         mesh = reconstruct_bpa(pcd, config)
 
@@ -300,7 +301,7 @@ class TestBPAReconstruction:
     def test_dispatch_bpa(self):
         """Test that reconstruct_surface dispatches correctly for method='bpa'."""
         pcd = create_flat_plane_cloud(z=1.5, n_points=100)
-        config = SurfaceConfig(method="bpa", bpa_radii=[0.01, 0.02, 0.04])
+        config = ReconstructionConfig(method="bpa", bpa_radii=[0.01, 0.02, 0.04])
 
         mesh = reconstruct_surface(pcd, config)
 
@@ -315,7 +316,7 @@ class TestReconstructSurface:
     def test_dispatch_poisson(self):
         """Test that 'poisson' dispatches correctly."""
         pcd = create_flat_plane_cloud(n_points=100)
-        config = SurfaceConfig(method="poisson", poisson_depth=6)
+        config = ReconstructionConfig(method="poisson", poisson_depth=6)
 
         mesh = reconstruct_surface(pcd, config)
 
@@ -326,7 +327,7 @@ class TestReconstructSurface:
     def test_dispatch_heightfield(self):
         """Test that 'heightfield' dispatches correctly."""
         pcd = create_flat_plane_cloud(n_points=100)
-        config = SurfaceConfig(method="heightfield", grid_resolution=0.01)
+        config = ReconstructionConfig(method="heightfield", grid_resolution=0.01)
 
         mesh = reconstruct_surface(pcd, config)
 
@@ -335,12 +336,9 @@ class TestReconstructSurface:
         assert len(mesh.triangles) > 0
 
     def test_unknown_method_raises(self):
-        """Test that unknown method raises ValueError."""
-        pcd = create_flat_plane_cloud(n_points=100)
-        config = SurfaceConfig(method="unknown_method")
-
-        with pytest.raises(ValueError, match="Unknown surface method"):
-            reconstruct_surface(pcd, config)
+        """Test that unknown method raises ValidationError."""
+        with pytest.raises(ValidationError):
+            ReconstructionConfig(surface_method="unknown_method")
 
 
 class TestMeshIO:
@@ -349,7 +347,7 @@ class TestMeshIO:
     def test_save_load_roundtrip(self):
         """Test that saving and loading preserves mesh data."""
         pcd = create_flat_plane_cloud(n_points=100)
-        config = SurfaceConfig(method="heightfield", grid_resolution=0.01)
+        config = ReconstructionConfig(method="heightfield", grid_resolution=0.01)
 
         mesh_original = reconstruct_heightfield(pcd, config)
 
@@ -382,7 +380,7 @@ class TestMeshIO:
     def test_normals_preserved(self):
         """Test that vertex normals are preserved in save/load."""
         pcd = create_flat_plane_cloud(n_points=100)
-        config = SurfaceConfig(method="heightfield", grid_resolution=0.01)
+        config = ReconstructionConfig(method="heightfield", grid_resolution=0.01)
 
         mesh_original = reconstruct_heightfield(pcd, config)
 

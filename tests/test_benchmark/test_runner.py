@@ -19,8 +19,8 @@ def mock_config(tmp_path):
         camera_video_map={"cam0": str(tmp_path / "video0.mp4")},
     )
     # Override benchmark config for testing
-    config.benchmark.extractors = ["superpoint", "aliked"]
-    config.benchmark.clahe = [True, False]
+    config.runtime.benchmark_extractors = ["superpoint", "aliked"]
+    config.runtime.benchmark_clahe = [True, False]
     return config
 
 
@@ -279,8 +279,8 @@ def test_masks_propagate(mock_config, mock_pipeline_context):
 def test_single_config_sweep(mock_config, mock_pipeline_context):
     """Test sweep with only one configuration."""
     # Set benchmark to single extractor and single clahe setting
-    mock_config.benchmark.extractors = ["superpoint"]
-    mock_config.benchmark.clahe = [False]
+    mock_config.runtime.benchmark_extractors = ["superpoint"]
+    mock_config.runtime.benchmark_clahe = [False]
 
     with (
         patch("aquamvs.benchmark.runner.setup_pipeline") as mock_setup,

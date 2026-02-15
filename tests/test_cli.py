@@ -382,7 +382,7 @@ def test_run_device_override(tmp_path: Path):
         "camera_video_map": {
             "cam1": str(tmp_path / "cam1.mp4"),
         },
-        "device": {
+        "runtime": {
             "device": "cpu",
         },
     }
@@ -396,7 +396,7 @@ def test_run_device_override(tmp_path: Path):
         # Verify the config passed to run_pipeline has device == "cuda"
         assert mock_run_pipeline.call_count == 1
         args, _ = mock_run_pipeline.call_args
-        assert args[0].device.device == "cuda"
+        assert args[0].runtime.device == "cuda"
 
 
 def test_run_verbose_flag(tmp_path: Path, caplog):
@@ -459,7 +459,7 @@ def test_run_invalid_config_validation_error(tmp_path: Path):
         "camera_video_map": {
             "cam1": str(tmp_path / "cam1.mp4"),
         },
-        "dense_stereo": {
+        "reconstruction": {
             "cost_function": "invalid_function",
         },
     }
@@ -509,6 +509,7 @@ def test_main_run_argument_parsing(tmp_path: Path):
                 config_path=config_path,
                 verbose=False,
                 device=None,
+                quiet=False,
             )
 
     # Test run with --verbose
@@ -519,6 +520,7 @@ def test_main_run_argument_parsing(tmp_path: Path):
                 config_path=config_path,
                 verbose=True,
                 device=None,
+                quiet=False,
             )
 
     # Test run with --device
@@ -529,6 +531,7 @@ def test_main_run_argument_parsing(tmp_path: Path):
                 config_path=config_path,
                 verbose=False,
                 device="cuda",
+                quiet=False,
             )
 
 
