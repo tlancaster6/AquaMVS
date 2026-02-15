@@ -1,5 +1,12 @@
 """Benchmark suite for comparing feature extraction configurations and reconstruction accuracy."""
 
+from .comparison import (
+    ComparisonResult,
+    MetricDelta,
+    compare_runs,
+    detect_regressions,
+    format_comparison,
+)
 from .config import BenchmarkConfig, BenchmarkDataset, BenchmarkTests
 from .datasets import DatasetContext, load_charuco_ground_truth, load_dataset
 from .metrics import (
@@ -43,4 +50,10 @@ __all__ = [
     "render_comparison_grids",
     # Visualization (new)
     "generate_visualizations",
+    # Comparison (new)
+    "compare_runs",
+    "detect_regressions",
+    "format_comparison",
+    "ComparisonResult",
+    "MetricDelta",
 ]

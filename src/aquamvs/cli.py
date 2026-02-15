@@ -393,15 +393,36 @@ def benchmark_command(
         print(f"Run ID: {result.run_id}")
         print(f"Results directory: {result.run_dir}\n")
 
-        # 5. Handle --compare flag (Plan 05 placeholder)
-        if compare is not None and len(compare) > 0:
-            print("Comparison not yet implemented (planned for Phase 05 Plan 05)")
-            print(f"Would compare: {', '.join(str(p) for p in compare)}\n")
-
-        # 6. Handle --visualize flag (Plan 05 placeholder)
+        # 5. Handle --visualize flag
         if visualize:
-            print("Visualization not yet implemented (planned for Phase 05 Plan 05)")
-            print("Would generate plots for benchmark results\n")
+            from aquamvs.benchmark import generate_visualizations
+
+            print("Generating visualization plots...")
+            plots = generate_visualizations(result.run_dir, result)
+            print(f"Generated {len(plots)} plots in {result.run_dir}/plots/\n")
+
+        # 6. Handle --compare flag
+        if compare is not None and len(compare) > 0:
+            from aquamvs.benchmark import compare_runs, format_comparison
+
+            if len(compare) != 2:
+                print(
+                    "Error: --compare requires exactly 2 run directories",
+                    file=sys.stderr,
+                )
+                sys.exit(1)
+
+            run1_dir, run2_dir = compare[0], compare[1]
+
+            try:
+                comparison = compare_runs(run1_dir, run2_dir)
+                print(format_comparison(comparison))
+            except FileNotFoundError as e:
+                print(f"Error: {e}", file=sys.stderr)
+                sys.exit(1)
+            except ValueError as e:
+                print(f"Error: {e}", file=sys.stderr)
+                sys.exit(1)
 
     except Exception as e:
         print(f"Error: Benchmark failed: {e}", file=sys.stderr)
@@ -644,12 +665,12 @@ def main() -> None:
         type=Path,
         nargs="+",
         default=None,
-        help="Compare multiple run directories (not yet implemented)",
+        help="Compare two run directories (provide exactly 2 paths)",
     )
     benchmark_parser.add_argument(
         "--visualize",
         action="store_true",
-        help="Generate visualization plots (not yet implemented)",
+        help="Generate visualization plots (error heatmaps, bar charts, depth comparisons)",
     )
 
     # preprocess subcommand
