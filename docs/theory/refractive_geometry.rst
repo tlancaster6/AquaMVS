@@ -148,9 +148,12 @@ process has four steps.
     Refract the ray direction at the interface. See the next section for
     the vector form of Snell's law.
 
-.. note::
+.. mermaid::
 
-   **Ray path**: Camera in Air (optical center C) → incident ray d_air → Water Surface (z = z_water) → refracted ray d_water (Snell's law) → Underwater Target (z > z_water)
+   graph TD
+     A["Camera in Air<br/>(optical center C)"] -->|"incident ray d_air"| B["Water Surface<br/>z = z_water"]
+     B -->|"refracted ray d_water<br/>(Snell's law)"| C["Underwater Target<br/>(z > z_water)"]
+     style B fill:#4fc3f7,stroke:#0288d1,stroke-width:2px
 
 Snell's Law: Vector Form
 -------------------------
