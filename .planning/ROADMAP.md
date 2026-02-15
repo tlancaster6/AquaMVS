@@ -126,8 +126,8 @@ Plans:
 - [x] 05-04-PLAN.md — Quality presets and plane sweep optimization
 - [x] 05-05-PLAN.md — Visualization, comparison diff, and regression detection
 - [x] 05-06-PLAN.md — CI benchmarks, profiling CLI, and Sphinx docs page
-- [ ] 05-07-PLAN.md — Fix broken wiring (profiler stub, synthetic data signatures, runner metrics)
-- [ ] 05-08-PLAN.md — Execute benchmarks and profiling on synthetic data, document results
+- [x] 05-07-PLAN.md — Fix broken wiring (profiler stub, synthetic data signatures, runner metrics)
+- [x] 05-08-PLAN.md — Execute benchmarks and profiling on synthetic data, document results
 
 ## Progress
 
@@ -141,4 +141,4 @@ Phases execute in numeric order: 1 -> 2 -> 3 -> 4 -> 5
 | 2. Configuration and API Cleanup | 2/2 | Complete | 2026-02-14 |
 | 3. Pipeline Decomposition and Modularization | 3/3 | Complete | 2026-02-15 |
 | 4. Documentation and Examples | 7/7 | Complete | - |
-| 5. Performance and Optimization | 0/6 | Planning complete | - |
+| 5. Performance and Optimization | 8/8 | Complete | 2026-02-15 |
