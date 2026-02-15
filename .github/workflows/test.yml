@@ -17,6 +17,7 @@ jobs:
 
     env:
       PYTHONUNBUFFERED: 1
+      OPEN3D_CPU_RENDERING: "true"
 
     steps:
       - uses: actions/checkout@v4

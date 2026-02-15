@@ -1,5 +1,10 @@
 """Shared pytest fixtures for AquaMVS tests."""
 
+import os
+
+# Must be set before Open3D is imported to prevent segfault on headless CI
+os.environ.setdefault("OPEN3D_CPU_RENDERING", "true")
+
 import pytest
 import torch
 
