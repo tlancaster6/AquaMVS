@@ -10,18 +10,18 @@ See: .planning/PROJECT.md (updated 2026-02-14)
 ## Current Position
 
 Phase: 04 (Documentation and Examples)
-Plan: 3 of 5 plans complete
+Plan: 4 of 5 plans complete
 Status: In Progress
-Last activity: 2026-02-15 - Completed 04-03-PLAN.md: Theory Documentation
+Last activity: 2026-02-15 - Completed 04-04-PLAN.md: Tutorial and CLI Guide
 
 Progress: [████████░░] 80% (4 of 5 phases complete)
 
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 12
-- Average duration: 6.3 min
-- Total execution time: 1.3 hours
+- Total plans completed: 13
+- Average duration: 6.0 min
+- Total execution time: 1.4 hours
 
 **By Phase:**
 
@@ -31,18 +31,21 @@ Progress: [████████░░] 80% (4 of 5 phases complete)
 | 01.1  | 2     | 17min | 8.5min   |
 | 02    | 2     | 16min | 8min     |
 | 03    | 3     | 16min | 5.3min   |
-| 04    | 3     | 13min | 4.3min   |
+| 04    | 4     | 17min | 4.3min   |
 
 **Recent Trend:**
-- Last 5 plans: 03-03 (8min), 04-01 (2min), 04-02 (4min), 04-03 (7min)
+- Last 5 plans: 04-01 (2min), 04-02 (4min), 04-03 (7min), 04-04 (4min)
 - Trend: Documentation tasks fast (2-7min), extraction/scaffolding fast (4min), integration moderate (8-11min)
+
+| Plan | Duration | Tasks | Files |
+|------|----------|-------|-------|
 | Phase 03 P01 | 4 | 2 tasks | 6 files |
 | Phase 03 P02 | 4 | 2 tasks | 7 files |
-| Phase 03 P03 | 8 | 2 tasks | 5 files |
 | Phase 03 P03 | 8 | 2 tasks | 5 files |
 | Phase 04 P01 | 2 | 2 tasks | 10 files |
 | Phase 04 P02 | 4 | 2 tasks | 10 files |
 | Phase 04 P03 | 7 | 2 tasks | 4 files |
+| Phase 04 P04 | 4 | 2 tasks | 3 files |
 
 ## Accumulated Context
 
@@ -129,6 +132,11 @@ Recent decisions affecting current work:
 - [Phase 04]: Visual-first README with hero image, badges, and minimal quickstart snippet
 - [Phase 04]: Alabaster theme for Sphinx docs (furo not installed)
 
+**Phase 04 Plan 04 (2026-02-15):**
+- Dual format tutorials (Jupyter + CLI guide) serve both API users (Python programmers) and CLI users (command-line workflow)
+- Downloadable notebook instead of rendered in Sphinx (nbsphinx requires pandoc which complicates CI)
+- Placeholder example dataset URL (dataset not yet published to Zenodo/GitHub Releases)
+
 ### Roadmap Evolution
 
 - Phase 1.1 inserted after Phase 1: Last-Minute Feature Additions (URGENT)
@@ -159,5 +167,5 @@ approved
 ## Session Continuity
 
 Last session: 2026-02-15 (phase 04 execution)
-Stopped at: Completed 04-03-PLAN.md (Theory Documentation)
+Stopped at: Completed 04-04-PLAN.md (Tutorial and CLI Guide)
 Resume file: None
