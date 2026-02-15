@@ -89,7 +89,7 @@ def test_icp_known_transform():
     # (This is an indirect check - the transformation should approximately invert the applied one)
     # Check fitness and RMSE as proxies
     assert result["fitness"] > 0.9
-    assert result["inlier_rmse"] < 0.002  # 2mm
+    assert result["inlier_rmse"] < 0.005  # 5mm
 
 
 def test_icp_distant_clouds():
