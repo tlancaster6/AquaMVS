@@ -204,28 +204,38 @@ def test_process_frame_directory_structure(
             ) as mock_match:
                 mock_match.return_value = {}
 
-                with patch("aquamvs.pipeline.stages.sparse_matching.triangulate_all_pairs") as mock_tri:
+                with patch(
+                    "aquamvs.pipeline.stages.sparse_matching.triangulate_all_pairs"
+                ) as mock_tri:
                     mock_tri.return_value = {
                         "points_3d": torch.zeros(0, 3),
                         "scores": torch.zeros(0),
                     }
 
-                    with patch("aquamvs.pipeline.stages.sparse_matching.compute_depth_ranges") as mock_ranges:
+                    with patch(
+                        "aquamvs.pipeline.stages.sparse_matching.compute_depth_ranges"
+                    ) as mock_ranges:
                         mock_ranges.return_value = {"cam0": (0.3, 0.9)}
 
-                        with patch("aquamvs.pipeline.stages.depth_estimation.plane_sweep_stereo") as mock_sweep:
+                        with patch(
+                            "aquamvs.pipeline.stages.depth_estimation.plane_sweep_stereo"
+                        ) as mock_sweep:
                             mock_sweep.return_value = {
                                 "cost_volume": torch.zeros(1, 1, 1),
                                 "depths": torch.tensor([0.5]),
                             }
 
-                            with patch("aquamvs.pipeline.stages.depth_estimation.extract_depth") as mock_extr:
+                            with patch(
+                                "aquamvs.pipeline.stages.depth_estimation.extract_depth"
+                            ) as mock_extr:
                                 mock_extr.return_value = (
                                     torch.full((480, 640), float("nan")),
                                     torch.zeros(480, 640),
                                 )
 
-                                with patch("aquamvs.pipeline.stages.fusion.filter_all_depth_maps") as mock_filter:
+                                with patch(
+                                    "aquamvs.pipeline.stages.fusion.filter_all_depth_maps"
+                                ) as mock_filter:
                                     mock_filter.return_value = {
                                         "cam0": (
                                             torch.full((480, 640), float("nan")),
@@ -234,7 +244,9 @@ def test_process_frame_directory_structure(
                                         )
                                     }
 
-                                    with patch("aquamvs.pipeline.stages.fusion.fuse_depth_maps") as mock_fuse:
+                                    with patch(
+                                        "aquamvs.pipeline.stages.fusion.fuse_depth_maps"
+                                    ) as mock_fuse:
                                         # Return non-empty point cloud
                                         pcd = o3d.geometry.PointCloud()
                                         pcd.points = o3d.utility.Vector3dVector(
@@ -242,7 +254,9 @@ def test_process_frame_directory_structure(
                                         )
                                         mock_fuse.return_value = pcd
 
-                                        with patch("aquamvs.pipeline.stages.surface.reconstruct_surface") as mock_surf:
+                                        with patch(
+                                            "aquamvs.pipeline.stages.surface.reconstruct_surface"
+                                        ) as mock_surf:
                                             mock_surf.return_value = (
                                                 o3d.geometry.TriangleMesh()
                                             )
@@ -421,16 +435,24 @@ def _mock_pipeline_stages():
         ) as m_extract,
         patch("aquamvs.pipeline.stages.sparse_matching.match_all_pairs") as m_match,
         patch("aquamvs.pipeline.stages.sparse_matching.triangulate_all_pairs") as m_tri,
-        patch("aquamvs.pipeline.stages.sparse_matching.filter_sparse_cloud") as m_filter_sparse,
-        patch("aquamvs.pipeline.stages.sparse_matching.compute_depth_ranges") as m_ranges,
+        patch(
+            "aquamvs.pipeline.stages.sparse_matching.filter_sparse_cloud"
+        ) as m_filter_sparse,
+        patch(
+            "aquamvs.pipeline.stages.sparse_matching.compute_depth_ranges"
+        ) as m_ranges,
         patch("aquamvs.pipeline.helpers._sparse_cloud_to_open3d") as m_sparse_to_o3d,
         patch("aquamvs.pipeline.stages.depth_estimation.plane_sweep_stereo") as m_sweep,
         patch("aquamvs.pipeline.stages.depth_estimation.extract_depth") as m_extr,
         patch("aquamvs.pipeline.stages.fusion.filter_all_depth_maps") as m_filter,
         patch("aquamvs.pipeline.stages.fusion.fuse_depth_maps") as m_fuse,
         patch("aquamvs.pipeline.stages.surface.reconstruct_surface") as m_surf,
-        patch("aquamvs.pipeline.stages.sparse_matching.save_sparse_cloud") as m_save_sparse,
-        patch("aquamvs.pipeline.stages.depth_estimation.save_depth_map") as m_save_depth,
+        patch(
+            "aquamvs.pipeline.stages.sparse_matching.save_sparse_cloud"
+        ) as m_save_sparse,
+        patch(
+            "aquamvs.pipeline.stages.depth_estimation.save_depth_map"
+        ) as m_save_depth,
         patch("aquamvs.pipeline.stages.fusion.save_point_cloud") as m_save_pcd,
         patch("aquamvs.pipeline.stages.surface.save_mesh") as m_save_mesh,
     ):
@@ -866,9 +888,9 @@ class TestOutputConfig:
 
         with _mock_pipeline_stages() as mocks:
             process_frame(0, _RAW_IMAGES.copy(), ctx)
-            assert mocks[
-                "save_sparse"
-            ].called, "save_sparse_cloud should always be called"
+            assert mocks["save_sparse"].called, (
+                "save_sparse_cloud should always be called"
+            )
 
 
 # ---------------------------------------------------------------------------
@@ -939,7 +961,9 @@ class TestSummaryViz:
                 mock_videoset.return_value = mock_videos
 
                 with patch("aquamvs.pipeline.runner.process_frame"):
-                    with patch("aquamvs.pipeline.runner._collect_height_maps") as m_collect:
+                    with patch(
+                        "aquamvs.pipeline.runner._collect_height_maps"
+                    ) as m_collect:
                         run_pipeline(config)
                         assert not m_collect.called
 
@@ -1032,7 +1056,9 @@ class TestSparseCloudFiltering:
         ctx = _make_ctx(config, mock_calibration_data)
 
         with _mock_pipeline_stages():
-            with patch("aquamvs.pipeline.stages.sparse_matching.filter_sparse_cloud") as mock_filter:
+            with patch(
+                "aquamvs.pipeline.stages.sparse_matching.filter_sparse_cloud"
+            ) as mock_filter:
                 # Mock filter to return the input unchanged
                 mock_filter.side_effect = lambda cloud, **kwargs: cloud
 
@@ -1064,7 +1090,9 @@ class TestSparseCloudFiltering:
                 "scores": torch.zeros(100),
             }
 
-            with patch("aquamvs.pipeline.stages.sparse_matching.filter_sparse_cloud") as mock_filter:
+            with patch(
+                "aquamvs.pipeline.stages.sparse_matching.filter_sparse_cloud"
+            ) as mock_filter:
                 # Mock filter to reduce points to 50
                 def filter_side_effect(cloud, **kwargs):
                     return {
@@ -1105,7 +1133,9 @@ class TestSparseCloudFiltering:
                 "scores": torch.zeros(100),
             }
 
-            with patch("aquamvs.pipeline.stages.sparse_matching.filter_sparse_cloud") as mock_filter:
+            with patch(
+                "aquamvs.pipeline.stages.sparse_matching.filter_sparse_cloud"
+            ) as mock_filter:
                 # Mock filter to remove all points
                 def filter_side_effect(cloud, **kwargs):
                     return {

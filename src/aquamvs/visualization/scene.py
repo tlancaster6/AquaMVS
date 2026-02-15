@@ -32,9 +32,7 @@ def _offscreen_available() -> bool:
         # No display - check if we're in CI or explicitly headless
         ci_markers = ["CI", "GITHUB_ACTIONS", "TRAVIS", "CIRCLECI"]
         if any(os.environ.get(marker) for marker in ci_markers):
-            logger.debug(
-                "Skipping OffscreenRenderer probe on headless CI (no DISPLAY)"
-            )
+            logger.debug("Skipping OffscreenRenderer probe on headless CI (no DISPLAY)")
             return False
 
         # Not in known CI, but still no DISPLAY - be cautious

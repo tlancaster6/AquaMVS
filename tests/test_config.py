@@ -1,10 +1,8 @@
 """Tests for configuration system."""
 
 import logging
-from pathlib import Path
 
 import pytest
-import yaml
 from pydantic import ValidationError
 
 from aquamvs.config import (

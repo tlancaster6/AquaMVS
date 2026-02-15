@@ -1,7 +1,8 @@
 """Protocol interfaces for pipeline abstraction."""
 
-from typing import Iterator, Protocol, runtime_checkable
 import logging
+from collections.abc import Iterator
+from typing import Protocol, runtime_checkable
 
 import numpy as np
 import torch
