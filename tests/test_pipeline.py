@@ -13,17 +13,11 @@ import torch
 
 from aquamvs.calibration import CalibrationData, CameraData, UndistortionData
 from aquamvs.config import (
-    DenseStereoConfig,
-    DeviceConfig,
-    FeatureExtractionConfig,
-    FrameSamplingConfig,
-    FusionConfig,
-    MatchingConfig,
-    OutputConfig,
-    PairSelectionConfig,
     PipelineConfig,
-    SurfaceConfig,
-    VizConfig,
+    PreprocessingConfig,
+    ReconstructionConfig,
+    RuntimeConfig,
+    SparseMatchingConfig,
 )
 from aquamvs.pipeline import (
     PipelineContext,
@@ -70,14 +64,10 @@ def pipeline_config(tmp_path):
             "cam1": "video1.mp4",
             "cam2": "video2.mp4",
         },
-        frame_sampling=FrameSamplingConfig(start=0, stop=10, step=1),
-        feature_extraction=FeatureExtractionConfig(),
-        pair_selection=PairSelectionConfig(),
-        matching=MatchingConfig(),
-        dense_stereo=DenseStereoConfig(),
-        fusion=FusionConfig(),
-        surface=SurfaceConfig(),
-        device=DeviceConfig(device="cpu"),
+        preprocessing=PreprocessingConfig(frame_start=0, frame_stop=10, frame_step=1),
+        sparse_matching=SparseMatchingConfig(),
+        reconstruction=ReconstructionConfig(),
+        runtime=RuntimeConfig(device="cpu"),
     )
 
 
@@ -441,7 +431,9 @@ def _mock_pipeline_stages():
         patch(
             "aquamvs.pipeline.stages.sparse_matching.compute_depth_ranges"
         ) as m_ranges,
-        patch("aquamvs.pipeline.helpers._sparse_cloud_to_open3d") as m_sparse_to_o3d,
+        patch(
+            "aquamvs.pipeline.stages.surface._sparse_cloud_to_open3d"
+        ) as m_sparse_to_o3d,
         patch("aquamvs.pipeline.stages.depth_estimation.plane_sweep_stereo") as m_sweep,
         patch("aquamvs.pipeline.stages.depth_estimation.extract_depth") as m_extr,
         patch("aquamvs.pipeline.stages.fusion.filter_all_depth_maps") as m_filter,
@@ -454,6 +446,7 @@ def _mock_pipeline_stages():
             "aquamvs.pipeline.stages.depth_estimation.save_depth_map"
         ) as m_save_depth,
         patch("aquamvs.pipeline.stages.fusion.save_point_cloud") as m_save_pcd,
+        patch("aquamvs.pipeline.stages.surface.save_point_cloud") as m_save_pcd_sparse,
         patch("aquamvs.pipeline.stages.surface.save_mesh") as m_save_mesh,
     ):
         m_undist.side_effect = lambda img, _: img  # Pass through
@@ -518,6 +511,7 @@ def _mock_pipeline_stages():
             "save_sparse": m_save_sparse,
             "save_depth": m_save_depth,
             "save_pcd": m_save_pcd,
+            "save_pcd_sparse": m_save_pcd_sparse,
             "save_mesh": m_save_mesh,
         }
 
@@ -580,7 +574,7 @@ class TestShouldViz:
         """enabled=False returns False for any stage."""
         config = PipelineConfig(
             output_dir=str(tmp_path),
-            visualization=VizConfig(enabled=False),
+            runtime=RuntimeConfig(viz_enabled=False),
         )
         assert _should_viz(config, "depth") is False
         assert _should_viz(config, "features") is False
@@ -592,7 +586,7 @@ class TestShouldViz:
         """enabled=True with stages=[] returns True for all stages."""
         config = PipelineConfig(
             output_dir=str(tmp_path),
-            visualization=VizConfig(enabled=True, stages=[]),
+            runtime=RuntimeConfig(viz_enabled=True, viz_stages=[]),
         )
         assert _should_viz(config, "depth") is True
         assert _should_viz(config, "features") is True
@@ -604,7 +598,7 @@ class TestShouldViz:
         """enabled=True with specific stages returns True only for those."""
         config = PipelineConfig(
             output_dir=str(tmp_path),
-            visualization=VizConfig(enabled=True, stages=["depth", "scene"]),
+            runtime=RuntimeConfig(viz_enabled=True, viz_stages=["depth", "scene"]),
         )
         assert _should_viz(config, "depth") is True
         assert _should_viz(config, "scene") is True
@@ -626,7 +620,7 @@ class TestVizIntegration:
     ):
         """When viz is disabled, no viz/ directory is created."""
         # Default config has viz disabled
-        assert pipeline_config.visualization.enabled is False
+        assert pipeline_config.runtime.viz_enabled is False
 
         ctx = _make_ctx(pipeline_config, mock_calibration_data)
         with _mock_pipeline_stages():
@@ -639,7 +633,7 @@ class TestVizIntegration:
         self, pipeline_config, mock_calibration_data, tmp_path
     ):
         """When viz is disabled, viz modules are not imported."""
-        assert pipeline_config.visualization.enabled is False
+        assert pipeline_config.runtime.viz_enabled is False
 
         # Remove any cached viz module imports
         viz_modules_before = {
@@ -663,8 +657,7 @@ class TestVizIntegration:
             calibration_path="dummy.json",
             output_dir=str(tmp_path / "output"),
             camera_video_map={"cam0": "v0.mp4", "cam1": "v1.mp4", "cam2": "v2.mp4"},
-            visualization=VizConfig(enabled=True, stages=[]),
-            device=DeviceConfig(device="cpu"),
+            runtime=RuntimeConfig(viz_enabled=True, viz_stages=[], device="cpu"),
         )
 
         ctx = _make_ctx(config, mock_calibration_data)
@@ -693,8 +686,7 @@ class TestVizIntegration:
             calibration_path="dummy.json",
             output_dir=str(tmp_path / "output"),
             camera_video_map={"cam0": "v0.mp4", "cam1": "v1.mp4", "cam2": "v2.mp4"},
-            visualization=VizConfig(enabled=True, stages=["depth"]),
-            device=DeviceConfig(device="cpu"),
+            runtime=RuntimeConfig(viz_enabled=True, viz_stages=["depth"], device="cpu"),
         )
 
         ctx = _make_ctx(config, mock_calibration_data)
@@ -721,8 +713,7 @@ class TestVizIntegration:
             calibration_path="dummy.json",
             output_dir=str(tmp_path / "output"),
             camera_video_map={"cam0": "v0.mp4", "cam1": "v1.mp4", "cam2": "v2.mp4"},
-            visualization=VizConfig(enabled=True, stages=["depth"]),
-            device=DeviceConfig(device="cpu"),
+            runtime=RuntimeConfig(viz_enabled=True, viz_stages=["depth"], device="cpu"),
         )
 
         ctx = _make_ctx(config, mock_calibration_data)
@@ -758,8 +749,7 @@ class TestOutputConfig:
             calibration_path="dummy.json",
             output_dir=str(tmp_path / "output"),
             camera_video_map={"cam0": "v0.mp4", "cam1": "v1.mp4", "cam2": "v2.mp4"},
-            output=OutputConfig(save_features=True),
-            device=DeviceConfig(device="cpu"),
+            runtime=RuntimeConfig(save_features=True, device="cpu"),
         )
 
         ctx = _make_ctx(config, mock_calibration_data)
@@ -780,8 +770,7 @@ class TestOutputConfig:
             calibration_path="dummy.json",
             output_dir=str(tmp_path / "output"),
             camera_video_map={"cam0": "v0.mp4", "cam1": "v1.mp4", "cam2": "v2.mp4"},
-            output=OutputConfig(save_features=False),
-            device=DeviceConfig(device="cpu"),
+            runtime=RuntimeConfig(save_features=False, device="cpu"),
         )
 
         ctx = _make_ctx(config, mock_calibration_data)
@@ -799,8 +788,7 @@ class TestOutputConfig:
             calibration_path="dummy.json",
             output_dir=str(tmp_path / "output"),
             camera_video_map={"cam0": "v0.mp4", "cam1": "v1.mp4", "cam2": "v2.mp4"},
-            output=OutputConfig(save_depth_maps=False),
-            device=DeviceConfig(device="cpu"),
+            runtime=RuntimeConfig(save_depth_maps=False, device="cpu"),
         )
 
         ctx = _make_ctx(config, mock_calibration_data)
@@ -818,8 +806,7 @@ class TestOutputConfig:
             calibration_path="dummy.json",
             output_dir=str(tmp_path / "output"),
             camera_video_map={"cam0": "v0.mp4", "cam1": "v1.mp4", "cam2": "v2.mp4"},
-            output=OutputConfig(save_point_cloud=False),
-            device=DeviceConfig(device="cpu"),
+            runtime=RuntimeConfig(save_point_cloud=False, device="cpu"),
         )
 
         ctx = _make_ctx(config, mock_calibration_data)
@@ -837,8 +824,7 @@ class TestOutputConfig:
             calibration_path="dummy.json",
             output_dir=str(tmp_path / "output"),
             camera_video_map={"cam0": "v0.mp4", "cam1": "v1.mp4", "cam2": "v2.mp4"},
-            output=OutputConfig(save_mesh=False),
-            device=DeviceConfig(device="cpu"),
+            runtime=RuntimeConfig(save_mesh=False, device="cpu"),
         )
 
         ctx = _make_ctx(config, mock_calibration_data)
@@ -856,8 +842,9 @@ class TestOutputConfig:
             calibration_path="dummy.json",
             output_dir=str(tmp_path / "output"),
             camera_video_map={"cam0": "v0.mp4", "cam1": "v1.mp4", "cam2": "v2.mp4"},
-            output=OutputConfig(save_depth_maps=True, keep_intermediates=False),
-            device=DeviceConfig(device="cpu"),
+            runtime=RuntimeConfig(
+                save_depth_maps=True, keep_intermediates=False, device="cpu"
+            ),
         )
 
         ctx = _make_ctx(config, mock_calibration_data)
@@ -875,13 +862,13 @@ class TestOutputConfig:
             calibration_path="dummy.json",
             output_dir=str(tmp_path / "output"),
             camera_video_map={"cam0": "v0.mp4", "cam1": "v1.mp4", "cam2": "v2.mp4"},
-            output=OutputConfig(
+            runtime=RuntimeConfig(
                 save_features=False,
                 save_depth_maps=False,
                 save_point_cloud=False,
                 save_mesh=False,
+                device="cpu",
             ),
-            device=DeviceConfig(device="cpu"),
         )
 
         ctx = _make_ctx(config, mock_calibration_data)
@@ -907,8 +894,9 @@ class TestSummaryViz:
             calibration_path="dummy.json",
             output_dir=str(tmp_path / "output"),
             camera_video_map={"cam0": "v0.mp4"},
-            visualization=VizConfig(enabled=True, stages=["summary"]),
-            device=DeviceConfig(device="cpu"),
+            runtime=RuntimeConfig(
+                viz_enabled=True, viz_stages=["summary"], device="cpu"
+            ),
         )
 
         with patch("aquamvs.pipeline.runner.build_pipeline_context") as mock_setup:
@@ -925,7 +913,7 @@ class TestSummaryViz:
                 with (
                     patch("aquamvs.pipeline.runner.process_frame"),
                     patch(
-                        "aquamvs.pipeline._collect_height_maps",
+                        "aquamvs.pipeline.runner._collect_height_maps",
                         return_value=[
                             (0, np.zeros((10, 10)), np.arange(10), np.arange(10)),
                         ],
@@ -945,8 +933,7 @@ class TestSummaryViz:
             calibration_path="dummy.json",
             output_dir=str(tmp_path / "output"),
             camera_video_map={"cam0": "v0.mp4"},
-            visualization=VizConfig(enabled=False),
-            device=DeviceConfig(device="cpu"),
+            runtime=RuntimeConfig(viz_enabled=False, device="cpu"),
         )
 
         with patch("aquamvs.pipeline.runner.build_pipeline_context") as mock_setup:
@@ -984,7 +971,7 @@ class TestEmptyCloudHandling:
             calibration_path="dummy.json",
             output_dir=str(tmp_path / "output"),
             camera_video_map={"cam0": "v0.mp4", "cam1": "v1.mp4", "cam2": "v2.mp4"},
-            device=DeviceConfig(device="cpu"),
+            runtime=RuntimeConfig(device="cpu"),
         )
 
         ctx = _make_ctx(config, mock_calibration_data)
@@ -1019,7 +1006,7 @@ class TestEmptyCloudHandling:
             calibration_path="dummy.json",
             output_dir=str(tmp_path / "output"),
             camera_video_map={"cam0": "v0.mp4", "cam1": "v1.mp4", "cam2": "v2.mp4"},
-            device=DeviceConfig(device="cpu"),
+            runtime=RuntimeConfig(device="cpu"),
         )
 
         ctx = _make_ctx(config, mock_calibration_data)
@@ -1050,7 +1037,7 @@ class TestSparseCloudFiltering:
             calibration_path="dummy.json",
             output_dir=str(tmp_path / "output"),
             camera_video_map={"cam0": "v0.mp4", "cam1": "v1.mp4", "cam2": "v2.mp4"},
-            device=DeviceConfig(device="cpu"),
+            runtime=RuntimeConfig(device="cpu"),
         )
 
         ctx = _make_ctx(config, mock_calibration_data)
@@ -1078,7 +1065,7 @@ class TestSparseCloudFiltering:
             calibration_path="dummy.json",
             output_dir=str(tmp_path / "output"),
             camera_video_map={"cam0": "v0.mp4", "cam1": "v1.mp4", "cam2": "v2.mp4"},
-            device=DeviceConfig(device="cpu"),
+            runtime=RuntimeConfig(device="cpu"),
         )
 
         ctx = _make_ctx(config, mock_calibration_data)
@@ -1121,7 +1108,7 @@ class TestSparseCloudFiltering:
             calibration_path="dummy.json",
             output_dir=str(tmp_path / "output"),
             camera_video_map={"cam0": "v0.mp4", "cam1": "v1.mp4", "cam2": "v2.mp4"},
-            device=DeviceConfig(device="cpu"),
+            runtime=RuntimeConfig(device="cpu"),
         )
 
         ctx = _make_ctx(config, mock_calibration_data)
@@ -1177,7 +1164,7 @@ class TestSparseMode:
             output_dir=str(tmp_path / "output"),
             camera_video_map={"cam0": "v0.mp4", "cam1": "v1.mp4", "cam2": "v2.mp4"},
             pipeline_mode="sparse",
-            device=DeviceConfig(device="cpu"),
+            runtime=RuntimeConfig(device="cpu"),
         )
 
         ctx = _make_ctx(config, mock_calibration_data)
@@ -1204,7 +1191,7 @@ class TestSparseMode:
             output_dir=str(tmp_path / "output"),
             camera_video_map={"cam0": "v0.mp4", "cam1": "v1.mp4", "cam2": "v2.mp4"},
             pipeline_mode="sparse",
-            device=DeviceConfig(device="cpu"),
+            runtime=RuntimeConfig(device="cpu"),
         )
 
         ctx = _make_ctx(config, mock_calibration_data)
@@ -1224,8 +1211,8 @@ class TestSparseMode:
             # Surface reconstruction should be called
             assert mocks["surface"].called
 
-            # Point cloud and mesh should be saved
-            assert mocks["save_pcd"].called
+            # Point cloud and mesh should be saved (sparse mode uses save_pcd_sparse)
+            assert mocks["save_pcd_sparse"].called
             assert mocks["save_mesh"].called
 
     def test_sparse_mode_saves_sparse_ply(self, tmp_path, mock_calibration_data):
@@ -1235,7 +1222,7 @@ class TestSparseMode:
             output_dir=str(tmp_path / "output"),
             camera_video_map={"cam0": "v0.mp4", "cam1": "v1.mp4", "cam2": "v2.mp4"},
             pipeline_mode="sparse",
-            device=DeviceConfig(device="cpu"),
+            runtime=RuntimeConfig(device="cpu"),
         )
 
         ctx = _make_ctx(config, mock_calibration_data)
@@ -1250,8 +1237,8 @@ class TestSparseMode:
             process_frame(0, _RAW_IMAGES.copy(), ctx)
 
             # Verify save_point_cloud was called with path ending in sparse.ply
-            assert mocks["save_pcd"].called
-            call_args = mocks["save_pcd"].call_args
+            assert mocks["save_pcd_sparse"].called
+            call_args = mocks["save_pcd_sparse"].call_args
             save_path = call_args[0][1]  # Second positional arg is the path
             assert str(save_path).endswith("sparse.ply")
             assert "fused.ply" not in str(save_path)
@@ -1265,7 +1252,7 @@ class TestSparseMode:
             output_dir=str(tmp_path / "output"),
             camera_video_map={"cam0": "v0.mp4", "cam1": "v1.mp4", "cam2": "v2.mp4"},
             pipeline_mode="sparse",
-            device=DeviceConfig(device="cpu"),
+            runtime=RuntimeConfig(device="cpu"),
         )
 
         ctx = _make_ctx(config, mock_calibration_data)
@@ -1301,8 +1288,7 @@ class TestSparseMode:
             output_dir=str(tmp_path / "output"),
             camera_video_map={"cam0": "v0.mp4", "cam1": "v1.mp4", "cam2": "v2.mp4"},
             pipeline_mode="sparse",
-            visualization=VizConfig(enabled=True, stages=["scene"]),
-            device=DeviceConfig(device="cpu"),
+            runtime=RuntimeConfig(viz_enabled=True, viz_stages=["scene"], device="cpu"),
         )
 
         ctx = _make_ctx(config, mock_calibration_data)
@@ -1330,8 +1316,7 @@ class TestSparseMode:
             output_dir=str(tmp_path / "output"),
             camera_video_map={"cam0": "v0.mp4", "cam1": "v1.mp4", "cam2": "v2.mp4"},
             pipeline_mode="sparse",
-            visualization=VizConfig(enabled=True, stages=["rig"]),
-            device=DeviceConfig(device="cpu"),
+            runtime=RuntimeConfig(viz_enabled=True, viz_stages=["rig"], device="cpu"),
         )
 
         ctx = _make_ctx(config, mock_calibration_data)
@@ -1356,7 +1341,7 @@ class TestSparseMode:
             output_dir=str(tmp_path / "output"),
             camera_video_map={"cam0": "v0.mp4", "cam1": "v1.mp4", "cam2": "v2.mp4"},
             pipeline_mode="full",
-            device=DeviceConfig(device="cpu"),
+            runtime=RuntimeConfig(device="cpu"),
         )
 
         ctx = _make_ctx(config, mock_calibration_data)
@@ -1383,7 +1368,7 @@ class TestSparseMode:
             output_dir=str(tmp_path / "output"),
             camera_video_map={"cam0": "v0.mp4", "cam1": "v1.mp4", "cam2": "v2.mp4"},
             pipeline_mode="sparse",
-            device=DeviceConfig(device="cpu"),
+            runtime=RuntimeConfig(device="cpu"),
         )
 
         ctx = _make_ctx(config, mock_calibration_data)
@@ -1411,7 +1396,7 @@ class TestMaskIntegration:
             output_dir=str(tmp_path / "output"),
             camera_video_map={"cam0": "v0.mp4", "cam1": "v1.mp4", "cam2": "v2.mp4"},
             mask_dir=str(tmp_path / "masks"),
-            device=DeviceConfig(device="cpu"),
+            runtime=RuntimeConfig(device="cpu"),
         )
 
         with (
@@ -1423,7 +1408,7 @@ class TestMaskIntegration:
         ):
             mock_select_pairs.return_value = {"cam0": ["cam1"]}
 
-            with patch("aquamvs.masks.load_all_masks") as mock_load_masks:
+            with patch("aquamvs.pipeline.builder.load_all_masks") as mock_load_masks:
                 mock_load_masks.return_value = {
                     "cam0": np.ones((480, 640), dtype=np.uint8)
                 }
@@ -1449,7 +1434,7 @@ class TestMaskIntegration:
             calibration_path="dummy.json",
             output_dir=str(tmp_path / "output"),
             camera_video_map={"cam0": "v0.mp4", "cam1": "v1.mp4", "cam2": "v2.mp4"},
-            device=DeviceConfig(device="cpu"),
+            runtime=RuntimeConfig(device="cpu"),
         )
 
         # Create a mask for cam0 (right half valid)
@@ -1493,7 +1478,7 @@ class TestMaskIntegration:
             calibration_path="dummy.json",
             output_dir=str(tmp_path / "output"),
             camera_video_map={"cam0": "v0.mp4", "cam1": "v1.mp4", "cam2": "v2.mp4"},
-            device=DeviceConfig(device="cpu"),
+            runtime=RuntimeConfig(device="cpu"),
         )
 
         # Create a mask for cam0 (top half excluded)
@@ -1521,7 +1506,7 @@ class TestMaskIntegration:
             calibration_path="dummy.json",
             output_dir=str(tmp_path / "output"),
             camera_video_map={"cam0": "v0.mp4", "cam1": "v1.mp4", "cam2": "v2.mp4"},
-            device=DeviceConfig(device="cpu"),
+            runtime=RuntimeConfig(device="cpu"),
         )
 
         # Empty masks dict (no masking)
