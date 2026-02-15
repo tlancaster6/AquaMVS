@@ -210,3 +210,7 @@ __marimo__/
 dev/
 tmp/
 CLAUDE.md
+
+# Example data files (keep README only)
+example_data/*
+!example_data/README.md
