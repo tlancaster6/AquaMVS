@@ -117,15 +117,17 @@ Plans:
   2. Runtime profiling identifies and documents the top 3 performance bottlenecks with specific measurements
   3. At least one optimization targeting a measured bottleneck (RoMa or plane sweep) is implemented and verified
   4. Benchmark suite (asv or pytest-benchmark) tracks performance across code changes to detect regressions
-**Plans:** 6 plans
+**Plans:** 8 plans
 
 Plans:
-- [ ] 05-01-PLAN.md — Benchmark config models, accuracy metrics, and synthetic scene generation
-- [ ] 05-02-PLAN.md — Benchmark runner and CLI replacement
-- [ ] 05-03-PLAN.md — Profiling infrastructure (torch.profiler wrapper, stage instrumentation)
-- [ ] 05-04-PLAN.md — Quality presets and plane sweep optimization
-- [ ] 05-05-PLAN.md — Visualization, comparison diff, and regression detection
-- [ ] 05-06-PLAN.md — CI benchmarks, profiling CLI, and Sphinx docs page
+- [x] 05-01-PLAN.md — Benchmark config models, accuracy metrics, and synthetic scene generation
+- [x] 05-02-PLAN.md — Benchmark runner and CLI replacement
+- [x] 05-03-PLAN.md — Profiling infrastructure (torch.profiler wrapper, stage instrumentation)
+- [x] 05-04-PLAN.md — Quality presets and plane sweep optimization
+- [x] 05-05-PLAN.md — Visualization, comparison diff, and regression detection
+- [x] 05-06-PLAN.md — CI benchmarks, profiling CLI, and Sphinx docs page
+- [ ] 05-07-PLAN.md — Fix broken wiring (profiler stub, synthetic data signatures, runner metrics)
+- [ ] 05-08-PLAN.md — Execute benchmarks and profiling on synthetic data, document results
 
 ## Progress
 
