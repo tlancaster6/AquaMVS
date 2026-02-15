@@ -118,6 +118,7 @@ Recent decisions affecting current work:
 ### Pending Todos
 
 1. **Mint a Zenodo DOI** (general) — Link repo to Zenodo, add `.zenodo.json`, get citable DOI
+2. **Build portfolio website for Aqua libraries** (general) — Showcase site for AquaCal/AquaMVS/AquaPose targeting employers; static hosting, 3D viewers, comparison sliders
 
 ### Blockers/Concerns
 
