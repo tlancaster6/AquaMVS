@@ -97,14 +97,16 @@ Plans:
   3. At least one Jupyter notebook tutorial demonstrates complete reconstruction workflow from videos to mesh
   4. Example dataset is available (bundled or downloadable) for users to test pipeline without preparing their own data
   5. Sphinx documentation is hosted on ReadTheDocs with auto-generated API reference from docstrings
-**Plans:** 5 plans
+**Plans:** 7 plans
 
 Plans:
-- [ ] 04-01-PLAN.md — Sphinx infrastructure (Furo theme, ReadTheDocs config, installation guide)
-- [ ] 04-02-PLAN.md — README overhaul (visual-first layout, badges) + API reference pages
-- [ ] 04-03-PLAN.md — Theory/concepts section (refractive geometry, dense stereo, fusion)
-- [ ] 04-04-PLAN.md — Jupyter tutorial + CLI guide
-- [ ] 04-05-PLAN.md — Example dataset packaging, hero image, final build verification
+- [x] 04-01-PLAN.md — Sphinx infrastructure (Furo theme, ReadTheDocs config, installation guide)
+- [x] 04-02-PLAN.md — README overhaul (visual-first layout, badges) + API reference pages
+- [x] 04-03-PLAN.md — Theory/concepts section (refractive geometry, dense stereo, fusion)
+- [x] 04-04-PLAN.md — Jupyter tutorial + CLI guide
+- [x] 04-05-PLAN.md — Example dataset packaging, hero image, final build verification
+- [ ] 04-06-PLAN.md — Gap closure: package example dataset and update placeholder URLs
+- [ ] 04-07-PLAN.md — Gap closure: ReadTheDocs deployment verification
 
 ### Phase 5: Performance and Optimization
 **Goal**: Performance bottlenecks identified and optimized based on measurements, with benchmarking infrastructure for tracking
@@ -123,13 +125,13 @@ Plans:
 ## Progress
 
 **Execution Order:**
-Phases execute in numeric order: 1 → 2 → 3 → 4 → 5
+Phases execute in numeric order: 1 -> 2 -> 3 -> 4 -> 5
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
-| 1. Dependency Resolution and Packaging Foundations | 2/2 | ✓ Complete | 2026-02-14 |
-| 01.1. Last-Minute Feature Additions | 2/2 | ✓ Complete | 2026-02-14 |
-| 2. Configuration and API Cleanup | 2/2 | ✓ Complete | 2026-02-14 |
-| 3. Pipeline Decomposition and Modularization | 3/3 | ✓ Complete | 2026-02-15 |
-| 4. Documentation and Examples | 0/TBD | Not started | - |
+| 1. Dependency Resolution and Packaging Foundations | 2/2 | Complete | 2026-02-14 |
+| 01.1. Last-Minute Feature Additions | 2/2 | Complete | 2026-02-14 |
+| 2. Configuration and API Cleanup | 2/2 | Complete | 2026-02-14 |
+| 3. Pipeline Decomposition and Modularization | 3/3 | Complete | 2026-02-15 |
+| 4. Documentation and Examples | 5/7 | Gap closure | - |
 | 5. Performance and Optimization | 0/TBD | Not started | - |
