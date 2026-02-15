@@ -10,17 +10,17 @@ See: .planning/PROJECT.md (updated 2026-02-14)
 ## Current Position
 
 Phase: 04 (Documentation and Examples)
-Plan: 2 of 5 plans complete
+Plan: 3 of 5 plans complete
 Status: In Progress
-Last activity: 2026-02-15 - Completed 04-02-PLAN.md: README and API Reference
+Last activity: 2026-02-15 - Completed 04-03-PLAN.md: Theory Documentation
 
 Progress: [████████░░] 80% (4 of 5 phases complete)
 
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 11
-- Average duration: 6.4 min
+- Total plans completed: 12
+- Average duration: 6.3 min
 - Total execution time: 1.3 hours
 
 **By Phase:**
@@ -31,17 +31,18 @@ Progress: [████████░░] 80% (4 of 5 phases complete)
 | 01.1  | 2     | 17min | 8.5min   |
 | 02    | 2     | 16min | 8min     |
 | 03    | 3     | 16min | 5.3min   |
-| 04    | 2     | 6min  | 3min     |
+| 04    | 3     | 13min | 4.3min   |
 
 **Recent Trend:**
-- Last 5 plans: 03-02 (4min), 03-03 (8min), 04-01 (2min), 04-02 (4min)
-- Trend: Documentation tasks fast (2-4min), extraction/scaffolding fast (4min), integration moderate (8-11min)
+- Last 5 plans: 03-03 (8min), 04-01 (2min), 04-02 (4min), 04-03 (7min)
+- Trend: Documentation tasks fast (2-7min), extraction/scaffolding fast (4min), integration moderate (8-11min)
 | Phase 03 P01 | 4 | 2 tasks | 6 files |
 | Phase 03 P02 | 4 | 2 tasks | 7 files |
 | Phase 03 P03 | 8 | 2 tasks | 5 files |
 | Phase 03 P03 | 8 | 2 tasks | 5 files |
 | Phase 04 P01 | 2 | 2 tasks | 10 files |
 | Phase 04 P02 | 4 | 2 tasks | 10 files |
+| Phase 04 P03 | 7 | 2 tasks | 4 files |
 
 ## Accumulated Context
 
@@ -114,6 +115,12 @@ Recent decisions affecting current work:
 - Top-level import works: from aquamvs import Pipeline
 - Test imports and patches updated to new module locations (builder, stages, runner, helpers)
 
+**Phase 04 Plan 03 (2026-02-15):**
+- Theory section structured in three stages: refractive geometry, dense stereo, fusion
+- Mermaid diagrams for visual representation (requires sphinxcontrib-mermaid extension)
+- Comprehensive math derivations with RST math directives for equations
+- Cross-references to API docs to connect theory with implementation
+
 **Phase 04 Plan 01 (2026-02-15):**
 - Furo theme over sphinx_rtd_theme for modern aesthetics and better mobile support
 - ReadTheDocs custom build.commands to install PyTorch CPU and git prerequisites before package install
@@ -152,5 +159,5 @@ approved
 ## Session Continuity
 
 Last session: 2026-02-15 (phase 04 execution)
-Stopped at: Completed 04-01-PLAN.md (Sphinx Documentation Infrastructure)
+Stopped at: Completed 04-03-PLAN.md (Theory Documentation)
 Resume file: None
