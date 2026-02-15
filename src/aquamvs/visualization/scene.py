@@ -13,10 +13,34 @@ logger = logging.getLogger(__name__)
 def _offscreen_available() -> bool:
     """Check if Open3D offscreen rendering is available.
 
+    Detects headless environments before attempting to create OffscreenRenderer,
+    because instantiation can segfault at the C++ level on systems without a
+    display server (e.g., GitHub Actions Ubuntu runners).
+
     Suppresses native stderr during the probe because Open3D's C++
     layer prints an ``[Open3D Error]`` message to fd 2 before raising
     the Python exception, which ``try/except`` alone cannot catch.
     """
+    # On Linux, OffscreenRenderer requires either:
+    # 1. A display server (DISPLAY set), or
+    # 2. EGL headless support (not always available)
+    # Without these, instantiation segfaults at C-level before Python can catch it.
+    # Skip the probe on headless Linux to avoid crashes during pytest collection.
+    import platform
+
+    if platform.system() == "Linux" and not os.environ.get("DISPLAY"):
+        # No display - check if we're in CI or explicitly headless
+        ci_markers = ["CI", "GITHUB_ACTIONS", "TRAVIS", "CIRCLECI"]
+        if any(os.environ.get(marker) for marker in ci_markers):
+            logger.debug(
+                "Skipping OffscreenRenderer probe on headless CI (no DISPLAY)"
+            )
+            return False
+
+        # Not in known CI, but still no DISPLAY - be cautious
+        logger.debug("Skipping OffscreenRenderer probe on Linux without DISPLAY")
+        return False
+
     devnull_fd = os.open(os.devnull, os.O_WRONLY)
     old_fd = os.dup(2)
     os.dup2(devnull_fd, 2)
