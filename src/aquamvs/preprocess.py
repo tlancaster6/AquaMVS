@@ -292,8 +292,11 @@ def process_batch(
     if input_path.is_file():
         # Single file mode
         if output_dir is None:
-            output_dir = input_path.parent / input_path.stem
-        else:
+            if output_format == "png":
+                output_dir = input_path.parent / input_path.stem
+            else:
+                output_dir = input_path.parent
+        elif output_format == "png":
             output_dir = output_dir / input_path.stem
 
         count = process_video_temporal_median(
@@ -325,7 +328,12 @@ def process_batch(
         logger.info(f"Batch processing {len(video_files)} video(s)")
 
         for video_file in video_files:
-            video_output_dir = output_dir / video_file.stem
+            # PNG sequences need per-video subdirectories; mp4 files go
+            # directly into output_dir (named by video stem already).
+            if output_format == "png":
+                video_output_dir = output_dir / video_file.stem
+            else:
+                video_output_dir = output_dir
 
             try:
                 count = process_video_temporal_median(
