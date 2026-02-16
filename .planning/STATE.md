@@ -219,9 +219,10 @@ approved
 | 1 | Add slow-test workflow, adopt Ruff+pre-commit, add coverage reporting, add docs workflow with Sphinx scaffolding | 2026-02-14 | c69270d | [1-add-slow-test-workflow-adopt-ruff-pre-co](./quick/1-add-slow-test-workflow-adopt-ruff-pre-co/) |
 | 2 | Fix pre-commit and CI test failures (lint, imports, Open3D headless) | 2026-02-15 | 8fabc94 | [2-fix-pre-commit-lint-issues-noqa-directiv](./quick/2-fix-pre-commit-lint-issues-noqa-directiv/) |
 | 3 | Fix test failures from Pydantic config migration (mock patch paths) | 2026-02-15 | 53ff2f8 | [3-fix-test-failures-from-pydantic-config-m](./quick/3-fix-test-failures-from-pydantic-config-m/) |
+| 4 | Optimize aquamvs preprocess for speed and memory (hybrid seek, window-step, optimized buffers) | 2026-02-16 | 076bea0 | [4-optimize-aquamvs-preprocess-for-speed-an](./quick/4-optimize-aquamvs-preprocess-for-speed-an/) |
 
 ## Session Continuity
 
-Last session: 2026-02-15 (context gathering)
-Stopped at: Phase 6 context gathered
-Resume file: .planning/phases/06-cli-qa-execution/06-CONTEXT.md
+Last session: 2026-02-16 (quick task execution)
+Stopped at: Completed quick task 4
+Resume file: .planning/quick/4-optimize-aquamvs-preprocess-for-speed-an/4-SUMMARY.md
