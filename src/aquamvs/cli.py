@@ -533,6 +533,8 @@ def preprocess_command(args) -> None:
             window=args.window,
             framestep=args.framestep,
             output_format=args.format,
+            exact_seek=args.exact_seek,
+            window_step=args.window_step,
         )
 
         # Print summary
@@ -801,6 +803,19 @@ def main() -> None:
         choices=["png", "mp4"],
         default="png",
         help="Output format (default: png)",
+    )
+    preprocess_parser.add_argument(
+        "--exact-seek",
+        action="store_true",
+        default=False,
+        help="Force sequential frame reading (slower but avoids seek inaccuracy in compressed video)",
+    )
+    preprocess_parser.add_argument(
+        "--window-step",
+        type=int,
+        default=1,
+        help="Sample every Nth frame within the median window (default: 1 = use all frames). "
+        "E.g., --window 90 --window-step 3 uses 30 frames per median.",
     )
 
     # export-mesh subcommand
