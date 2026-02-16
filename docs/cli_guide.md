@@ -325,12 +325,12 @@ aquamvs benchmark config.yaml --frame 0
 
 This runs reconstruction with multiple matcher/detector combinations and generates a comparison report in `output/benchmark/`.
 
-## Preprocessing
+## Temporal Filtering
 
 Apply temporal median filtering to remove fish/debris from underwater video:
 
 ```bash
-aquamvs preprocess input_video.mp4 --output-dir filtered/ --window 30
+aquamvs temporal-filter input_video.mp4 --output-dir filtered/ --window 30
 ```
 
 **Parameters:**

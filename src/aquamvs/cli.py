@@ -525,7 +525,7 @@ def benchmark_command(
         sys.exit(1)
 
 
-def preprocess_command(args) -> None:
+def temporal_filter_command(args) -> None:
     """Apply temporal median filtering to remove fish/debris from underwater video.
 
     Args:
@@ -791,9 +791,9 @@ def main() -> None:
         help="Generate visualization plots (error heatmaps, bar charts, depth comparisons)",
     )
 
-    # preprocess subcommand
+    # temporal-filter subcommand
     preprocess_parser = subparsers.add_parser(
-        "preprocess",
+        "temporal-filter",
         help="Apply temporal median filtering to remove fish/debris from underwater video",
     )
     preprocess_parser.add_argument(
@@ -912,8 +912,8 @@ def main() -> None:
             compare=args.compare,
             visualize=args.visualize,
         )
-    elif args.command == "preprocess":
-        preprocess_command(args)
+    elif args.command == "temporal-filter":
+        temporal_filter_command(args)
     elif args.command == "export-mesh":
         export_mesh_command(args)
     else:
