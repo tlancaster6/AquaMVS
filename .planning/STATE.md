@@ -201,6 +201,7 @@ Recent decisions affecting current work:
 3. **Write project retrospective** (general) — Lessons learned (agentic coding, new tech stacks, workflow pain points, future directions)
 4. **Update example dataset to 13-camera set** (docs) — Current dataset missing one camera due to recording mishap; likely to confuse users
 5. **Fix benchmark package broken imports and stale test wiring** (testing) — Phase 05 rewrote benchmark modules but left stale references in __init__.py, report.py, and test_ci_benchmarks.py
+6. **Fix pre-existing integration test failure (empty fused cloud)** (testing) — test_end_to_end_reconstruction fails because synthetic scene produces empty fused cloud after fusion
 
 ### Blockers/Concerns
 
