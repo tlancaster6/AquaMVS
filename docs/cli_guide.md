@@ -153,29 +153,74 @@ aquamvs run config.yaml --device cuda
 
 ## Step 5: Examine Results
 
-The output directory contains frame-wise results:
+The output directory contains frame-wise results. Which files are present depends on the matcher type (`roma` vs `lightglue`) and pipeline mode (`full` vs `sparse`).
 
 ```
 output/
+├── config.yaml                          # Copy of the config used for this run
 ├── frame_000000/
-│   ├── e3v82e0_depth.npz           # Depth map for each camera
-│   ├── e3v82e0_consistency.npz     # Consistency map
-│   ├── ...
-│   ├── fused.ply                   # Fused point cloud
-│   └── surface.ply                 # Reconstructed mesh
+│   ├── sparse/                          # LightGlue and RoMa sparse only
+│   │   └── sparse_cloud.pt
+│   ├── features/                        # Optional (runtime.save_features)
+│   │   ├── {camera}.pt                  #   LightGlue only: per-camera keypoints
+│   │   └── {ref}_{src}.pt              #   Per-pair matches
+│   ├── depth_maps/                      # Full mode only (runtime.save_depth_maps)
+│   │   └── {camera}.npz
+│   ├── consistency_maps/                # Full mode, LightGlue only (runtime.save_consistency_maps)
+│   │   ├── {camera}.npz
+│   │   └── {camera}.png
+│   ├── point_cloud/
+│   │   ├── fused.ply                    #   Full mode (runtime.save_point_cloud)
+│   │   └── sparse.ply                   #   Sparse mode (runtime.save_point_cloud)
+│   ├── mesh/                            # runtime.save_mesh
+│   │   └── surface.ply
+│   └── viz/                             # runtime.viz_enabled + viz_stages
+│       ├── depth_{camera}.png
+│       ├── confidence_{camera}.png
+│       ├── sparse_{camera}.png          #   LightGlue only (viz_stages: features)
+│       ├── matches_{ref}_{src}.png      #   LightGlue only (viz_stages: features)
+│       ├── fused_top.png                #   viz_stages: scene
+│       ├── fused_oblique.png
+│       ├── fused_side.png
+│       ├── mesh_top.png
+│       ├── mesh_oblique.png
+│       ├── mesh_side.png
+│       └── rig.png                      #   viz_stages: rig
 ├── frame_000010/
 │   └── ...
-└── summary/
-    └── timeseries_gallery.png      # (If multiple frames)
+└── summary/                             # viz_stages: summary (multi-frame runs)
+    └── timeseries_gallery.png
 ```
 
-**Depth maps (`{camera}_depth.npz`)**: Per-camera depth estimates (ray depth in meters)
+### Data outputs
 
-**Consistency maps (`{camera}_consistency.npz`)**: Number of agreeing source cameras per pixel
+**`sparse/sparse_cloud.pt`** -- Triangulated 3D points from feature correspondences, stored as PyTorch tensors with `points_3d` and `scores` keys. Used internally to derive depth ranges for plane sweep stereo. *LightGlue and RoMa sparse mode only* (RoMa full mode skips triangulation).
 
-**Fused point cloud (`fused.ply`)**: Merged 3D points from all cameras with colors
+**`features/{camera}.pt`** and **`features/{ref}_{src}.pt`** -- Per-camera keypoints/descriptors and per-pair match correspondences. Useful for debugging feature quality. LightGlue saves both per-camera and per-pair files; RoMa sparse saves per-pair only; RoMa full does not save features. *Config: `runtime.save_features` (default: off).*
 
-**Surface mesh (`surface.ply`)**: Triangle mesh (Poisson reconstruction by default)
+**`depth_maps/{camera}.npz`** -- Per-camera depth and confidence maps (ray depth in meters, float32). Each `.npz` contains `depth` (H x W) and `confidence` (H x W) arrays. *Full mode only. Config: `runtime.save_depth_maps` (default: on). Set `runtime.keep_intermediates: false` to delete after fusion.*
+
+**`consistency_maps/{camera}.npz`** and **`{camera}.png`** -- Number of source cameras that agree on the depth at each pixel, saved as both raw counts (`.npz`) and colormapped visualization (`.png`). Only produced by the geometric consistency filter. *Full mode, LightGlue only* (RoMa full mode skips consistency filtering). *Config: `runtime.save_consistency_maps` (default: off).*
+
+**`point_cloud/fused.ply`** -- Fused point cloud merged from all cameras, with vertex colors. Produced in full mode after depth map fusion and outlier removal. *Config: `runtime.save_point_cloud` (default: on).*
+
+**`point_cloud/sparse.ply`** -- Colored sparse point cloud downsampled from triangulated correspondences. Produced in sparse mode. *Config: `runtime.save_point_cloud` (default: on).*
+
+**`mesh/surface.ply`** -- Reconstructed triangle mesh with vertex colors (Poisson reconstruction by default). *Config: `runtime.save_mesh` (default: on).*
+
+### Visualizations
+
+All visualizations require `runtime.viz_enabled: true` (default: off). The `runtime.viz_stages` list controls which groups are generated; leave it empty to enable all stages.
+
+**`viz/depth_{camera}.png`** and **`viz/confidence_{camera}.png`** -- Colormapped depth and confidence maps for each ring camera. *Stage: `depth`. Full mode only.*
+
+**`viz/sparse_{camera}.png`** and **`viz/matches_{ref}_{src}.png`** -- Keypoint overlays on undistorted images and side-by-side match visualizations. *Stage: `features`. LightGlue only.*
+
+**`viz/fused_top.png`**, **`fused_oblique.png`**, **`fused_side.png`**, **`mesh_top.png`**, **`mesh_oblique.png`**, **`mesh_side.png`** -- Point cloud and mesh rendered from three canonical viewpoints (top-down, 45-degree oblique, side). *Stage: `scene`.*
+
+**`viz/rig.png`** -- Camera rig diagram showing camera frustums and the water plane, optionally overlaid with the fused point cloud. *Stage: `rig`.*
+
+**`summary/timeseries_gallery.png`** -- Grid gallery of height maps across all processed frames. Only generated for multi-frame runs. *Stage: `summary`.*
 
 ### View Results
 

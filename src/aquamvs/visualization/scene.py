@@ -81,19 +81,25 @@ def _detect_rendering_backend() -> str:
     to avoid segfaulting on headless CI where OffscreenRenderer crashes
     before Python's try/except can intercept.
 
+    On Windows, the OffscreenRenderer probe may pass with a small buffer
+    but segfault on real geometry, so we skip it and go straight to the
+    legacy Visualizer (native OpenGL, hidden window).
+
     Returns:
         One of "offscreen", "legacy", or "none".
     """
+    import platform
+
     global _rendering_backend
     if _rendering_backend is not None:
         return _rendering_backend
 
-    if _offscreen_available():
+    if platform.system() != "Windows" and _offscreen_available():
         _rendering_backend = "offscreen"
         logger.debug("Using OffscreenRenderer for 3D rendering")
     elif _legacy_visualizer_available():
         _rendering_backend = "legacy"
-        logger.debug("OffscreenRenderer unavailable; using legacy Visualizer fallback")
+        logger.debug("Using legacy Visualizer for 3D rendering")
     else:
         _rendering_backend = "none"
         logger.debug("No 3D rendering backend available")
