@@ -332,7 +332,7 @@ class PipelineConfig(BaseModel):
     Attributes:
         calibration_path: Path to AquaCal calibration JSON file.
         output_dir: Root output directory for reconstruction results.
-        camera_video_map: Mapping from camera name to video file path.
+        camera_input_map: Mapping from camera name to input path (video file or image directory).
         mask_dir: Optional directory containing per-camera ROI mask PNGs.
         pipeline_mode: Pipeline execution mode ("sparse" or "full").
         matcher_type: Matcher backend ("lightglue" or "roma").
@@ -349,7 +349,7 @@ class PipelineConfig(BaseModel):
     # Required fields (no sensible defaults)
     calibration_path: str = ""
     output_dir: str = ""
-    camera_video_map: dict[str, str] = Field(default_factory=dict)
+    camera_input_map: dict[str, str] = Field(default_factory=dict)
 
     # Optional with defaults
     mask_dir: str | None = None
@@ -364,7 +364,6 @@ class PipelineConfig(BaseModel):
     reconstruction: ReconstructionConfig = Field(default_factory=ReconstructionConfig)
     runtime: RuntimeConfig = Field(default_factory=RuntimeConfig)
 
-    @model_validator(mode="after")
     def apply_preset(self, preset: QualityPreset) -> "PipelineConfig":
         """Apply a quality preset to this configuration.
 
@@ -402,11 +401,10 @@ class PipelineConfig(BaseModel):
                     setattr(self.reconstruction, key, preset_values[key])
 
         # Apply sparse matching params if they're at defaults
-        if "max_keypoints" in preset_values and self.sparse_matching.max_keypoints == default_sparse.max_keypoints:
-            self.sparse_matching.max_keypoints = preset_values["max_keypoints"]
-        if "max_keypoints" in preset_values and self.sparse_matching.max_keypoints == default_sparse.max_keypoints:
-            self.sparse_matching.max_keypoints = preset_values["max_keypoints"]
-        if "max_keypoints" in preset_values and self.sparse_matching.max_keypoints == default_sparse.max_keypoints:
+        if (
+            "max_keypoints" in preset_values
+            and self.sparse_matching.max_keypoints == default_sparse.max_keypoints
+        ):
             self.sparse_matching.max_keypoints = preset_values["max_keypoints"]
 
         return self

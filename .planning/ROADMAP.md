@@ -156,3 +156,12 @@ Plans:
 - [ ] 06-03-PLAN.md — Run RoMa+full reconstruction and benchmark comparison
 - [ ] 06-04-PLAN.md — Export mesh to OBJ, STL, GLTF with simplification
 - [ ] 06-05-PLAN.md — Profile pipeline performance and Pipeline API smoke test
+
+### Phase 7: Post-QA bug triage
+
+**Goal:** [To be planned]
+**Depends on:** Phase 6
+**Plans:** 0 plans
+
+Plans:
+- [ ] TBD (run /gsd:plan-phase 7 to break down)

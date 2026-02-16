@@ -59,7 +59,7 @@ Use `aquamvs init` to auto-generate a pipeline configuration from your data:
 
 ```bash
 aquamvs init \
-  --video-dir project_data/videos \
+  --input-dir project_data/videos \
   --pattern "^([a-z0-9]+)-" \
   --calibration project_data/calibration.json \
   --output-dir ./output
@@ -67,7 +67,7 @@ aquamvs init \
 
 **Parameters:**
 
-- `--video-dir`: Directory containing video files (or image directories)
+- `--input-dir`: Directory containing video files or camera subdirectories with images
 - `--pattern`: Regex pattern to extract camera name from filename. The first capture group is used as the camera name. Example: `"^([a-z0-9]+)-"` extracts `e3v82e0` from `e3v82e0-cam1.mp4`
 - `--calibration`: Path to AquaCal calibration JSON
 - `--output-dir`: Output directory for reconstruction results

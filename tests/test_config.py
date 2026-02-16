@@ -295,7 +295,7 @@ class TestPipelineConfig:
         config = PipelineConfig()
         assert config.calibration_path == ""
         assert config.output_dir == ""
-        assert config.camera_video_map == {}
+        assert config.camera_input_map == {}
         assert config.mask_dir is None
         assert config.pipeline_mode == "full"
         assert config.matcher_type == "lightglue"
@@ -311,14 +311,14 @@ class TestPipelineConfig:
         config = PipelineConfig(
             calibration_path="/path/to/calibration.json",
             output_dir="/path/to/output",
-            camera_video_map={"cam1": "/video1.mp4"},
+            camera_input_map={"cam1": "/video1.mp4"},
             mask_dir="/path/to/masks",
             pipeline_mode="sparse",
             matcher_type="roma",
         )
         assert config.calibration_path == "/path/to/calibration.json"
         assert config.output_dir == "/path/to/output"
-        assert config.camera_video_map == {"cam1": "/video1.mp4"}
+        assert config.camera_input_map == {"cam1": "/video1.mp4"}
         assert config.mask_dir == "/path/to/masks"
         assert config.pipeline_mode == "sparse"
         assert config.matcher_type == "roma"
@@ -411,7 +411,7 @@ class TestYAMLRoundTrip:
         original = PipelineConfig(
             calibration_path="/path/to/calibration.json",
             output_dir="/path/to/output",
-            camera_video_map={"cam1": "/video1.mp4", "cam2": "/video2.mp4"},
+            camera_input_map={"cam1": "/video1.mp4", "cam2": "/video2.mp4"},
             pipeline_mode="sparse",
             matcher_type="roma",
             preprocessing=PreprocessingConfig(
@@ -435,7 +435,7 @@ class TestYAMLRoundTrip:
         # Check all fields match
         assert loaded.calibration_path == original.calibration_path
         assert loaded.output_dir == original.output_dir
-        assert loaded.camera_video_map == original.camera_video_map
+        assert loaded.camera_input_map == original.camera_input_map
         assert loaded.pipeline_mode == original.pipeline_mode
         assert loaded.matcher_type == original.matcher_type
         assert (
@@ -456,7 +456,7 @@ class TestYAMLRoundTrip:
         original = PipelineConfig(
             calibration_path="/path/to/calibration.json",
             output_dir="/path/to/output",
-            camera_video_map={"cam1": "/video1.mp4"},
+            camera_input_map={"cam1": "/video1.mp4"},
         )
 
         original.to_yaml(config_path)
@@ -464,7 +464,7 @@ class TestYAMLRoundTrip:
 
         assert loaded.calibration_path == original.calibration_path
         assert loaded.output_dir == original.output_dir
-        assert loaded.camera_video_map == original.camera_video_map
+        assert loaded.camera_input_map == original.camera_input_map
         assert loaded.preprocessing.frame_start == 0
 
     def test_partial_yaml_merges_over_defaults(self, tmp_path):
@@ -474,7 +474,7 @@ class TestYAMLRoundTrip:
         yaml_content = """
 calibration_path: /path/to/calibration.json
 output_dir: /path/to/output
-camera_video_map:
+camera_input_map:
   cam1: /video1.mp4
 
 reconstruction:
@@ -491,7 +491,7 @@ runtime:
         # Session fields
         assert loaded.calibration_path == "/path/to/calibration.json"
         assert loaded.output_dir == "/path/to/output"
-        assert loaded.camera_video_map == {"cam1": "/video1.mp4"}
+        assert loaded.camera_input_map == {"cam1": "/video1.mp4"}
 
         # Partially specified reconstruction (others should be default)
         assert loaded.reconstruction.num_depths == 256
@@ -514,7 +514,7 @@ runtime:
         loaded = PipelineConfig.from_yaml(config_path)
         assert loaded.calibration_path == ""
         assert loaded.output_dir == ""
-        assert loaded.camera_video_map == {}
+        assert loaded.camera_input_map == {}
         assert loaded.reconstruction.num_depths == 128
 
     def test_yaml_handles_none_values(self, tmp_path):
@@ -524,7 +524,7 @@ runtime:
         config = PipelineConfig(
             calibration_path="/path/to/calibration.json",
             output_dir="/path/to/output",
-            camera_video_map={"cam1": "/video1.mp4"},
+            camera_input_map={"cam1": "/video1.mp4"},
             preprocessing=PreprocessingConfig(frame_stop=None),
         )
 
@@ -545,7 +545,7 @@ class TestBackwardCompatibility:
         yaml_content = """
 calibration_path: /path/to/calibration.json
 output_dir: /path/to/output
-camera_video_map:
+camera_input_map:
   cam1: /video1.mp4
 
 color_norm:
@@ -598,7 +598,7 @@ device:
         yaml_content = """
 calibration_path: /path/to/calibration.json
 output_dir: /path/to/output
-camera_video_map:
+camera_input_map:
   cam1: /video1.mp4
 
 preprocessing:
@@ -651,7 +651,7 @@ class TestDefaultLogging:
         yaml_content = """
 calibration_path: /path/to/calibration.json
 output_dir: /path/to/output
-camera_video_map:
+camera_input_map:
   cam1: /video1.mp4
 """
 
@@ -850,7 +850,7 @@ class TestQualityPresets:
         original = PipelineConfig(
             calibration_path="/path/to/calibration.json",
             output_dir="/path/to/output",
-            camera_video_map={"cam1": "/video1.mp4"},
+            camera_input_map={"cam1": "/video1.mp4"},
             quality_preset=QualityPreset.FAST,
         )
 

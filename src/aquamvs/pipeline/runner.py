@@ -159,13 +159,13 @@ def run_pipeline(config: PipelineConfig) -> None:
     ctx = build_pipeline_context(config)
 
     # Auto-detect input type and open appropriate context manager
-    input_type = detect_input_type(config.camera_video_map)
+    input_type = detect_input_type(config.camera_input_map)
     if input_type == "images":
         logger.info("Detected image directory input")
-        context_manager = ImageDirectorySet(config.camera_video_map)
+        context_manager = ImageDirectorySet(config.camera_input_map)
     else:
         logger.info("Opening video files")
-        context_manager = VideoSet(config.camera_video_map)
+        context_manager = VideoSet(config.camera_input_map)
 
     with context_manager as videos:
         logger.info(

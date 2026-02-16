@@ -12,11 +12,11 @@ Commands
 
 ``aquamvs init``
 ~~~~~~~~~~~~~~~~
-Generate a pipeline configuration from a video directory and calibration file.
+Generate a pipeline configuration from an input directory (videos or images) and calibration file.
 
 .. code-block:: bash
 
-   aquamvs init --video-dir /path/to/videos --pattern "^([a-z0-9]+)-" \
+   aquamvs init --input-dir /path/to/input --pattern "^([a-z0-9]+)-" \
                 --calibration /path/to/calibration.json \
                 --output-dir /path/to/output
 

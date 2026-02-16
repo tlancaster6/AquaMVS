@@ -59,7 +59,7 @@ def pipeline_config(tmp_path):
     return PipelineConfig(
         calibration_path="dummy_calibration.json",
         output_dir=str(tmp_path / "output"),
-        camera_video_map={
+        camera_input_map={
             "cam0": "video0.mp4",
             "cam1": "video1.mp4",
             "cam2": "video2.mp4",
@@ -656,7 +656,7 @@ class TestVizIntegration:
         config = PipelineConfig(
             calibration_path="dummy.json",
             output_dir=str(tmp_path / "output"),
-            camera_video_map={"cam0": "v0.mp4", "cam1": "v1.mp4", "cam2": "v2.mp4"},
+            camera_input_map={"cam0": "v0.mp4", "cam1": "v1.mp4", "cam2": "v2.mp4"},
             runtime=RuntimeConfig(viz_enabled=True, viz_stages=[], device="cpu"),
         )
 
@@ -685,7 +685,7 @@ class TestVizIntegration:
         config = PipelineConfig(
             calibration_path="dummy.json",
             output_dir=str(tmp_path / "output"),
-            camera_video_map={"cam0": "v0.mp4", "cam1": "v1.mp4", "cam2": "v2.mp4"},
+            camera_input_map={"cam0": "v0.mp4", "cam1": "v1.mp4", "cam2": "v2.mp4"},
             runtime=RuntimeConfig(viz_enabled=True, viz_stages=["depth"], device="cpu"),
         )
 
@@ -712,7 +712,7 @@ class TestVizIntegration:
         config = PipelineConfig(
             calibration_path="dummy.json",
             output_dir=str(tmp_path / "output"),
-            camera_video_map={"cam0": "v0.mp4", "cam1": "v1.mp4", "cam2": "v2.mp4"},
+            camera_input_map={"cam0": "v0.mp4", "cam1": "v1.mp4", "cam2": "v2.mp4"},
             runtime=RuntimeConfig(viz_enabled=True, viz_stages=["depth"], device="cpu"),
         )
 
@@ -748,7 +748,7 @@ class TestOutputConfig:
         config = PipelineConfig(
             calibration_path="dummy.json",
             output_dir=str(tmp_path / "output"),
-            camera_video_map={"cam0": "v0.mp4", "cam1": "v1.mp4", "cam2": "v2.mp4"},
+            camera_input_map={"cam0": "v0.mp4", "cam1": "v1.mp4", "cam2": "v2.mp4"},
             runtime=RuntimeConfig(save_features=True, device="cpu"),
         )
 
@@ -769,7 +769,7 @@ class TestOutputConfig:
         config = PipelineConfig(
             calibration_path="dummy.json",
             output_dir=str(tmp_path / "output"),
-            camera_video_map={"cam0": "v0.mp4", "cam1": "v1.mp4", "cam2": "v2.mp4"},
+            camera_input_map={"cam0": "v0.mp4", "cam1": "v1.mp4", "cam2": "v2.mp4"},
             runtime=RuntimeConfig(save_features=False, device="cpu"),
         )
 
@@ -787,7 +787,7 @@ class TestOutputConfig:
         config = PipelineConfig(
             calibration_path="dummy.json",
             output_dir=str(tmp_path / "output"),
-            camera_video_map={"cam0": "v0.mp4", "cam1": "v1.mp4", "cam2": "v2.mp4"},
+            camera_input_map={"cam0": "v0.mp4", "cam1": "v1.mp4", "cam2": "v2.mp4"},
             runtime=RuntimeConfig(save_depth_maps=False, device="cpu"),
         )
 
@@ -805,7 +805,7 @@ class TestOutputConfig:
         config = PipelineConfig(
             calibration_path="dummy.json",
             output_dir=str(tmp_path / "output"),
-            camera_video_map={"cam0": "v0.mp4", "cam1": "v1.mp4", "cam2": "v2.mp4"},
+            camera_input_map={"cam0": "v0.mp4", "cam1": "v1.mp4", "cam2": "v2.mp4"},
             runtime=RuntimeConfig(save_point_cloud=False, device="cpu"),
         )
 
@@ -823,7 +823,7 @@ class TestOutputConfig:
         config = PipelineConfig(
             calibration_path="dummy.json",
             output_dir=str(tmp_path / "output"),
-            camera_video_map={"cam0": "v0.mp4", "cam1": "v1.mp4", "cam2": "v2.mp4"},
+            camera_input_map={"cam0": "v0.mp4", "cam1": "v1.mp4", "cam2": "v2.mp4"},
             runtime=RuntimeConfig(save_mesh=False, device="cpu"),
         )
 
@@ -841,7 +841,7 @@ class TestOutputConfig:
         config = PipelineConfig(
             calibration_path="dummy.json",
             output_dir=str(tmp_path / "output"),
-            camera_video_map={"cam0": "v0.mp4", "cam1": "v1.mp4", "cam2": "v2.mp4"},
+            camera_input_map={"cam0": "v0.mp4", "cam1": "v1.mp4", "cam2": "v2.mp4"},
             runtime=RuntimeConfig(
                 save_depth_maps=True, keep_intermediates=False, device="cpu"
             ),
@@ -861,7 +861,7 @@ class TestOutputConfig:
         config = PipelineConfig(
             calibration_path="dummy.json",
             output_dir=str(tmp_path / "output"),
-            camera_video_map={"cam0": "v0.mp4", "cam1": "v1.mp4", "cam2": "v2.mp4"},
+            camera_input_map={"cam0": "v0.mp4", "cam1": "v1.mp4", "cam2": "v2.mp4"},
             runtime=RuntimeConfig(
                 save_features=False,
                 save_depth_maps=False,
@@ -893,7 +893,7 @@ class TestSummaryViz:
         config = PipelineConfig(
             calibration_path="dummy.json",
             output_dir=str(tmp_path / "output"),
-            camera_video_map={"cam0": "v0.mp4"},
+            camera_input_map={"cam0": "v0.mp4"},
             runtime=RuntimeConfig(
                 viz_enabled=True, viz_stages=["summary"], device="cpu"
             ),
@@ -932,7 +932,7 @@ class TestSummaryViz:
         config = PipelineConfig(
             calibration_path="dummy.json",
             output_dir=str(tmp_path / "output"),
-            camera_video_map={"cam0": "v0.mp4"},
+            camera_input_map={"cam0": "v0.mp4"},
             runtime=RuntimeConfig(viz_enabled=False, device="cpu"),
         )
 
@@ -970,7 +970,7 @@ class TestEmptyCloudHandling:
         config = PipelineConfig(
             calibration_path="dummy.json",
             output_dir=str(tmp_path / "output"),
-            camera_video_map={"cam0": "v0.mp4", "cam1": "v1.mp4", "cam2": "v2.mp4"},
+            camera_input_map={"cam0": "v0.mp4", "cam1": "v1.mp4", "cam2": "v2.mp4"},
             runtime=RuntimeConfig(device="cpu"),
         )
 
@@ -1005,7 +1005,7 @@ class TestEmptyCloudHandling:
         config = PipelineConfig(
             calibration_path="dummy.json",
             output_dir=str(tmp_path / "output"),
-            camera_video_map={"cam0": "v0.mp4", "cam1": "v1.mp4", "cam2": "v2.mp4"},
+            camera_input_map={"cam0": "v0.mp4", "cam1": "v1.mp4", "cam2": "v2.mp4"},
             runtime=RuntimeConfig(device="cpu"),
         )
 
@@ -1036,7 +1036,7 @@ class TestSparseCloudFiltering:
         config = PipelineConfig(
             calibration_path="dummy.json",
             output_dir=str(tmp_path / "output"),
-            camera_video_map={"cam0": "v0.mp4", "cam1": "v1.mp4", "cam2": "v2.mp4"},
+            camera_input_map={"cam0": "v0.mp4", "cam1": "v1.mp4", "cam2": "v2.mp4"},
             runtime=RuntimeConfig(device="cpu"),
         )
 
@@ -1064,7 +1064,7 @@ class TestSparseCloudFiltering:
         config = PipelineConfig(
             calibration_path="dummy.json",
             output_dir=str(tmp_path / "output"),
-            camera_video_map={"cam0": "v0.mp4", "cam1": "v1.mp4", "cam2": "v2.mp4"},
+            camera_input_map={"cam0": "v0.mp4", "cam1": "v1.mp4", "cam2": "v2.mp4"},
             runtime=RuntimeConfig(device="cpu"),
         )
 
@@ -1107,7 +1107,7 @@ class TestSparseCloudFiltering:
         config = PipelineConfig(
             calibration_path="dummy.json",
             output_dir=str(tmp_path / "output"),
-            camera_video_map={"cam0": "v0.mp4", "cam1": "v1.mp4", "cam2": "v2.mp4"},
+            camera_input_map={"cam0": "v0.mp4", "cam1": "v1.mp4", "cam2": "v2.mp4"},
             runtime=RuntimeConfig(device="cpu"),
         )
 
@@ -1162,7 +1162,7 @@ class TestSparseMode:
         config = PipelineConfig(
             calibration_path="dummy.json",
             output_dir=str(tmp_path / "output"),
-            camera_video_map={"cam0": "v0.mp4", "cam1": "v1.mp4", "cam2": "v2.mp4"},
+            camera_input_map={"cam0": "v0.mp4", "cam1": "v1.mp4", "cam2": "v2.mp4"},
             pipeline_mode="sparse",
             runtime=RuntimeConfig(device="cpu"),
         )
@@ -1189,7 +1189,7 @@ class TestSparseMode:
         config = PipelineConfig(
             calibration_path="dummy.json",
             output_dir=str(tmp_path / "output"),
-            camera_video_map={"cam0": "v0.mp4", "cam1": "v1.mp4", "cam2": "v2.mp4"},
+            camera_input_map={"cam0": "v0.mp4", "cam1": "v1.mp4", "cam2": "v2.mp4"},
             pipeline_mode="sparse",
             runtime=RuntimeConfig(device="cpu"),
         )
@@ -1220,7 +1220,7 @@ class TestSparseMode:
         config = PipelineConfig(
             calibration_path="dummy.json",
             output_dir=str(tmp_path / "output"),
-            camera_video_map={"cam0": "v0.mp4", "cam1": "v1.mp4", "cam2": "v2.mp4"},
+            camera_input_map={"cam0": "v0.mp4", "cam1": "v1.mp4", "cam2": "v2.mp4"},
             pipeline_mode="sparse",
             runtime=RuntimeConfig(device="cpu"),
         )
@@ -1250,7 +1250,7 @@ class TestSparseMode:
         config = PipelineConfig(
             calibration_path="dummy.json",
             output_dir=str(tmp_path / "output"),
-            camera_video_map={"cam0": "v0.mp4", "cam1": "v1.mp4", "cam2": "v2.mp4"},
+            camera_input_map={"cam0": "v0.mp4", "cam1": "v1.mp4", "cam2": "v2.mp4"},
             pipeline_mode="sparse",
             runtime=RuntimeConfig(device="cpu"),
         )
@@ -1286,7 +1286,7 @@ class TestSparseMode:
         config = PipelineConfig(
             calibration_path="dummy.json",
             output_dir=str(tmp_path / "output"),
-            camera_video_map={"cam0": "v0.mp4", "cam1": "v1.mp4", "cam2": "v2.mp4"},
+            camera_input_map={"cam0": "v0.mp4", "cam1": "v1.mp4", "cam2": "v2.mp4"},
             pipeline_mode="sparse",
             runtime=RuntimeConfig(viz_enabled=True, viz_stages=["scene"], device="cpu"),
         )
@@ -1314,7 +1314,7 @@ class TestSparseMode:
         config = PipelineConfig(
             calibration_path="dummy.json",
             output_dir=str(tmp_path / "output"),
-            camera_video_map={"cam0": "v0.mp4", "cam1": "v1.mp4", "cam2": "v2.mp4"},
+            camera_input_map={"cam0": "v0.mp4", "cam1": "v1.mp4", "cam2": "v2.mp4"},
             pipeline_mode="sparse",
             runtime=RuntimeConfig(viz_enabled=True, viz_stages=["rig"], device="cpu"),
         )
@@ -1339,7 +1339,7 @@ class TestSparseMode:
         config = PipelineConfig(
             calibration_path="dummy.json",
             output_dir=str(tmp_path / "output"),
-            camera_video_map={"cam0": "v0.mp4", "cam1": "v1.mp4", "cam2": "v2.mp4"},
+            camera_input_map={"cam0": "v0.mp4", "cam1": "v1.mp4", "cam2": "v2.mp4"},
             pipeline_mode="full",
             runtime=RuntimeConfig(device="cpu"),
         )
@@ -1366,7 +1366,7 @@ class TestSparseMode:
         config = PipelineConfig(
             calibration_path="dummy.json",
             output_dir=str(tmp_path / "output"),
-            camera_video_map={"cam0": "v0.mp4", "cam1": "v1.mp4", "cam2": "v2.mp4"},
+            camera_input_map={"cam0": "v0.mp4", "cam1": "v1.mp4", "cam2": "v2.mp4"},
             pipeline_mode="sparse",
             runtime=RuntimeConfig(device="cpu"),
         )
@@ -1394,7 +1394,7 @@ class TestMaskIntegration:
         config = PipelineConfig(
             calibration_path="dummy.json",
             output_dir=str(tmp_path / "output"),
-            camera_video_map={"cam0": "v0.mp4", "cam1": "v1.mp4", "cam2": "v2.mp4"},
+            camera_input_map={"cam0": "v0.mp4", "cam1": "v1.mp4", "cam2": "v2.mp4"},
             mask_dir=str(tmp_path / "masks"),
             runtime=RuntimeConfig(device="cpu"),
         )
@@ -1433,7 +1433,7 @@ class TestMaskIntegration:
         config = PipelineConfig(
             calibration_path="dummy.json",
             output_dir=str(tmp_path / "output"),
-            camera_video_map={"cam0": "v0.mp4", "cam1": "v1.mp4", "cam2": "v2.mp4"},
+            camera_input_map={"cam0": "v0.mp4", "cam1": "v1.mp4", "cam2": "v2.mp4"},
             runtime=RuntimeConfig(device="cpu"),
         )
 
@@ -1477,7 +1477,7 @@ class TestMaskIntegration:
         config = PipelineConfig(
             calibration_path="dummy.json",
             output_dir=str(tmp_path / "output"),
-            camera_video_map={"cam0": "v0.mp4", "cam1": "v1.mp4", "cam2": "v2.mp4"},
+            camera_input_map={"cam0": "v0.mp4", "cam1": "v1.mp4", "cam2": "v2.mp4"},
             runtime=RuntimeConfig(device="cpu"),
         )
 
@@ -1505,7 +1505,7 @@ class TestMaskIntegration:
         config = PipelineConfig(
             calibration_path="dummy.json",
             output_dir=str(tmp_path / "output"),
-            camera_video_map={"cam0": "v0.mp4", "cam1": "v1.mp4", "cam2": "v2.mp4"},
+            camera_input_map={"cam0": "v0.mp4", "cam1": "v1.mp4", "cam2": "v2.mp4"},
             runtime=RuntimeConfig(device="cpu"),
         )
 

@@ -35,25 +35,25 @@ def build_pipeline_context(config: PipelineConfig) -> PipelineContext:
     logger.info("Loading calibration from %s", config.calibration_path)
     calibration = load_calibration_data(config.calibration_path)
 
-    # Filter calibration cameras to those with video files
-    video_cameras = set(config.camera_video_map.keys())
+    # Filter calibration cameras to those with input files/directories
+    input_cameras = set(config.camera_input_map.keys())
 
     all_ring = calibration.ring_cameras
     all_auxiliary = calibration.auxiliary_cameras
 
-    ring_cameras = [c for c in all_ring if c in video_cameras]
-    auxiliary_cameras = [c for c in all_auxiliary if c in video_cameras]
+    ring_cameras = [c for c in all_ring if c in input_cameras]
+    auxiliary_cameras = [c for c in all_auxiliary if c in input_cameras]
 
-    skipped_ring = [c for c in all_ring if c not in video_cameras]
-    skipped_aux = [c for c in all_auxiliary if c not in video_cameras]
+    skipped_ring = [c for c in all_ring if c not in input_cameras]
+    skipped_aux = [c for c in all_auxiliary if c not in input_cameras]
     if skipped_ring:
         logger.warning(
-            "Ring cameras in calibration but missing video (skipped): %s",
+            "Ring cameras in calibration but missing input (skipped): %s",
             skipped_ring,
         )
     if skipped_aux:
         logger.warning(
-            "Auxiliary cameras in calibration but missing video (skipped): %s",
+            "Auxiliary cameras in calibration but missing input (skipped): %s",
             skipped_aux,
         )
 

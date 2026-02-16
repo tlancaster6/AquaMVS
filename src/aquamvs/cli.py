@@ -22,20 +22,25 @@ VIDEO_EXTENSIONS = {".mp4", ".avi", ".mkv", ".mov"}
 
 
 def init_config(
-    video_dir: Path,
+    input_dir: Path,
     pattern: str,
     calibration_path: Path,
     output_dir: str,
     config_path: Path,
 ) -> PipelineConfig:
-    """Generate a PipelineConfig from a video directory and calibration file.
+    """Generate a PipelineConfig from an input directory and calibration file.
 
-    Scans the video directory for video files, extracts camera names via regex,
-    cross-references against calibration camera names, and generates a config YAML.
+    Scans the input directory for video files or image subdirectories, extracts camera
+    names via regex, cross-references against calibration camera names, and generates
+    a config YAML.
+
+    For video input: input_dir contains video files (e.g., cam1.mp4, cam2.avi).
+    For image input: input_dir contains subdirectories per camera (e.g., cam1/, cam2/),
+                     each containing image files.
 
     Args:
-        video_dir: Directory containing video files.
-        pattern: Regex pattern to extract camera name from filename.
+        input_dir: Directory containing video files or camera subdirectories.
+        pattern: Regex pattern to extract camera name from filename/dirname.
             The first capture group is used as the camera name.
         calibration_path: Path to AquaCal calibration JSON file.
         output_dir: Output directory for reconstruction results.
@@ -47,22 +52,29 @@ def init_config(
     Raises:
         SystemExit: If no cameras are matched or if the regex pattern has no capture group.
     """
-    # 1. Scan video directory
-    if not video_dir.exists():
-        print(f"Error: Video directory does not exist: {video_dir}", file=sys.stderr)
+    # 1. Scan input directory for videos or image directories
+    if not input_dir.exists():
+        print(f"Error: Input directory does not exist: {input_dir}", file=sys.stderr)
         sys.exit(1)
 
+    # Check for video files
     video_files = [
         f
-        for f in video_dir.iterdir()
+        for f in input_dir.iterdir()
         if f.is_file() and f.suffix.lower() in VIDEO_EXTENSIONS
     ]
 
-    if not video_files:
-        print(f"Error: No video files found in {video_dir}", file=sys.stderr)
+    # Check for image directories
+    image_dirs = [d for d in input_dir.iterdir() if d.is_dir()]
+
+    if not video_files and not image_dirs:
+        print(
+            f"Error: No video files or image directories found in {input_dir}",
+            file=sys.stderr,
+        )
         sys.exit(1)
 
-    # 2. Extract camera names from video filenames
+    # 2. Extract camera names from filenames/dirnames
     try:
         regex = re.compile(pattern)
     except re.error as e:
@@ -78,16 +90,26 @@ def init_config(
         )
         sys.exit(1)
 
-    video_camera_map: dict[str, Path] = {}
-    unmatched_videos: list[Path] = []
+    input_camera_map: dict[str, Path] = {}
+    unmatched_items: list[Path] = []
 
+    # Process video files
     for video_file in video_files:
         match = regex.match(video_file.name)
         if match:
             camera_name = match.group(1)
-            video_camera_map[camera_name] = video_file
+            input_camera_map[camera_name] = video_file
         else:
-            unmatched_videos.append(video_file)
+            unmatched_items.append(video_file)
+
+    # Process image directories
+    for img_dir in image_dirs:
+        match = regex.match(img_dir.name)
+        if match:
+            camera_name = match.group(1)
+            input_camera_map[camera_name] = img_dir
+        else:
+            unmatched_items.append(img_dir)
 
     # 3. Load calibration camera names
     if not calibration_path.exists():
@@ -111,9 +133,9 @@ def init_config(
     calibration_cameras = set(calibration_data["cameras"].keys())
 
     # 4. Cross-reference: find intersection
-    matched_cameras = set(video_camera_map.keys()) & calibration_cameras
-    videos_without_calibration = set(video_camera_map.keys()) - calibration_cameras
-    cameras_without_video = calibration_cameras - set(video_camera_map.keys())
+    matched_cameras = set(input_camera_map.keys()) & calibration_cameras
+    inputs_without_calibration = set(input_camera_map.keys()) - calibration_cameras
+    cameras_without_input = calibration_cameras - set(input_camera_map.keys())
 
     # 5. Report
     print(f"\n{'=' * 70}")
@@ -123,30 +145,30 @@ def init_config(
     if matched_cameras:
         print(f"[OK] Matched {len(matched_cameras)} camera(s):")
         for camera in sorted(matched_cameras):
-            print(f"  {camera:15s} -> {video_camera_map[camera].name}")
+            print(f"  {camera:15s} -> {input_camera_map[camera].name}")
         print()
     else:
         print("[ERROR] No cameras matched!\n")
 
-    if unmatched_videos:
-        print(f"[WARN] {len(unmatched_videos)} video(s) with no regex match:")
-        for video in sorted(unmatched_videos):
-            print(f"  {video.name}")
+    if unmatched_items:
+        print(f"[WARN] {len(unmatched_items)} item(s) with no regex match:")
+        for item in sorted(unmatched_items):
+            print(f"  {item.name}")
         print()
 
-    if videos_without_calibration:
+    if inputs_without_calibration:
         print(
-            f"[WARN] {len(videos_without_calibration)} video(s) with no calibration entry:"
+            f"[WARN] {len(inputs_without_calibration)} input(s) with no calibration entry:"
         )
-        for camera in sorted(videos_without_calibration):
-            print(f"  {camera:15s} -> {video_camera_map[camera].name}")
+        for camera in sorted(inputs_without_calibration):
+            print(f"  {camera:15s} -> {input_camera_map[camera].name}")
         print()
 
-    if cameras_without_video:
+    if cameras_without_input:
         print(
-            f"[WARN] {len(cameras_without_video)} calibration camera(s) with no video:"
+            f"[WARN] {len(cameras_without_input)} calibration camera(s) with no input:"
         )
-        for camera in sorted(cameras_without_video):
+        for camera in sorted(cameras_without_input):
             print(f"  {camera}")
         print()
 
@@ -158,14 +180,14 @@ def init_config(
         sys.exit(1)
 
     # 6. Build config
-    camera_video_map = {
-        camera: str(video_camera_map[camera]) for camera in matched_cameras
+    camera_input_map = {
+        camera: str(input_camera_map[camera]) for camera in matched_cameras
     }
 
     config = PipelineConfig(
         calibration_path=str(calibration_path),
         output_dir=output_dir,
-        camera_video_map=camera_video_map,
+        camera_input_map=camera_input_map,
     )
 
     # 7. Save
@@ -208,10 +230,10 @@ def export_refs_command(
         print(f"Error: Failed to load calibration: {e}", file=sys.stderr)
         sys.exit(1)
 
-    # 3. Compute undistortion maps for all cameras with video
-    video_cameras = set(config.camera_video_map.keys())
+    # 3. Compute undistortion maps for all cameras with input
+    input_cameras = set(config.camera_input_map.keys())
     undistortion_maps = {}
-    for name in video_cameras:
+    for name in input_cameras:
         if name not in calibration.cameras:
             print(
                 f"Warning: Camera {name} in config but not in calibration, skipping",
@@ -228,11 +250,11 @@ def export_refs_command(
     # 4. Auto-detect input type and open appropriate context manager
     from aquamvs.io import ImageDirectorySet, detect_input_type
 
-    input_type = detect_input_type(config.camera_video_map)
+    input_type = detect_input_type(config.camera_input_map)
     if input_type == "images":
-        context_manager = ImageDirectorySet(config.camera_video_map)
+        context_manager = ImageDirectorySet(config.camera_input_map)
     else:
-        context_manager = VideoSet(config.camera_video_map)
+        context_manager = VideoSet(config.camera_input_map)
 
     try:
         with context_manager as videos:
@@ -644,19 +666,19 @@ def main() -> None:
     # init subcommand
     init_parser = subparsers.add_parser(
         "init",
-        help="Generate config from video directory",
+        help="Generate config from input directory",
     )
     init_parser.add_argument(
-        "--video-dir",
+        "--input-dir",
         type=Path,
         required=True,
-        help="Directory containing video files",
+        help="Directory containing video files or camera subdirectories with images",
     )
     init_parser.add_argument(
         "--pattern",
         type=str,
         required=True,
-        help="Regex pattern to extract camera name from filename (first capture group)",
+        help="Regex pattern to extract camera name from filename/dirname (first capture group)",
     )
     init_parser.add_argument(
         "--calibration",
@@ -860,7 +882,7 @@ def main() -> None:
     # Dispatch
     if args.command == "init":
         init_config(
-            video_dir=args.video_dir,
+            input_dir=args.input_dir,
             pattern=args.pattern,
             calibration_path=args.calibration,
             output_dir=args.output_dir,

@@ -3,13 +3,13 @@
 ## Task 1: Run preprocess, init, and export-refs commands
 
 ### Step 1: Verify environment
-- [ ] 1.1: Run `python -c "import aquamvs; print('OK')"` to confirm package imports
-- [ ] 1.2: Run `nvidia-smi` to check GPU availability and VRAM
+- [x] 1.1: Run `python -c "import aquamvs; print('OK')"` to confirm package imports
+- [x] 1.2: Run `nvidia-smi` to check GPU availability and VRAM
 
 ### Step 2: Run preprocess
-- [ ] 2.1: Run `aquamvs preprocess /path/to/videos --output-dir ./preprocessed --window 30 --framestep 3600 --format png` (adjust framestep based on actual FPS)
-- [ ] 2.2: Run `ls ./preprocessed/ | wc -l` to verify 5 frame directories exist
-- [ ] 2.3: Run `ls ./preprocessed/frame_000000/*.png | wc -l` to verify 13 PNG images per frame directory
+- [x] 2.1: Run `aquamvs preprocess /path/to/videos --output-dir ./preprocessed --window 30 --framestep 3600 --format png` (adjust framestep based on actual FPS)
+- [x] 2.2: Run `ls ./preprocessed/ | wc -l` and verify all frame directories exist
+- [x] 2.3: Run `ls ./preprocessed/frame_000000/*.png | wc -l` and verify all png files exist
 
 ### Step 3: Run init
 - [ ] 3.1: Run `aquamvs init --video-dir ./preprocessed/frame_000000 --pattern "^([a-z0-9]+)\.png$" --calibration /path/to/calibration.json --output-dir ./output --config config.yaml` (adjust pattern if image filenames differ)

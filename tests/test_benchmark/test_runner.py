@@ -16,7 +16,7 @@ def mock_config(tmp_path):
     config = PipelineConfig(
         calibration_path=str(tmp_path / "calibration.json"),
         output_dir=str(tmp_path / "output"),
-        camera_video_map={"cam0": str(tmp_path / "video0.mp4")},
+        camera_input_map={"cam0": str(tmp_path / "video0.mp4")},
     )
     # Override benchmark config for testing
     config.runtime.benchmark_extractors = ["superpoint", "aliked"]

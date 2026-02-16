@@ -136,12 +136,12 @@ def profile_pipeline(config: PipelineConfig, frame: int = 0) -> ProfileReport:
     ctx = build_pipeline_context(config)
 
     # Detect input type and open appropriate reader
-    input_type = detect_input_type(config.camera_video_map)
+    input_type = detect_input_type(config.camera_input_map)
 
     if input_type == "images":
-        context_manager = ImageDirectorySet(config.camera_video_map)
+        context_manager = ImageDirectorySet(config.camera_input_map)
     else:
-        context_manager = VideoSet(config.camera_video_map)
+        context_manager = VideoSet(config.camera_input_map)
 
     with context_manager as source:
         raw_images = source.read_frame(frame)

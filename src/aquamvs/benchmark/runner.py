@@ -414,7 +414,7 @@ def _build_pipeline_config(
         config = PipelineConfig(
             calibration_path=str(dataset_path / "calibration.json"),
             output_dir=output_dir,
-            camera_video_map={},
+            camera_input_map={},
         )
 
     # Override settings for this test variant
