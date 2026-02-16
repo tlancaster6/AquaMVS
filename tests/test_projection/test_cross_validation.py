@@ -259,7 +259,9 @@ class TestCastRayCrossValidation:
             if result_np[0] is None:
                 continue  # Skip invalid corners
 
-            pixel_pt = torch.tensor([corner], dtype=torch.float32, device=device)
+            pixel_pt = torch.tensor(
+                corner, dtype=torch.float32, device=device
+            ).unsqueeze(0)
             origins_pt, directions_pt = aquamvs_model.cast_ray(pixel_pt)
 
             origin_aquacal = torch.tensor(
@@ -358,7 +360,9 @@ class TestProjectCrossValidation:
         if pixel_np is None:
             pytest.skip("AquaCal returned None for nadir point")
 
-        point_pt = torch.tensor([point_np], dtype=torch.float32, device=device)
+        point_pt = torch.tensor(point_np, dtype=torch.float32, device=device).unsqueeze(
+            0
+        )
         pixels_pt, valid_pt = aquamvs_model.project(point_pt)
 
         assert valid_pt[0].item()

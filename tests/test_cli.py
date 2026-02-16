@@ -715,7 +715,7 @@ def test_benchmark_argument_parsing():
     """Test main() correctly parses benchmark subcommand arguments."""
     from unittest.mock import patch
 
-    # Test basic benchmark command (default frame=0)
+    # Test basic benchmark command (default args)
     with patch("sys.argv", ["aquamvs", "benchmark", "config.yaml"]):
         with patch("aquamvs.cli.benchmark_command") as mock_benchmark:
             from aquamvs.cli import main
@@ -723,23 +723,25 @@ def test_benchmark_argument_parsing():
             main()
             mock_benchmark.assert_called_once_with(
                 config_path=Path("config.yaml"),
-                frame=0,
+                compare=None,
+                visualize=False,
             )
 
-    # Test benchmark with --frame argument
-    with patch("sys.argv", ["aquamvs", "benchmark", "config.yaml", "--frame", "5"]):
+    # Test benchmark with --visualize argument
+    with patch("sys.argv", ["aquamvs", "benchmark", "config.yaml", "--visualize"]):
         with patch("aquamvs.cli.benchmark_command") as mock_benchmark:
             from aquamvs.cli import main
 
             main()
             mock_benchmark.assert_called_once_with(
                 config_path=Path("config.yaml"),
-                frame=5,
+                compare=None,
+                visualize=True,
             )
 
 
-def test_benchmark_default_frame():
-    """Test benchmark command defaults to frame=0."""
+def test_benchmark_default_args():
+    """Test benchmark command defaults."""
     from unittest.mock import patch
 
     with patch("sys.argv", ["aquamvs", "benchmark", "config.yaml"]):
@@ -747,5 +749,6 @@ def test_benchmark_default_frame():
             from aquamvs.cli import main
 
             main()
-            # Verify frame defaults to 0
-            assert mock_benchmark.call_args[1]["frame"] == 0
+            # Verify defaults
+            assert mock_benchmark.call_args[1]["compare"] is None
+            assert mock_benchmark.call_args[1]["visualize"] is False

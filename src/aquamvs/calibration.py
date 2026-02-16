@@ -148,7 +148,7 @@ def load_calibration_data(calibration_path: str | Path) -> CalibrationData:
 
     # Extract interface parameters
     # water_z is stored per-camera but is the same for all after optimization
-    water_z = next(iter(result.cameras.values())).interface_distance
+    water_z = next(iter(result.cameras.values())).water_z
 
     # Convert interface normal to float32 tensor
     interface_normal = torch.from_numpy(result.interface.normal).to(torch.float32)

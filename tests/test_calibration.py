@@ -58,7 +58,7 @@ def create_synthetic_calibration(
                 is_fisheye=False,
             ),
             extrinsics=CameraExtrinsics(R=R, t=t),
-            interface_distance=water_z,
+            water_z=water_z,
             is_auxiliary=False,
         )
 
@@ -80,7 +80,7 @@ def create_synthetic_calibration(
                 is_fisheye=True,
             ),
             extrinsics=CameraExtrinsics(R=R, t=t),
-            interface_distance=water_z,
+            water_z=water_z,
             is_auxiliary=True,
         )
 
@@ -466,7 +466,7 @@ class TestLoadCalibrationData:
                 K=K, dist_coeffs=dist_coeffs, image_size=(640, 480), is_fisheye=False
             ),
             extrinsics=CameraExtrinsics(R=R, t=t_2d),
-            interface_distance=0.978,
+            water_z=0.978,
             is_auxiliary=False,
         )
 
@@ -511,7 +511,7 @@ class TestLoadCalibrationData:
                 K=K, dist_coeffs=dist_coeffs, image_size=(640, 480), is_fisheye=False
             ),
             extrinsics=CameraExtrinsics(R=R, t=t),
-            interface_distance=0.978,
+            water_z=0.978,
             is_auxiliary=False,
         )
 

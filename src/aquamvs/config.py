@@ -416,6 +416,7 @@ class PipelineConfig(BaseModel):
             self.apply_preset(self.quality_preset)
         return self
 
+    @model_validator(mode="after")
     def check_cross_stage_constraints(self) -> "PipelineConfig":
         """Validate cross-stage constraints and warn about extra fields."""
         # Warn about RoMa with low certainty threshold
@@ -612,7 +613,7 @@ class PipelineConfig(BaseModel):
         path.parent.mkdir(parents=True, exist_ok=True)
 
         # Convert to dict using Pydantic v2 model_dump
-        data = self.model_dump()
+        data = self.model_dump(mode="json")
 
         with open(path, "w") as f:
             yaml.safe_dump(data, f, default_flow_style=False, sort_keys=False)
