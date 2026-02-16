@@ -200,6 +200,7 @@ Recent decisions affecting current work:
 2. **Build portfolio website for Aqua libraries** (general) — Showcase site for AquaCal/AquaMVS/AquaPose targeting employers; static hosting, 3D viewers, comparison sliders
 3. **Write project retrospective** (general) — Lessons learned (agentic coding, new tech stacks, workflow pain points, future directions)
 4. **Update example dataset to 13-camera set** (docs) — Current dataset missing one camera due to recording mishap; likely to confuse users
+5. **Fix benchmark package broken imports and stale test wiring** (testing) — Phase 05 rewrote benchmark modules but left stale references in __init__.py, report.py, and test_ci_benchmarks.py
 
 ### Blockers/Concerns
 
