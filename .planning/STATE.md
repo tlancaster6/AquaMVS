@@ -192,12 +192,14 @@ Recent decisions affecting current work:
 
 - Phase 1.1 inserted after Phase 1: Last-Minute Feature Additions (URGENT)
 - Phase 6 added: CLI QA Execution
+- Phase 7 added: Post-QA bug triage
 
 ### Pending Todos
 
 1. **Mint a Zenodo DOI** (general) — Link repo to Zenodo, add `.zenodo.json`, get citable DOI
 2. **Build portfolio website for Aqua libraries** (general) — Showcase site for AquaCal/AquaMVS/AquaPose targeting employers; static hosting, 3D viewers, comparison sliders
 3. **Write project retrospective** (general) — Lessons learned (agentic coding, new tech stacks, workflow pain points, future directions)
+4. **Update example dataset to 13-camera set** (docs) — Current dataset missing one camera due to recording mishap; likely to confuse users
 
 ### Blockers/Concerns
 
