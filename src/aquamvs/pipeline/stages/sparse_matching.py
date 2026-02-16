@@ -14,7 +14,6 @@ from ...triangulation import (
     triangulate_all_pairs,
 )
 from ..context import PipelineContext
-from ..helpers import _should_viz
 
 logger = logging.getLogger(__name__)
 
@@ -81,42 +80,7 @@ def run_lightglue_path(
             extractor_type=config.sparse_matching.extractor_type,
         )
 
-        # --- [viz] Feature overlays ---
-        if _should_viz(config, "features"):
-            try:
-                from ...visualization.features import render_all_features
-
-                logger.info("Frame %d: rendering feature visualizations", frame_idx)
-                viz_dir = frame_dir / "viz"
-                viz_dir.mkdir(exist_ok=True)
-
-                # Convert tensors to numpy for viz
-                # Get numpy images from undistorted (passed separately if needed)
-                # For now, convert tensors back to numpy
-                np_images = {
-                    name: img.cpu().numpy() for name, img in undistorted_tensors.items()
-                }
-                np_features = {
-                    name: {k: v.cpu().numpy() for k, v in feats.items()}
-                    for name, feats in all_features.items()
-                }
-                np_matches = {
-                    pair: {k: v.cpu().numpy() for k, v in match.items()}
-                    for pair, match in all_matches.items()
-                }
-
-                render_all_features(
-                    images=np_images,
-                    all_features=np_features,
-                    all_matches=np_matches,
-                    sparse_cloud=None,  # Not available yet at this pipeline point
-                    projection_models=None,
-                    output_dir=viz_dir,
-                )
-            except Exception:
-                logger.exception("Frame %d: feature visualization failed", frame_idx)
-
-        # --- Save features (opt-in) ---
+        # --- Save features (opt-in, forced on by config validator when features viz active) ---
         if config.runtime.save_features:
             from ...features import save_features, save_matches
 

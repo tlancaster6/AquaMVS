@@ -9,7 +9,6 @@ from torch.profiler import record_function
 from ...dense import roma_warps_to_depth_maps, save_depth_map
 from ...features import match_all_pairs_roma, run_roma_all_pairs
 from ..context import PipelineContext
-from ..helpers import _should_viz
 
 logger = logging.getLogger(__name__)
 
@@ -59,35 +58,15 @@ def run_roma_full_path(
             masks=ctx.masks,
         )
 
-        # Save depth maps (opt-out)
-        if config.runtime.save_depth_maps:
-            depth_dir = frame_dir / "depth_maps"
-            depth_dir.mkdir(exist_ok=True)
-            for cam_name in depth_maps:
-                save_depth_map(
-                    depth_maps[cam_name],
-                    confidence_maps[cam_name],
-                    depth_dir / f"{cam_name}.npz",
-                )
-
-        # [viz] Depth map renders
-        if _should_viz(config, "depth"):
-            try:
-                from ...visualization.depth import render_all_depth_maps
-
-                logger.info("Frame %d: rendering depth map visualizations", frame_idx)
-                viz_dir = frame_dir / "viz"
-                viz_dir.mkdir(exist_ok=True)
-
-                # Convert depth/confidence tensors to numpy
-                np_depths = {name: dm.cpu().numpy() for name, dm in depth_maps.items()}
-                np_confs = {
-                    name: cm.cpu().numpy() for name, cm in confidence_maps.items()
-                }
-
-                render_all_depth_maps(np_depths, np_confs, viz_dir)
-            except Exception:
-                logger.exception("Frame %d: depth visualization failed", frame_idx)
+        # Save depth maps (always — viz pass reloads from disk)
+        depth_dir = frame_dir / "depth_maps"
+        depth_dir.mkdir(exist_ok=True)
+        for cam_name in depth_maps:
+            save_depth_map(
+                depth_maps[cam_name],
+                confidence_maps[cam_name],
+                depth_dir / f"{cam_name}.npz",
+            )
 
         return depth_maps, confidence_maps
 

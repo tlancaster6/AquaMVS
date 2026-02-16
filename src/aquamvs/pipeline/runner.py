@@ -1,10 +1,12 @@
 """Pipeline runner: orchestrates stage execution and provides public API."""
 
 import logging
+import shutil
 import sys
 from pathlib import Path
 
 import numpy as np
+import torch
 from aquacal.io.video import VideoSet
 from tqdm import tqdm
 
@@ -12,13 +14,13 @@ from ..config import PipelineConfig
 from ..io import ImageDirectorySet, detect_input_type
 from .builder import build_pipeline_context
 from .context import PipelineContext
-from .helpers import _collect_height_maps, _should_viz
 from .stages.dense_matching import run_roma_full_path, run_roma_sparse_path
 from .stages.depth_estimation import run_depth_estimation
 from .stages.fusion import run_fusion_stage
 from .stages.sparse_matching import run_lightglue_path, run_triangulation
 from .stages.surface import run_sparse_surface_stage, run_surface_stage
 from .stages.undistortion import run_undistortion_stage
+from .visualization import run_visualization_pass
 
 logger = logging.getLogger(__name__)
 
@@ -48,7 +50,7 @@ def process_frame(
 
     # --- Stage 1: Undistortion ---
     undistorted, undistorted_tensors, camera_centers = run_undistortion_stage(
-        raw_images, ctx, frame_idx
+        raw_images, ctx, frame_idx, frame_dir=frame_dir
     )
     if not undistorted:
         return
@@ -148,9 +150,16 @@ def process_frame(
 def run_pipeline(config: PipelineConfig) -> None:
     """Run the full reconstruction pipeline over video frames.
 
-    Performs one-time setup, then iterates over frames from the video
-    files according to FrameSamplingConfig, processing each frame.
-    After all frames, generates summary visualizations if enabled.
+    Uses a two-pass architecture to avoid Open3D OpenGL / CUDA GPU memory
+    conflicts on Windows:
+
+    1. **Compute pass** — matching, depth estimation, fusion, surface
+       reconstruction. All outputs saved to disk.
+    2. **Viz pass** — reload saved artifacts from disk, render all
+       visualizations.
+
+    Between passes, ``torch.cuda.empty_cache()`` frees GPU memory so
+    Open3D's OpenGL context can allocate without competing with CUDA.
 
     Args:
         config: Full pipeline configuration.
@@ -158,7 +167,7 @@ def run_pipeline(config: PipelineConfig) -> None:
     # One-time setup
     ctx = build_pipeline_context(config)
 
-    # Auto-detect input type and open appropriate context manager
+    # --- Compute pass ---
     input_type = detect_input_type(config.camera_input_map)
     if input_type == "images":
         logger.info("Detected image directory input")
@@ -191,25 +200,39 @@ def run_pipeline(config: PipelineConfig) -> None:
                 logger.exception("Frame %d: processing failed, skipping", frame_idx)
                 continue
 
-    # --- [viz] Summary plots ---
-    if _should_viz(config, "summary"):
-        try:
-            from ..visualization.summary import render_timeseries_gallery
+    # --- Free GPU memory before viz ---
+    if torch.cuda.is_available():
+        torch.cuda.empty_cache()
 
-            logger.info("Rendering summary visualizations")
-            summary_dir = Path(config.output_dir) / "summary"
-            summary_dir.mkdir(parents=True, exist_ok=True)
+    # --- Viz pass ---
+    if config.runtime.viz_enabled:
+        run_visualization_pass(config, ctx)
 
-            # Build height maps from frame outputs for gallery
-            height_maps = _collect_height_maps(config)
-            if height_maps:
-                render_timeseries_gallery(
-                    height_maps, summary_dir / "timeseries_gallery.png"
-                )
-        except Exception:
-            logger.exception("Summary visualization failed")
+    # --- Deferred cleanup ---
+    if not config.runtime.keep_intermediates:
+        _cleanup_intermediates(config)
 
     logger.info("Pipeline complete")
+
+
+def _cleanup_intermediates(config: PipelineConfig) -> None:
+    """Remove intermediate depth maps from all frame directories.
+
+    Args:
+        config: Pipeline configuration (for output_dir).
+    """
+    output_dir = Path(config.output_dir)
+    for frame_dir in sorted(output_dir.glob("frame_*")):
+        depth_dir = frame_dir / "depth_maps"
+        if depth_dir.exists():
+            shutil.rmtree(depth_dir)
+            logger.debug("Removed intermediate depth maps from %s", frame_dir.name)
+        undist_dir = frame_dir / "undistorted"
+        if undist_dir.exists():
+            shutil.rmtree(undist_dir)
+            logger.debug(
+                "Removed intermediate undistorted images from %s", frame_dir.name
+            )
 
 
 class Pipeline:

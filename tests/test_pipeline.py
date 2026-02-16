@@ -651,8 +651,8 @@ class TestVizIntegration:
         new_viz_imports = viz_modules_after - viz_modules_before
         assert len(new_viz_imports) == 0, f"Unexpected viz imports: {new_viz_imports}"
 
-    def test_viz_enabled_all_stages(self, tmp_path, mock_calibration_data):
-        """When viz is enabled with stages=[], all viz functions are called."""
+    def test_viz_not_called_in_process_frame(self, tmp_path, mock_calibration_data):
+        """Viz does NOT run during process_frame (two-pass architecture)."""
         config = PipelineConfig(
             calibration_path="dummy.json",
             output_dir=str(tmp_path / "output"),
@@ -664,24 +664,20 @@ class TestVizIntegration:
 
         with (
             _mock_pipeline_stages(),
-            patch("aquamvs.visualization.features.render_all_features") as m_feat_viz,
             patch("aquamvs.visualization.depth.render_all_depth_maps") as m_depth_viz,
             patch("aquamvs.visualization.scene.render_all_scenes") as m_scene_viz,
             patch("aquamvs.visualization.rig.render_rig_diagram") as m_rig_viz,
         ):
             process_frame(0, _RAW_IMAGES.copy(), ctx)
 
-            assert m_feat_viz.called, "render_all_features should be called"
-            assert m_depth_viz.called, "render_all_depth_maps should be called"
-            assert m_scene_viz.called, "render_all_scenes should be called"
-            assert m_rig_viz.called, "render_rig_diagram should be called"
+            assert not m_depth_viz.called, "depth viz should NOT run in process_frame"
+            assert not m_scene_viz.called, "scene viz should NOT run in process_frame"
+            assert not m_rig_viz.called, "rig viz should NOT run in process_frame"
 
-        # viz directory should exist
-        frame_dir = Path(config.output_dir) / "frame_000000"
-        assert (frame_dir / "viz").exists()
+    def test_viz_pass_calls_depth_viz(self, tmp_path, mock_calibration_data):
+        """Viz pass renders depth maps when depth stage is enabled."""
+        from aquamvs.pipeline.visualization import run_visualization_pass
 
-    def test_viz_enabled_specific_stages(self, tmp_path, mock_calibration_data):
-        """When viz is enabled with stages=["depth"], only depth viz runs."""
         config = PipelineConfig(
             calibration_path="dummy.json",
             output_dir=str(tmp_path / "output"),
@@ -691,24 +687,29 @@ class TestVizIntegration:
 
         ctx = _make_ctx(config, mock_calibration_data)
 
+        # Create frame dir with a dummy depth map
+        frame_dir = Path(config.output_dir) / "frame_000000"
+        depth_dir = frame_dir / "depth_maps"
+        depth_dir.mkdir(parents=True)
+        np.savez(
+            depth_dir / "cam0.npz", depth=np.zeros((4, 4)), confidence=np.ones((4, 4))
+        )
+
         with (
-            _mock_pipeline_stages(),
-            patch("aquamvs.visualization.features.render_all_features") as m_feat_viz,
             patch("aquamvs.visualization.depth.render_all_depth_maps") as m_depth_viz,
             patch("aquamvs.visualization.scene.render_all_scenes") as m_scene_viz,
-            patch("aquamvs.visualization.rig.render_rig_diagram") as m_rig_viz,
         ):
-            process_frame(0, _RAW_IMAGES.copy(), ctx)
+            run_visualization_pass(config, ctx)
 
             assert m_depth_viz.called, "render_all_depth_maps should be called"
-            assert not m_feat_viz.called, "render_all_features should NOT be called"
-            assert not m_scene_viz.called, "render_all_scenes should NOT be called"
-            assert not m_rig_viz.called, "render_rig_diagram should NOT be called"
+            assert not m_scene_viz.called, "scene viz should NOT be called"
 
-    def test_viz_error_does_not_crash_pipeline(
+    def test_viz_pass_error_does_not_crash(
         self, tmp_path, mock_calibration_data, caplog
     ):
-        """Viz errors are caught and logged, pipeline completes."""
+        """Viz pass errors are caught and logged, pass completes."""
+        from aquamvs.pipeline.visualization import run_visualization_pass
+
         config = PipelineConfig(
             calibration_path="dummy.json",
             output_dir=str(tmp_path / "output"),
@@ -718,21 +719,25 @@ class TestVizIntegration:
 
         ctx = _make_ctx(config, mock_calibration_data)
 
+        # Create frame dir with a dummy depth map
+        frame_dir = Path(config.output_dir) / "frame_000000"
+        depth_dir = frame_dir / "depth_maps"
+        depth_dir.mkdir(parents=True)
+        np.savez(
+            depth_dir / "cam0.npz", depth=np.zeros((4, 4)), confidence=np.ones((4, 4))
+        )
+
         with (
-            _mock_pipeline_stages(),
             patch(
                 "aquamvs.visualization.depth.render_all_depth_maps",
                 side_effect=RuntimeError("Viz explosion"),
             ),
-            caplog.at_level(logging.INFO),
+            caplog.at_level(logging.ERROR),
         ):
             # Should NOT raise
-            process_frame(0, _RAW_IMAGES.copy(), ctx)
+            run_visualization_pass(config, ctx)
 
-        # Pipeline should have completed
         assert "depth visualization failed" in caplog.text
-        # Frame should still be marked complete
-        assert "Frame 0: complete" in caplog.text
 
 
 # ---------------------------------------------------------------------------
@@ -782,80 +787,6 @@ class TestOutputConfig:
         frame_dir = Path(config.output_dir) / "frame_000000"
         assert not (frame_dir / "features").exists()
 
-    def test_skip_depth_maps(self, tmp_path, mock_calibration_data):
-        """save_depth_maps=False means no depth_maps/ directory."""
-        config = PipelineConfig(
-            calibration_path="dummy.json",
-            output_dir=str(tmp_path / "output"),
-            camera_input_map={"cam0": "v0.mp4", "cam1": "v1.mp4", "cam2": "v2.mp4"},
-            runtime=RuntimeConfig(save_depth_maps=False, device="cpu"),
-        )
-
-        ctx = _make_ctx(config, mock_calibration_data)
-
-        with _mock_pipeline_stages() as mocks:
-            process_frame(0, _RAW_IMAGES.copy(), ctx)
-            assert not mocks["save_depth"].called
-
-        frame_dir = Path(config.output_dir) / "frame_000000"
-        assert not (frame_dir / "depth_maps").exists()
-
-    def test_skip_point_cloud(self, tmp_path, mock_calibration_data):
-        """save_point_cloud=False means no point_cloud/ directory."""
-        config = PipelineConfig(
-            calibration_path="dummy.json",
-            output_dir=str(tmp_path / "output"),
-            camera_input_map={"cam0": "v0.mp4", "cam1": "v1.mp4", "cam2": "v2.mp4"},
-            runtime=RuntimeConfig(save_point_cloud=False, device="cpu"),
-        )
-
-        ctx = _make_ctx(config, mock_calibration_data)
-
-        with _mock_pipeline_stages() as mocks:
-            process_frame(0, _RAW_IMAGES.copy(), ctx)
-            assert not mocks["save_pcd"].called
-
-        frame_dir = Path(config.output_dir) / "frame_000000"
-        assert not (frame_dir / "point_cloud").exists()
-
-    def test_skip_mesh(self, tmp_path, mock_calibration_data):
-        """save_mesh=False means no mesh/ directory."""
-        config = PipelineConfig(
-            calibration_path="dummy.json",
-            output_dir=str(tmp_path / "output"),
-            camera_input_map={"cam0": "v0.mp4", "cam1": "v1.mp4", "cam2": "v2.mp4"},
-            runtime=RuntimeConfig(save_mesh=False, device="cpu"),
-        )
-
-        ctx = _make_ctx(config, mock_calibration_data)
-
-        with _mock_pipeline_stages() as mocks:
-            process_frame(0, _RAW_IMAGES.copy(), ctx)
-            assert not mocks["save_mesh"].called
-
-        frame_dir = Path(config.output_dir) / "frame_000000"
-        assert not (frame_dir / "mesh").exists()
-
-    def test_cleanup_intermediates(self, tmp_path, mock_calibration_data):
-        """keep_intermediates=False removes depth maps after fusion."""
-        config = PipelineConfig(
-            calibration_path="dummy.json",
-            output_dir=str(tmp_path / "output"),
-            camera_input_map={"cam0": "v0.mp4", "cam1": "v1.mp4", "cam2": "v2.mp4"},
-            runtime=RuntimeConfig(
-                save_depth_maps=True, keep_intermediates=False, device="cpu"
-            ),
-        )
-
-        ctx = _make_ctx(config, mock_calibration_data)
-
-        with _mock_pipeline_stages():
-            process_frame(0, _RAW_IMAGES.copy(), ctx)
-
-        frame_dir = Path(config.output_dir) / "frame_000000"
-        # Depth maps were saved but then cleaned up
-        assert not (frame_dir / "depth_maps").exists()
-
     def test_sparse_cloud_always_saved(self, tmp_path, mock_calibration_data):
         """Sparse cloud is always saved regardless of OutputConfig flags."""
         config = PipelineConfig(
@@ -864,9 +795,6 @@ class TestOutputConfig:
             camera_input_map={"cam0": "v0.mp4", "cam1": "v1.mp4", "cam2": "v2.mp4"},
             runtime=RuntimeConfig(
                 save_features=False,
-                save_depth_maps=False,
-                save_point_cloud=False,
-                save_mesh=False,
                 device="cpu",
             ),
         )
@@ -913,7 +841,7 @@ class TestSummaryViz:
                 with (
                     patch("aquamvs.pipeline.runner.process_frame"),
                     patch(
-                        "aquamvs.pipeline.runner._collect_height_maps",
+                        "aquamvs.pipeline.visualization._collect_height_maps",
                         return_value=[
                             (0, np.zeros((10, 10)), np.arange(10), np.arange(10)),
                         ],
@@ -947,12 +875,14 @@ class TestSummaryViz:
                 mock_videos.iterate_frames.return_value = []
                 mock_videoset.return_value = mock_videos
 
-                with patch("aquamvs.pipeline.runner.process_frame"):
-                    with patch(
-                        "aquamvs.pipeline.runner._collect_height_maps"
-                    ) as m_collect:
-                        run_pipeline(config)
-                        assert not m_collect.called
+                with (
+                    patch("aquamvs.pipeline.runner.process_frame"),
+                    patch(
+                        "aquamvs.pipeline.runner.run_visualization_pass"
+                    ) as m_viz_pass,
+                ):
+                    run_pipeline(config)
+                    assert not m_viz_pass.called
 
 
 # ---------------------------------------------------------------------------
@@ -1281,14 +1211,16 @@ class TestSparseMode:
             assert not mocks["save_pcd"].called
             assert not mocks["save_mesh"].called
 
-    def test_sparse_mode_scene_viz(self, tmp_path, mock_calibration_data):
-        """Sparse mode with scene viz enabled renders the sparse cloud."""
+    def test_sparse_mode_no_viz_in_process_frame(self, tmp_path, mock_calibration_data):
+        """Sparse mode does NOT render viz during process_frame (two-pass architecture)."""
         config = PipelineConfig(
             calibration_path="dummy.json",
             output_dir=str(tmp_path / "output"),
             camera_input_map={"cam0": "v0.mp4", "cam1": "v1.mp4", "cam2": "v2.mp4"},
             pipeline_mode="sparse",
-            runtime=RuntimeConfig(viz_enabled=True, viz_stages=["scene"], device="cpu"),
+            runtime=RuntimeConfig(
+                viz_enabled=True, viz_stages=["scene", "rig"], device="cpu"
+            ),
         )
 
         ctx = _make_ctx(config, mock_calibration_data)
@@ -1300,39 +1232,15 @@ class TestSparseMode:
                 "scores": torch.ones(10),
             }
 
-            with patch("aquamvs.visualization.scene.render_all_scenes") as m_scene_viz:
+            with (
+                patch("aquamvs.visualization.scene.render_all_scenes") as m_scene_viz,
+                patch("aquamvs.visualization.rig.render_rig_diagram") as m_rig_viz,
+            ):
                 process_frame(0, _RAW_IMAGES.copy(), ctx)
 
-                # Scene viz should be called
-                assert m_scene_viz.called
-
-                # Depth viz should NOT be called (no depth maps in sparse mode)
-                # (tested implicitly by _mock_pipeline_stages not having depth viz patched)
-
-    def test_sparse_mode_rig_viz(self, tmp_path, mock_calibration_data):
-        """Sparse mode with rig viz enabled renders the sparse cloud."""
-        config = PipelineConfig(
-            calibration_path="dummy.json",
-            output_dir=str(tmp_path / "output"),
-            camera_input_map={"cam0": "v0.mp4", "cam1": "v1.mp4", "cam2": "v2.mp4"},
-            pipeline_mode="sparse",
-            runtime=RuntimeConfig(viz_enabled=True, viz_stages=["rig"], device="cpu"),
-        )
-
-        ctx = _make_ctx(config, mock_calibration_data)
-
-        with _mock_pipeline_stages() as mocks:
-            # Override triangulate to return non-empty cloud
-            mocks["triangulate"].return_value = {
-                "points_3d": torch.zeros(10, 3),
-                "scores": torch.ones(10),
-            }
-
-            with patch("aquamvs.visualization.rig.render_rig_diagram") as m_rig_viz:
-                process_frame(0, _RAW_IMAGES.copy(), ctx)
-
-                # Rig viz should be called
-                assert m_rig_viz.called
+                # Neither should be called in process_frame (happens in viz pass)
+                assert not m_scene_viz.called
+                assert not m_rig_viz.called
 
     def test_full_mode_unchanged(self, tmp_path, mock_calibration_data):
         """Full mode (default) runs the complete pipeline as before."""

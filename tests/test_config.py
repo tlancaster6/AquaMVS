@@ -220,9 +220,6 @@ class TestRuntimeConfig:
         assert config.device == "cpu"
         # Output
         assert config.save_features is False
-        assert config.save_depth_maps is True
-        assert config.save_point_cloud is True
-        assert config.save_mesh is True
         assert config.keep_intermediates is True
         assert config.save_consistency_maps is False
         # Visualization
@@ -241,7 +238,6 @@ class TestRuntimeConfig:
         config = RuntimeConfig(
             device="cuda",
             save_features=True,
-            save_depth_maps=False,
             viz_enabled=True,
             viz_stages=["depth", "scene"],
             benchmark_extractors=["superpoint"],
@@ -251,7 +247,6 @@ class TestRuntimeConfig:
         )
         assert config.device == "cuda"
         assert config.save_features is True
-        assert config.save_depth_maps is False
         assert config.viz_enabled is True
         assert config.viz_stages == ["depth", "scene"]
         assert config.benchmark_extractors == ["superpoint"]

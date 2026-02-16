@@ -1,13 +1,16 @@
 """Undistortion and color normalization stage."""
 
 import logging
+from pathlib import Path
 
+import cv2
 import numpy as np
 import torch
 from torch.profiler import record_function
 
 from ...calibration import undistort_image
 from ..context import PipelineContext
+from ..helpers import _should_viz
 
 logger = logging.getLogger(__name__)
 
@@ -16,14 +19,20 @@ def run_undistortion_stage(
     raw_images: dict[str, np.ndarray],
     ctx: PipelineContext,
     frame_idx: int,
+    frame_dir: Path | None = None,
 ) -> tuple[dict[str, np.ndarray], dict[str, torch.Tensor], dict[str, np.ndarray]]:
     """Undistort images and optionally apply color normalization.
+
+    When features visualization is active and *frame_dir* is provided,
+    undistorted images are saved to ``frame_dir/undistorted/{cam}.png``
+    so the viz pass can reload them from disk.
 
     Args:
         raw_images: Camera name to raw BGR image (H, W, 3) uint8 mapping.
             May contain None values for cameras that failed to read.
         ctx: Pipeline context with config, undistortion maps, calibration.
         frame_idx: Frame index (for logging).
+        frame_dir: Frame output directory (optional, needed for saving undistorted images).
 
     Returns:
         Tuple of (undistorted_numpy, undistorted_tensors, camera_centers):
@@ -55,6 +64,13 @@ def run_undistortion_stage(
             undistorted = normalize_colors(
                 undistorted, method=config.preprocessing.color_norm_method
             )
+
+        # Save undistorted images when features viz is active (viz pass needs them)
+        if frame_dir is not None and _should_viz(config, "features"):
+            undist_dir = frame_dir / "undistorted"
+            undist_dir.mkdir(exist_ok=True)
+            for name, img in undistorted.items():
+                cv2.imwrite(str(undist_dir / f"{name}.png"), img)
 
         # Convert to tensors for feature extraction
         undistorted_tensors = {

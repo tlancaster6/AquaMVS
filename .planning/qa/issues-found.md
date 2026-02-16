@@ -1,5 +1,9 @@
 # QA Issues Found — Phase 06 CLI Execution
 
+## General Notes:
+- "aquamvs preprocess" was changed to "aquamvs temporal-filter" partway through QA. Any references to preprocess
+in this doc refer to what is now temporal-filter
+
 ## Issue Template
 
 When logging an issue, use this format:
@@ -25,12 +29,13 @@ in aqucacal dependencies. But in the previous stage, instead of just installing 
 workaround (see .planning/phases/05-performance-and-optimization) like utility inlining in .benchmarks/ to avoid the
 import entirely. These should be cleaned up now that the import works. 
 
-### 6.1 / 2.1: remove preprocess --format option
-- **Description**: remove non-png options for preprocess
-- **Impact**: low
+### 6.1 / 2.1: preprocessing output video long
+- **Description**: when running aquamvs preprocess with --format mp4, the output video is about as long as the input
+video despite having many fewer frames. Add a flag for --output-fps, default to 30, and update the underlying code
+to enforce.
+- **Impact**: non-blocker
 - **Status**: logged for later
-- **Notes**: preprocess currently support jpeg output, but this introduces compressions artifacts and the size savings
-are minimal. Switch to only png output and remove --format CLI option
+- **Notes**: possible bug source indicator in console output: each video prints "writing video to xxxx.mp4 @0.0 fps"
 
 ### 6.1 / 2.1: optimize preprocessing
 - **Description**: temporal median preprocessing is too slow
@@ -69,6 +74,47 @@ Updated the CLI init command to rename --video-dir to --input-dir and added prop
 for both video files (e.g., cam1.mp4) and image subdirectories (e.g., cam1/*.jpg). Modified error messages and 
 validation logic to handle both input types, preventing false "No video files found" errors when using image 
 directories. All 10 source files, 4 test files, and 4 documentation files were updated to maintain consistency with the new naming convention and dual input       support. 
+
+### 6.2 / 1.3
+- **Description**: unclear behavior of quality presets
+- **Impact**: low
+- **Status**: logged for later
+- **Notes**: After aquamvs init, we get a config file with default values set and the "quality_preset" left as null. If
+we change the quality preset, does it silently override other parameters in the config? If so, maybe the quality
+preset functionality should instead be a feature of aquamvs init. User could optionally supply a quality preset level
+during init, which would reflect in the config generated.
+
+### 6.2 / 2.3: no summary output
+- **Description**: running in sparse mode did not produce any output to the summary directory
+- **Impact**: non-blocking
+- **Status**: logged for later
+- **Notes**: If this is the expected behavior then no change is needed. Only a bug if there is a visualization function
+that is failing to run. 
+
+### 6.3 / 3.2: missing output when running roma in full mode
+- **Description**: running roma branch in full mode completes without error or warning, but seems to be missing some 
+outputs, such as the fused point cloud visualizations. 
+- **Impact**: medium
+- **Status**: fixed
+- **Notes**:
+
+### [Phase].[Plan] / [Step] — [Brief Title]
+- **Description**: 
+- **Impact**: 
+- **Status**: 
+- **Notes**:
+
+### [Phase].[Plan] / [Step] — [Brief Title]
+- **Description**: 
+- **Impact**: 
+- **Status**: 
+- **Notes**:
+
+### [Phase].[Plan] / [Step] — [Brief Title]
+- **Description**: 
+- **Impact**: 
+- **Status**: 
+- **Notes**:
 
 ### [Phase].[Plan] / [Step] — [Brief Title]
 - **Description**: 

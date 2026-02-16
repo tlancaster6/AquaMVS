@@ -246,12 +246,11 @@ class RuntimeConfig(BaseModel):
 
     Consolidates DeviceConfig, OutputConfig, VizConfig, BenchmarkConfig, and EvaluationConfig.
 
+    Depth maps, point clouds, and meshes are always saved (no toggle).
+
     Attributes:
         device: PyTorch device string.
         save_features: Save features and matches (.pt files).
-        save_depth_maps: Save per-camera depth + confidence maps (.npz).
-        save_point_cloud: Save fused point cloud (.ply).
-        save_mesh: Save surface mesh (.ply).
         keep_intermediates: Keep depth maps after fusion.
         save_consistency_maps: Save consistency maps as colormapped PNG + NPZ.
         viz_enabled: Master switch for all visualization.
@@ -269,9 +268,6 @@ class RuntimeConfig(BaseModel):
 
     # Output
     save_features: bool = False
-    save_depth_maps: bool = True
-    save_point_cloud: bool = True
-    save_mesh: bool = True
     keep_intermediates: bool = True
     save_consistency_maps: bool = False
 
@@ -429,6 +425,15 @@ class PipelineConfig(BaseModel):
                 "unreliable results. Consider increasing certainty_threshold.",
                 self.dense_matching.certainty_threshold,
             )
+
+        # Force save_features when features viz is active (viz pass needs them on disk)
+        if (
+            self.runtime.viz_enabled
+            and (not self.runtime.viz_stages or "features" in self.runtime.viz_stages)
+            and not self.runtime.save_features
+        ):
+            logger.info("Enabling save_features (required by features visualization)")
+            self.runtime.save_features = True
 
         # Warn about unknown top-level keys
         if self.__pydantic_extra__:

@@ -96,26 +96,16 @@ def run_fusion_stage(
             config.reconstruction,
         )
 
-        # --- Clean up intermediates after successful fusion ---
-        if not config.runtime.keep_intermediates:
-            depth_dir = frame_dir / "depth_maps"
-            if depth_dir.exists():
-                import shutil
-
-                shutil.rmtree(depth_dir)
-                logger.debug("Frame %d: removed intermediate depth maps", frame_idx)
-
-        # --- Save fused point cloud (opt-out) ---
-        if config.runtime.save_point_cloud:
-            if fused_pcd.has_points():
-                pcd_dir = frame_dir / "point_cloud"
-                pcd_dir.mkdir(exist_ok=True)
-                save_point_cloud(fused_pcd, pcd_dir / "fused.ply")
-            else:
-                logger.warning(
-                    "Frame %d: fused point cloud is empty, skipping point cloud save",
-                    frame_idx,
-                )
+        # --- Save fused point cloud (always — viz pass reloads from disk) ---
+        if fused_pcd.has_points():
+            pcd_dir = frame_dir / "point_cloud"
+            pcd_dir.mkdir(exist_ok=True)
+            save_point_cloud(fused_pcd, pcd_dir / "fused.ply")
+        else:
+            logger.warning(
+                "Frame %d: fused point cloud is empty, skipping point cloud save",
+                frame_idx,
+            )
 
         # --- Statistical Outlier Removal (after fusion, before surface reconstruction) ---
         # Skip if too few points for meaningful neighbor statistics

@@ -164,15 +164,15 @@ output/
 │   ├── features/                        # Optional (runtime.save_features)
 │   │   ├── {camera}.pt                  #   LightGlue only: per-camera keypoints
 │   │   └── {ref}_{src}.pt              #   Per-pair matches
-│   ├── depth_maps/                      # Full mode only (runtime.save_depth_maps)
+│   ├── depth_maps/                      # Full mode only (always saved)
 │   │   └── {camera}.npz
 │   ├── consistency_maps/                # Full mode, LightGlue only (runtime.save_consistency_maps)
 │   │   ├── {camera}.npz
 │   │   └── {camera}.png
 │   ├── point_cloud/
-│   │   ├── fused.ply                    #   Full mode (runtime.save_point_cloud)
-│   │   └── sparse.ply                   #   Sparse mode (runtime.save_point_cloud)
-│   ├── mesh/                            # runtime.save_mesh
+│   │   ├── fused.ply                    #   Full mode (always saved)
+│   │   └── sparse.ply                   #   Sparse mode (always saved)
+│   ├── mesh/                            # Always saved
 │   │   └── surface.ply
 │   └── viz/                             # runtime.viz_enabled + viz_stages
 │       ├── depth_{camera}.png
@@ -198,15 +198,15 @@ output/
 
 **`features/{camera}.pt`** and **`features/{ref}_{src}.pt`** -- Per-camera keypoints/descriptors and per-pair match correspondences. Useful for debugging feature quality. LightGlue saves both per-camera and per-pair files; RoMa sparse saves per-pair only; RoMa full does not save features. *Config: `runtime.save_features` (default: off).*
 
-**`depth_maps/{camera}.npz`** -- Per-camera depth and confidence maps (ray depth in meters, float32). Each `.npz` contains `depth` (H x W) and `confidence` (H x W) arrays. *Full mode only. Config: `runtime.save_depth_maps` (default: on). Set `runtime.keep_intermediates: false` to delete after fusion.*
+**`depth_maps/{camera}.npz`** -- Per-camera depth and confidence maps (ray depth in meters, float32). Each `.npz` contains `depth` (H x W) and `confidence` (H x W) arrays. *Full mode only. Always saved. Set `runtime.keep_intermediates: false` to delete after fusion.*
 
 **`consistency_maps/{camera}.npz`** and **`{camera}.png`** -- Number of source cameras that agree on the depth at each pixel, saved as both raw counts (`.npz`) and colormapped visualization (`.png`). Only produced by the geometric consistency filter. *Full mode, LightGlue only* (RoMa full mode skips consistency filtering). *Config: `runtime.save_consistency_maps` (default: off).*
 
-**`point_cloud/fused.ply`** -- Fused point cloud merged from all cameras, with vertex colors. Produced in full mode after depth map fusion and outlier removal. *Config: `runtime.save_point_cloud` (default: on).*
+**`point_cloud/fused.ply`** -- Fused point cloud merged from all cameras, with vertex colors. Produced in full mode after depth map fusion and outlier removal. *Always saved.*
 
-**`point_cloud/sparse.ply`** -- Colored sparse point cloud downsampled from triangulated correspondences. Produced in sparse mode. *Config: `runtime.save_point_cloud` (default: on).*
+**`point_cloud/sparse.ply`** -- Colored sparse point cloud downsampled from triangulated correspondences. Produced in sparse mode. *Always saved.*
 
-**`mesh/surface.ply`** -- Reconstructed triangle mesh with vertex colors (Poisson reconstruction by default). *Config: `runtime.save_mesh` (default: on).*
+**`mesh/surface.ply`** -- Reconstructed triangle mesh with vertex colors (Poisson reconstruction by default). *Always saved.*
 
 ### Visualizations
 
@@ -348,17 +348,14 @@ Leave `frame_stop: null` to process all frames.
 
 ### Output Control
 
-Enable/disable intermediate outputs:
+Depth maps, point clouds, and meshes are always saved. Control other outputs:
 
 ```yaml
 runtime:
-  save_depth_maps: true       # Per-camera depth maps
-  save_sparse_cloud: true     # Sparse triangulated cloud
-  save_fused_cloud: true      # Fused point cloud
-  save_mesh: true             # Final mesh
+  save_features: false          # Per-camera features and matches (default: off)
+  save_consistency_maps: false  # Consistency maps (default: off)
+  keep_intermediates: true      # Keep depth maps after fusion (default: on)
 ```
-
-Disable unnecessary outputs to save disk space.
 
 ## Benchmarking
 

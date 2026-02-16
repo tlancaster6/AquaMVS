@@ -3,19 +3,19 @@
 ## Task 1: Run RoMa+full reconstruction and benchmark comparison
 
 ### Step 1: Prepare RoMa config
-- [ ] 1.1: Copy config.yaml to config_roma.yaml
-- [ ] 1.2: Edit config_roma.yaml and set matcher_type to "roma"
-- [ ] 1.3: Edit config_roma.yaml and set output_dir to ./output_roma (to avoid overwriting LightGlue results)
-- [ ] 1.4: Verify mask_dir, calibration_path, and device settings are kept same as LightGlue run
+- [x] 1.1: Copy config.yaml to config_roma.yaml
+- [x] 1.2: Edit config_roma.yaml and set matcher_type to "roma"
+- [x] 1.3: Edit config_roma.yaml and set output_dir to ./output_roma (to avoid overwriting LightGlue results)
+- [x] 1.4: Verify mask_dir, calibration_path, and device settings are kept same as LightGlue run
 
 ### Step 2: Run RoMa pipeline
-- [ ] 2.1: Run `aquamvs run config_roma.yaml --device cuda`
-- [ ] 2.2: Monitor GPU memory for CUDA OOM errors (RoMa is slower and more VRAM-hungry than LightGlue)
-- [ ] 2.3: If CUDA OOM occurs, reduce image resolution or use FAST preset
-- [ ] 2.4: Fix any blockers immediately
+- [x] 2.1: Run `aquamvs run config_roma.yaml --device cuda`
+- [x] 2.2: Monitor GPU memory for CUDA OOM errors (RoMa is slower and more VRAM-hungry than LightGlue)
+- [x] 2.3: If CUDA OOM occurs, reduce image resolution or use FAST preset
+- [x] 2.4: Fix any blockers immediately
 
 ### Step 3: Verify RoMa outputs
-- [ ] 3.1: Run `ls output_roma/frame_000000/depth_maps/*.npz` to verify depth map files exist
+- [x] 3.1: Run `ls output_roma/frame_000000/depth_maps/*.npz` to verify depth map files exist
 - [ ] 3.2: Run `ls output_roma/frame_000000/*.ply` to verify sparse cloud, fused cloud, and mesh files exist
 - [ ] 3.3: Run `python -c "import open3d as o3d; pcd = o3d.io.read_point_cloud('output_roma/frame_000000/sparse_cloud_frame_000000.ply'); print(len(pcd.points), 'points')"` and verify point count
 - [ ] 3.4: Verify RoMa typically produces denser matches than LightGlue
