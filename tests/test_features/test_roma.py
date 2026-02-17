@@ -257,20 +257,19 @@ class TestApplyMaskToCorrespondences:
 
 
 @pytest.mark.slow
+@pytest.mark.skipif(not torch.cuda.is_available(), reason="RoMa requires CUDA")
 def test_create_roma_matcher():
     """Test that create_roma_matcher initializes model correctly."""
     pytest.importorskip("romav2")
 
-    matcher = create_roma_matcher(device="cpu")
+    matcher = create_roma_matcher(device="cuda")
 
     # Check that it's in eval mode
     assert not matcher.training
 
-    # Check device
-    # Note: RoMa might place submodules on different devices, just check it doesn't crash
-
 
 @pytest.mark.slow
+@pytest.mark.skipif(not torch.cuda.is_available(), reason="RoMa requires CUDA")
 def test_match_pair_roma_output_format():
     """Test that match_pair_roma returns correct output format with real RoMa."""
     pytest.importorskip("romav2")
@@ -281,10 +280,7 @@ def test_match_pair_roma_output_format():
 
     config = DenseMatchingConfig(certainty_threshold=0.5, max_correspondences=1000)
 
-    try:
-        result = match_pair_roma(img_ref, img_src, config, device="cpu")
-    except Exception as e:
-        pytest.skip(f"RoMa not available or failed: {e}")
+    result = match_pair_roma(img_ref, img_src, config, device="cuda")
 
     # Verify output structure
     assert "ref_keypoints" in result
