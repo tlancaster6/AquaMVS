@@ -11,7 +11,6 @@ matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 
 from .metrics import BenchmarkResults, total_keypoints, total_matches
-from .visualization import render_comparison_grids
 
 logger = logging.getLogger(__name__)
 
@@ -41,10 +40,6 @@ def generate_report(
 
     # Generate charts
     _generate_charts(results, comparison_dir)
-
-    # Generate comparison grids
-    config_names = [r.config_name for r in results.results]
-    render_comparison_grids(config_names, results.camera_names, report_dir)
 
     # Generate Markdown
     report_path = report_dir / "report.md"

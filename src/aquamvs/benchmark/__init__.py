@@ -17,12 +17,8 @@ from .metrics import (
     compute_plane_fit_metrics,
 )
 from .report import generate_report
-from .runner import BenchmarkRunResult, TestResult, run_benchmark, run_benchmarks
-from .visualization import (
-    generate_visualizations,
-    render_comparison_grids,
-    render_config_outputs,
-)
+from .runner import BenchmarkRunResult, TestResult, run_benchmarks
+from .visualization import generate_visualizations
 
 __all__ = [
     # Configuration models
@@ -42,13 +38,10 @@ __all__ = [
     "BenchmarkRunResult",
     "TestResult",
     # Feature extraction benchmark (legacy)
-    "run_benchmark",
     "ConfigResult",
     "BenchmarkResults",
     "generate_report",
-    "render_config_outputs",
-    "render_comparison_grids",
-    # Visualization (new)
+    # Visualization
     "generate_visualizations",
     # Comparison (new)
     "compare_runs",
