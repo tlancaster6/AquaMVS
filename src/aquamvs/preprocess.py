@@ -10,6 +10,19 @@ import numpy as np
 
 logger = logging.getLogger(__name__)
 
+# Use bottleneck.median when available — 3–10× faster than np.median for large
+# uint8 arrays (e.g. 30 × 1920 × 1080 × 3 ≈ 179 M values per output frame).
+try:
+    import bottleneck as bn
+
+    _median = bn.median
+except ImportError:
+    logger.warning(
+        "bottleneck not installed; using np.median (slower). "
+        "Install with: pip install bottleneck"
+    )
+    _median = np.median
+
 # Video file extensions to process
 VIDEO_EXTENSIONS = {".mp4", ".avi", ".mkv", ".mov"}
 
@@ -184,7 +197,7 @@ def _process_hybrid_seek(
             frame_stack[i] = frame
 
         # Compute median
-        median_frame = np.median(frame_stack[:num_frames], axis=0).astype(np.uint8)
+        median_frame = _median(frame_stack[:num_frames], axis=0).astype(np.uint8)
 
         # Output
         if output_format == "png":
@@ -246,7 +259,7 @@ def _process_exact_seek(
             for i, f in enumerate(buffer):
                 frame_stack[i] = f
 
-            median_frame = np.median(frame_stack, axis=0).astype(np.uint8)
+            median_frame = _median(frame_stack, axis=0).astype(np.uint8)
 
             # Output
             if output_format == "png":
