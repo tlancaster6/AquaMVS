@@ -142,7 +142,8 @@ Phases execute in numeric order: 1 -> 2 -> 3 -> 4 -> 5
 | 3. Pipeline Decomposition and Modularization | 3/3 | Complete | 2026-02-15 |
 | 4. Documentation and Examples | 7/7 | Complete | - |
 | 5. Performance and Optimization | 8/8 | Complete | 2026-02-15 |
-| 6. CLI QA Execution | 0/5 | Planned | - |
+| 6. CLI QA Execution | 5/5 | Complete | 2026-02-17 |
+| 7. Post-QA Bug Triage | 0/3 | Planned | - |
 
 ### Phase 6: CLI QA Execution
 
@@ -157,11 +158,14 @@ Plans:
 - [ ] 06-04-PLAN.md — Export mesh to OBJ, STL, GLTF with simplification
 - [ ] 06-05-PLAN.md — Profile pipeline performance and Pipeline API smoke test
 
-### Phase 7: Post-QA bug triage
+### Phase 7: Post-QA Bug Triage
 
-**Goal:** [To be planned]
+**Goal:** Fix bugs and issues discovered during Phase 6 CLI QA execution, prioritizing medium-impact items that affect core functionality
 **Depends on:** Phase 6
-**Plans:** 0 plans
+**Bug details:** `.planning/qa/issues-found.md` — full descriptions, reproduction steps, error logs, and triage notes for all issues below
+**Plans:** 3 plans
 
 Plans:
-- [ ] TBD (run /gsd:plan-phase 7 to break down)
+- [ ] 07-01-PLAN.md — Config cleanup + preprocessing quick fixes (deprecated keys, quality presets to init, --output-fps, STL verify, sparse summary close, NAL doc)
+- [ ] 07-02-PLAN.md — Profiler wiring (thread-local registry, timed_stage delegation to PipelineProfiler)
+- [ ] 07-03-PLAN.md — Benchmark rebuild (new unified aquamvs benchmark command, delete old benchmark/profile code)
