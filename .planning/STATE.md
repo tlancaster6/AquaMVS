@@ -9,19 +9,19 @@ See: .planning/PROJECT.md (updated 2026-02-14)
 
 ## Current Position
 
-Phase: 05 (Performance and Optimization)
-Plan: 8 of 8 plans complete
-Status: Complete
-Last activity: 2026-02-16 - Completed quick task 4: Optimize aquamvs preprocess for speed and resource usage
+Phase: 07 (Post-QA Bug Triage)
+Plan: 2 of 3 plans complete
+Status: In Progress
+Last activity: 2026-02-17 - Completed plan 02: Profiler wiring via thread-local registry
 
-Progress: [████████████] 100% (8 of 8 Phase 05 plans complete)
+Progress: [████████] 67% (2 of 3 Phase 07 plans complete)
 
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 21
-- Average duration: 5.9 min
-- Total execution time: 2.15 hours
+- Total plans completed: 23
+- Average duration: 6.0 min
+- Total execution time: 2.38 hours
 
 **By Phase:**
 
@@ -58,6 +58,8 @@ Progress: [████████████] 100% (8 of 8 Phase 05 plans com
 | Phase 05 P06 | 5 | 2 tasks | 7 files |
 | Phase 05 P07 | 3 | 2 tasks | 5 files |
 | Phase 05 P08 | 13 | 2 tasks | 6 files |
+| Phase 07 P01 | ~8 | 3 tasks | 7 files |
+| Phase 07 P02 | 13 | 1 task  | 3 files |
 
 ## Accumulated Context
 
@@ -188,11 +190,17 @@ Recent decisions affecting current work:
 - CPU-only profiling baseline with documented GPU behavior predictions for batching optimization
 - RaycastingScene for point-to-mesh distance computation (not compute_point_cloud_distance which requires two point clouds)
 
+**Phase 07 Plan 02 (2026-02-17):**
+- Thread-local storage (threading.local) for profiler registry — ensures per-thread isolation, safe for concurrent pipeline runs
+- timed_stage else-branch identical to old implementation — backward-compatible, no behavior change for normal aquamvs run usage
+- profile_pipeline uses try/finally to guarantee set_active_profiler(None) always runs even on exception
+
 ### Roadmap Evolution
 
 - Phase 1.1 inserted after Phase 1: Last-Minute Feature Additions (URGENT)
 - Phase 6 added: CLI QA Execution
 - Phase 7 added: Post-QA bug triage
+- Phase 8 added: User Guide and Tutorials Overhaul
 
 ### Pending Todos
 
@@ -225,6 +233,6 @@ approved
 
 ## Session Continuity
 
-Last session: 2026-02-16 (quick task execution)
-Stopped at: Completed quick task 4
-Resume file: .planning/quick/4-optimize-aquamvs-preprocess-for-speed-an/4-SUMMARY.md
+Last session: 2026-02-17 (phase 07 plan 02 execution)
+Stopped at: Completed 07-02-PLAN.md
+Resume file: .planning/phases/07-post-qa-bug-triage/07-02-SUMMARY.md
