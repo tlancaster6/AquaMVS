@@ -144,7 +144,7 @@ Phases execute in numeric order: 1 -> 2 -> 3 -> 4 -> 5
 | 5. Performance and Optimization | 8/8 | Complete | 2026-02-15 |
 | 6. CLI QA Execution | 5/5 | Complete | 2026-02-17 |
 | 7. Post-QA Bug Triage | 0/3 | Planned | - |
-| 8. User Guide and Tutorials Overhaul | 0/0 | Planned | - |
+| 8. User Guide and Tutorials Overhaul | 0/4 | Planned | - |
 
 ### Phase 6: CLI QA Execution
 
@@ -175,9 +175,10 @@ Plans:
 
 **Goal:** Replace the current thin tutorials section with 4 polished pages: overview (CLI vs API routing), CLI usage example, end-to-end Python API notebook, and benchmarking API notebook. Jupyter notebooks render with static outputs on RTD and include Colab launch buttons. Automated notebook execution tests catch breakage from upstream code changes.
 **Depends on:** Phase 7
-**Plans:** 3 plans
+**Plans:** 4 plans
 
 Plans:
 - [ ] 08-01-PLAN.md — myst-nb infrastructure, CLI guide polish, centralized troubleshooting
 - [ ] 08-02-PLAN.md — API notebook polish (Colab badge, auto-download), tutorial overview page
 - [ ] 08-03-PLAN.md — Benchmarking notebook, benchmarks.rst redirect, notebook smoke test
+- [ ] 08-04-PLAN.md — Execute notebooks on real hardware, commit pre-executed outputs for RTD
