@@ -14,11 +14,9 @@ import torch
 
 from aquamvs.calibration import CalibrationData, CameraData, UndistortionData
 from aquamvs.config import (
-    DenseStereoConfig,
-    FusionConfig,
     PairSelectionConfig,
     PipelineConfig,
-    SurfaceConfig,
+    ReconstructionConfig,
 )
 from aquamvs.features import select_pairs
 from aquamvs.pipeline import PipelineContext, process_frame
@@ -220,13 +218,15 @@ def build_synthetic_scene(tmp_path):
     # Pipeline config with relaxed parameters for speed and synthetic data
     config = PipelineConfig(
         output_dir=str(tmp_path / "output"),
-        dense_stereo=DenseStereoConfig(num_depths=16, window_size=5),
-        fusion=FusionConfig(
+        reconstruction=ReconstructionConfig(
+            num_depths=16,
+            window_size=5,
             min_consistent_views=1,
             min_confidence=0.1,
             depth_tolerance=0.05,
+            surface_method="heightfield",
+            grid_resolution=0.01,
         ),
-        surface=SurfaceConfig(method="heightfield", grid_resolution=0.01),
     )
 
     ctx = PipelineContext(

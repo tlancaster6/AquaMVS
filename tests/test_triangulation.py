@@ -403,55 +403,6 @@ class TestTriangulatePair:
             "Inconsistent matches should produce high reprojection error"
         )
 
-    def test_triangulate_pair_rejects_negative_depth(self, device):
-        """Test that points behind ray origins (negative depth) are rejected."""
-        water_z = 0.978
-        normal = torch.tensor([0.0, 0.0, -1.0], device=device, dtype=torch.float32)
-        n_air = 1.0
-        n_water = 1.333
-
-        K = torch.tensor(
-            [[800.0, 0.0, 800.0], [0.0, 800.0, 600.0], [0.0, 0.0, 1.0]],
-            device=device,
-            dtype=torch.float32,
-        )
-        R = torch.eye(3, device=device, dtype=torch.float32)
-
-        # Create two cameras
-        t1 = torch.zeros(3, device=device, dtype=torch.float32)
-        t2 = torch.tensor([0.635, 0.0, 0.0], device=device, dtype=torch.float32)
-
-        model1 = RefractiveProjectionModel(K, R, t1, water_z, normal, n_air, n_water)
-        model2 = RefractiveProjectionModel(K, R, t2, water_z, normal, n_air, n_water)
-
-        # Create a point ABOVE the water surface (z < water_z)
-        # This will cause the triangulated point to be behind the ray origin
-        point_above_water = torch.tensor(
-            [[0.3, 0.0, 0.5]], device=device, dtype=torch.float32
-        )
-
-        # Project through both models (these may be invalid, but let's try)
-        pixels1, valid1 = model1.project(point_above_water)
-        pixels2, valid2 = model2.project(point_above_water)
-
-        # If projections are invalid, create synthetic pixel matches
-        # that would triangulate to a point behind the ray origin
-        if not (valid1.all() and valid2.all()):
-            # Create pixels that point slightly upward (negative Z direction in camera)
-            # This is tricky with refraction, so we'll skip this specific test case
-            pytest.skip("Cannot create invalid projection for this geometry")
-
-        matches = {
-            "ref_keypoints": pixels1,
-            "src_keypoints": pixels2,
-            "scores": torch.ones(1, device=device, dtype=torch.float32),
-        }
-
-        triangulate_pair(model1, model2, matches)
-
-        # If the triangulation produces negative depth, it should be rejected
-        # (This test may need adjustment based on actual geometry)
-
     def test_triangulate_pair_min_angle_parameter(self, device):
         """Test that min_angle parameter correctly controls angle filtering."""
         water_z = 0.978
