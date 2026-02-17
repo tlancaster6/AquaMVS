@@ -1,5 +1,8 @@
 """PipelineProfiler class wrapping torch.profiler with memory tracking and CUDA warmup."""
 
+import tracemalloc
+from contextlib import contextmanager
+from dataclasses import dataclass
 from pathlib import Path
 
 import torch
@@ -9,21 +12,33 @@ from ..config import PipelineConfig
 from .analyzer import ProfileReport, analyze_profile
 
 
+@dataclass
+class MemorySnapshot:
+    """Memory usage captured at stage boundaries."""
+
+    cpu_delta_mb: float = 0.0
+    cuda_delta_mb: float = 0.0
+    cuda_peak_mb: float = 0.0
+
+
 class PipelineProfiler:
     """Wrapper around torch.profiler for pipeline profiling.
 
     Provides:
     - CUDA warmup before profiling
-    - Memory tracking (CPU + GPU)
+    - Manual memory tracking at stage boundaries (avoids profiler OOM)
     - Chrome trace export
     - Structured report generation
+
+    Memory is tracked using torch.cuda APIs and tracemalloc rather than the
+    profiler's built-in profile_memory option, which can cause OOM when
+    serializing traces from long pipeline runs.
     """
 
     def __init__(
         self,
         activities: list[str] | None = None,
-        profile_memory: bool = True,
-        record_shapes: bool = True,
+        record_shapes: bool = False,
         output_dir: Path | None = None,
     ):
         """Initialize profiler.
@@ -31,8 +46,9 @@ class PipelineProfiler:
         Args:
             activities: List of activities to profile. Options: ["cpu", "cuda"].
                 Defaults to ["cpu", "cuda"].
-            profile_memory: Enable memory profiling (recommended for GPU bottlenecks).
-            record_shapes: Record tensor shapes (helps identify size-dependent bottlenecks).
+            record_shapes: Record tensor shapes. Disabled by default because it
+                significantly increases trace data size and can cause OOM
+                when the profiler serializes results.
             output_dir: Directory for Chrome trace output (optional).
         """
         if activities is None:
@@ -45,10 +61,10 @@ class PipelineProfiler:
         if "cuda" in activities:
             self.activities.append(ProfilerActivity.CUDA)
 
-        self.profile_memory = profile_memory
         self.record_shapes = record_shapes
         self.output_dir = output_dir
         self.prof = None
+        self.memory_snapshots: dict[str, MemorySnapshot] = {}
 
     def _cuda_warmup(self):
         """Perform CUDA warmup to avoid cold-start overhead in profile."""
@@ -63,12 +79,12 @@ class PipelineProfiler:
         # CUDA warmup before profiling starts
         self._cuda_warmup()
 
-        # Create profiler
+        # Create profiler — profile_memory=False to avoid trace OOM
         self.prof = profile(
             activities=self.activities,
-            profile_memory=self.profile_memory,
+            profile_memory=False,
             record_shapes=self.record_shapes,
-            with_stack=False,  # Stack traces add overhead, disable for production
+            with_stack=False,
         )
         self.prof.__enter__()
         return self
@@ -78,16 +94,46 @@ class PipelineProfiler:
         if self.prof is not None:
             self.prof.__exit__(exc_type, exc_val, exc_tb)
 
+    @contextmanager
     def stage(self, name: str):
-        """Create a stage-level profiling context.
+        """Create a stage-level profiling context with memory tracking.
+
+        Wraps torch.profiler.record_function for timing and additionally
+        captures CPU (via tracemalloc) and CUDA memory deltas.
 
         Args:
             name: Stage name (e.g., "sparse_matching", "depth_estimation").
 
-        Returns:
-            Context manager for torch.profiler.record_function.
+        Yields:
+            None.
         """
-        return record_function(name)
+        has_cuda = torch.cuda.is_available()
+
+        # Snapshot memory before
+        if has_cuda:
+            torch.cuda.synchronize()
+            torch.cuda.reset_peak_memory_stats()
+            cuda_before = torch.cuda.memory_allocated()
+
+        tracemalloc.start()
+
+        with record_function(name):
+            yield
+
+        # Snapshot memory after
+        _, cpu_peak = tracemalloc.get_traced_memory()
+        tracemalloc.stop()
+
+        snap = MemorySnapshot(cpu_delta_mb=cpu_peak / (1024 * 1024))
+
+        if has_cuda:
+            torch.cuda.synchronize()
+            cuda_after = torch.cuda.memory_allocated()
+            cuda_peak = torch.cuda.max_memory_allocated()
+            snap.cuda_delta_mb = (cuda_after - cuda_before) / (1024 * 1024)
+            snap.cuda_peak_mb = cuda_peak / (1024 * 1024)
+
+        self.memory_snapshots[name] = snap
 
     def export_chrome_trace(self, path: Path) -> None:
         """Export Chrome trace JSON for visualization.
@@ -109,7 +155,7 @@ class PipelineProfiler:
         if self.prof is None:
             raise RuntimeError("Profiler must be run before generating report")
 
-        return analyze_profile(self.prof)
+        return analyze_profile(self.prof, self.memory_snapshots)
 
 
 def profile_pipeline(config: PipelineConfig, frame: int = 0) -> ProfileReport:

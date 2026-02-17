@@ -1,8 +1,14 @@
 """Profile result parsing, sorting, and reporting."""
 
+from __future__ import annotations
+
 from dataclasses import dataclass
+from typing import TYPE_CHECKING
 
 import torch
+
+if TYPE_CHECKING:
+    from .profiler import MemorySnapshot
 
 
 @dataclass
@@ -29,46 +35,46 @@ class ProfileReport:
     device: str
 
 
-def analyze_profile(prof: torch.profiler.profile) -> ProfileReport:
+def analyze_profile(
+    prof: torch.profiler.profile,
+    memory_snapshots: dict[str, MemorySnapshot] | None = None,
+) -> ProfileReport:
     """Analyze torch.profiler results and identify bottlenecks.
 
     Args:
         prof: Completed torch.profiler.profile instance.
+        memory_snapshots: Per-stage memory snapshots captured by PipelineProfiler.
+            When provided, these are used instead of profiler event memory fields
+            (which require profile_memory=True and can cause OOM).
 
     Returns:
         ProfileReport with per-stage metrics and top 3 bottlenecks.
     """
+    if memory_snapshots is None:
+        memory_snapshots = {}
+
     # Get key averages grouped by input shapes
     key_avg = prof.key_averages()
 
-    # Group operations by stage label (record_function names)
-    stage_data = {}
-    total_time = 0.0
-    total_memory = 0.0
-
     # Collect all events by name
     event_map = {}
+    total_time = 0.0
+
     for evt in key_avg:
         name = evt.key
         cpu_time = evt.cpu_time_total / 1000.0  # us to ms
         cuda_time = evt.cuda_time_total / 1000.0  # us to ms
         self_cpu_time = evt.self_cpu_time_total / 1000.0  # us to ms
         self_cuda_time = evt.self_cuda_time_total / 1000.0  # us to ms
-        cpu_mem = evt.cpu_memory_usage / (1024 * 1024)  # bytes to MB
-        cuda_mem = evt.cuda_memory_usage / (1024 * 1024)  # bytes to MB
 
         event_map[name] = {
             "cpu_time_ms": cpu_time,
             "cuda_time_ms": cuda_time,
             "self_cpu_time_ms": self_cpu_time,
             "self_cuda_time_ms": self_cuda_time,
-            "cpu_memory_mb": cpu_mem,
-            "cuda_memory_mb": cuda_mem,
         }
 
-        # Accumulate totals
         total_time = max(total_time, cpu_time + cuda_time)
-        total_memory = max(total_memory, abs(cpu_mem) + abs(cuda_mem))
 
     # Extract stage profiles (filter for known stage names)
     stage_names = [
@@ -83,18 +89,29 @@ def analyze_profile(prof: torch.profiler.profile) -> ProfileReport:
         "extract_depth",
     ]
 
+    stage_data = {}
+    total_memory = 0.0
+
     for stage_name in stage_names:
         if stage_name in event_map:
             evt_data = event_map[stage_name]
+
+            # Use manual memory snapshots if available, otherwise zeros
+            snap = memory_snapshots.get(stage_name)
+            cpu_mem = snap.cpu_delta_mb if snap else 0.0
+            cuda_mem = snap.cuda_peak_mb if snap else 0.0
+
             stage_data[stage_name] = StageProfile(
                 name=stage_name,
                 cpu_time_ms=evt_data["cpu_time_ms"],
                 cuda_time_ms=evt_data["cuda_time_ms"],
                 self_cpu_time_ms=evt_data["self_cpu_time_ms"],
                 self_cuda_time_ms=evt_data["self_cuda_time_ms"],
-                cpu_memory_mb=evt_data["cpu_memory_mb"],
-                cuda_memory_mb=evt_data["cuda_memory_mb"],
+                cpu_memory_mb=cpu_mem,
+                cuda_memory_mb=cuda_mem,
             )
+
+            total_memory = max(total_memory, cpu_mem + cuda_mem)
 
     # Identify top 3 bottlenecks by total time (CPU + CUDA)
     bottlenecks = []
