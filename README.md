@@ -9,6 +9,12 @@
 
 Multi-view-stereo (MVS) reconstruction of underwater surfaces viewed through a flat water surface, with Snell's law refraction modeling.
 
+## :construction: Status :construction:
+**02/17/26: This project is under active and rapid development.**
+The API and internal structure are subject to frequent breaking changes without notice. It is not yet recommended for
+production use. A stable release is planned by the end of the month. This section will be updated accordingly once that
+milestone is reached.
+
 ## What it does
 
 AquaMVS is a companion library to [AquaCal](https://github.com/tlancaster6/AquaCal). It consumes calibration output and synchronized video from above-water cameras to produce time-series 3D surface reconstructions. The pipeline handles the unique challenge of cameras positioned in air observing underwater geometry, accounting for refraction at the air-water interface using Snell's law.
