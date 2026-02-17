@@ -81,6 +81,8 @@ def _collect_height_maps(
     output_dir = Path(config.output_dir)
     height_maps = []
 
+    # Note: sparse mode produces no depth maps or fused point clouds, so this
+    # loop finds nothing and returns empty — by design. The gallery is skipped.
     for frame_dir in sorted(output_dir.glob("frame_*")):
         pcd_path = frame_dir / "point_cloud" / "fused.ply"
         if not pcd_path.exists():

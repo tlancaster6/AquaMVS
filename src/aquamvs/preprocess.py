@@ -47,6 +47,8 @@ def process_video_temporal_median(
     start_time = time.time()
 
     # Open video
+    # Note: H.264 streams may emit "Invalid NAL unit size" warnings from ffmpeg
+    # at the end of decoding. This is benign and does not indicate corrupted frames.
     cap = cv2.VideoCapture(str(video_path))
     if not cap.isOpened():
         raise RuntimeError(f"Failed to open video: {video_path}")

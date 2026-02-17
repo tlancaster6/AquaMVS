@@ -6,6 +6,7 @@ at stage boundaries.
 """
 
 import logging
+import threading
 import time
 import tracemalloc
 from contextlib import contextmanager
@@ -17,13 +18,37 @@ import torch
 from ..config import PipelineConfig
 from .analyzer import ProfileReport, build_report
 
+_profiler_local = threading.local()
+
+
+def set_active_profiler(profiler: "PipelineProfiler | None") -> None:
+    """Set the active profiler for the current thread.
+
+    When set, timed_stage() will delegate to profiler.stage() instead of
+    just logging elapsed time. Call with None to deactivate.
+
+    Args:
+        profiler: PipelineProfiler instance or None to deactivate.
+    """
+    _profiler_local.instance = profiler
+
+
+def get_active_profiler() -> "PipelineProfiler | None":
+    """Get the active profiler for the current thread, or None.
+
+    Returns:
+        Active PipelineProfiler or None if no profiler is active.
+    """
+    return getattr(_profiler_local, "instance", None)
+
 
 @contextmanager
 def timed_stage(name: str, logger: logging.Logger):
     """Log wall-clock duration of a pipeline stage.
 
-    Drop-in replacement for torch.profiler.record_function that emits
-    a timing log line when the block exits.
+    When an active profiler is set (via set_active_profiler), delegates to
+    profiler.stage() to capture detailed timing and memory metrics. Otherwise,
+    falls back to simple log-based timing.
 
     Args:
         name: Stage name (e.g., "depth_estimation").
@@ -32,14 +57,19 @@ def timed_stage(name: str, logger: logging.Logger):
     Yields:
         None.
     """
-    if torch.cuda.is_available():
-        torch.cuda.synchronize()
-    start = time.perf_counter()
-    yield
-    if torch.cuda.is_available():
-        torch.cuda.synchronize()
-    elapsed_ms = (time.perf_counter() - start) * 1000.0
-    logger.info("%s: %.1f ms", name, elapsed_ms)
+    profiler = get_active_profiler()
+    if profiler is not None:
+        with profiler.stage(name):
+            yield
+    else:
+        if torch.cuda.is_available():
+            torch.cuda.synchronize()
+        start = time.perf_counter()
+        yield
+        if torch.cuda.is_available():
+            torch.cuda.synchronize()
+        elapsed_ms = (time.perf_counter() - start) * 1000.0
+        logger.info("%s: %.1f ms", name, elapsed_ms)
 
 
 @dataclass
@@ -174,7 +204,11 @@ def profile_pipeline(config: PipelineConfig, frame: int = 0) -> ProfileReport:
     profiler = PipelineProfiler(output_dir=Path(config.output_dir))
 
     with profiler:
-        process_frame(frame, raw_images, ctx)
+        set_active_profiler(profiler)
+        try:
+            process_frame(frame, raw_images, ctx)
+        finally:
+            set_active_profiler(None)
 
     if torch.cuda.is_available():
         torch.cuda.synchronize()

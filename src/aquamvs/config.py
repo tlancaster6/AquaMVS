@@ -17,6 +17,10 @@ from pydantic import (
 
 logger = logging.getLogger(__name__)
 
+# Keys that were removed from the config schema (outputs are now always saved).
+# Old configs containing these keys will produce a warning and have them stripped.
+REMOVED_KEYS = {"save_depth_maps", "save_point_cloud", "save_mesh"}
+
 # Valid values for enum fields
 VALID_COLOR_NORM_METHODS = ["gain", "histogram"]
 VALID_VIZ_STAGES = ["depth", "features", "scene", "rig", "summary"]
@@ -407,9 +411,20 @@ class PipelineConfig(BaseModel):
 
     @model_validator(mode="after")
     def auto_apply_preset(self) -> "PipelineConfig":
-        """Auto-apply quality preset if specified."""
+        """Warn when quality_preset is present in config (no longer applied at runtime).
+
+        Presets are now baked in at init time via ``aquamvs init --preset <name>``.
+        Loading a config with quality_preset set does NOT silently override
+        user-specified values.
+        """
         if self.quality_preset is not None:
-            self.apply_preset(self.quality_preset)
+            logger.warning(
+                "quality_preset '%s' in config is deprecated and will NOT be applied "
+                "at runtime. Re-generate your config with "
+                "'aquamvs init --preset %s' to bake preset values in explicitly.",
+                self.quality_preset.value,
+                self.quality_preset.value,
+            )
         return self
 
     @model_validator(mode="after")
@@ -496,6 +511,26 @@ class PipelineConfig(BaseModel):
         Returns:
             Migrated configuration dictionary.
         """
+        # Strip removed keys (outputs are now always saved; these flags no longer exist).
+        for key in list(data.keys()):
+            if key in REMOVED_KEYS:
+                logger.warning(
+                    "Config key '%s' has been removed and will be ignored. "
+                    "All outputs are now always saved. Remove this key from your config.",
+                    key,
+                )
+                del data[key]
+        # Also check inside 'runtime' subdict (old structure placed them there).
+        if "runtime" in data and isinstance(data["runtime"], dict):
+            for key in list(data["runtime"].keys()):
+                if key in REMOVED_KEYS:
+                    logger.warning(
+                        "Config key 'runtime.%s' has been removed and will be ignored. "
+                        "All outputs are now always saved.",
+                        key,
+                    )
+                    del data["runtime"][key]
+
         # Check for old-style keys and migrate them
         migrations = {
             # Preprocessing

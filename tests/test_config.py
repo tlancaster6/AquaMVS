@@ -737,10 +737,16 @@ class TestQualityPresets:
         assert QualityPreset.QUALITY == "quality"
 
     def test_fast_preset_sets_expected_values(self):
-        """Test that fast preset sets expected parameter values."""
+        """Test that apply_preset('fast') sets expected parameter values.
+
+        Presets are no longer auto-applied at construction time; they are baked
+        in at init time via ``aquamvs init --preset fast``. This test verifies
+        that calling apply_preset() explicitly still works correctly.
+        """
         from aquamvs.config import PipelineConfig, QualityPreset
 
-        config = PipelineConfig(quality_preset=QualityPreset.FAST)
+        config = PipelineConfig()
+        config.apply_preset(QualityPreset.FAST)
 
         # Dense stereo
         assert config.reconstruction.num_depths == 64
@@ -757,10 +763,11 @@ class TestQualityPresets:
         assert config.reconstruction.poisson_depth == 8
 
     def test_balanced_preset_sets_expected_values(self):
-        """Test that balanced preset sets expected parameter values."""
+        """Test that apply_preset('balanced') sets expected parameter values."""
         from aquamvs.config import PipelineConfig, QualityPreset
 
-        config = PipelineConfig(quality_preset=QualityPreset.BALANCED)
+        config = PipelineConfig()
+        config.apply_preset(QualityPreset.BALANCED)
 
         # Dense stereo
         assert config.reconstruction.num_depths == 128
@@ -777,10 +784,11 @@ class TestQualityPresets:
         assert config.reconstruction.poisson_depth == 9
 
     def test_quality_preset_sets_expected_values(self):
-        """Test that quality preset sets expected parameter values."""
+        """Test that apply_preset('quality') sets expected parameter values."""
         from aquamvs.config import PipelineConfig, QualityPreset
 
-        config = PipelineConfig(quality_preset=QualityPreset.QUALITY)
+        config = PipelineConfig()
+        config.apply_preset(QualityPreset.QUALITY)
 
         # Dense stereo
         assert config.reconstruction.num_depths == 256
@@ -796,8 +804,26 @@ class TestQualityPresets:
         # Surface
         assert config.reconstruction.poisson_depth == 10
 
-    def test_explicit_values_override_preset(self):
-        """Test that explicitly set values are NOT overridden by preset."""
+    def test_quality_preset_not_auto_applied(self):
+        """Test that quality_preset in config is NOT auto-applied at runtime.
+
+        Presets are now baked in at init time. Loading a config with
+        quality_preset set should emit a deprecation warning but NOT override
+        any field values.
+        """
+
+        from aquamvs.config import PipelineConfig, QualityPreset
+
+        # Constructing with quality_preset=FAST should NOT change defaults
+        config = PipelineConfig(quality_preset=QualityPreset.FAST)
+
+        # Default values should remain unchanged (not overridden by fast preset)
+        assert config.reconstruction.num_depths == 128  # FAST would set 64
+        assert config.reconstruction.window_size == 11  # FAST would set 7
+        assert config.sparse_matching.max_keypoints == 2048  # FAST would set 1024
+
+    def test_explicit_values_not_overridden_when_preset_stored(self):
+        """Test that explicit values are preserved when quality_preset is stored."""
         from aquamvs.config import (
             PipelineConfig,
             QualityPreset,
@@ -811,33 +837,15 @@ class TestQualityPresets:
             sparse_matching=SparseMatchingConfig(max_keypoints=8192),
         )
 
-        # Explicit values should be preserved
+        # Explicit values should be preserved (preset not auto-applied)
         assert config.reconstruction.num_depths == 512
         assert config.sparse_matching.max_keypoints == 8192
 
-        # Other preset values should still apply
-        assert config.reconstruction.window_size == 7
-        assert config.reconstruction.depth_batch_size == 8
-
-    def test_partial_override_preset(self):
-        """Test that partially overridden configs preserve user values."""
-        from aquamvs.config import PipelineConfig, QualityPreset, ReconstructionConfig
-
-        config = PipelineConfig(
-            quality_preset=QualityPreset.QUALITY,
-            reconstruction=ReconstructionConfig(num_depths=200),
-        )
-
-        # User-specified value preserved
-        assert config.reconstruction.num_depths == 200
-
-        # Other preset values applied
-        assert config.reconstruction.window_size == 15
-        assert config.reconstruction.voxel_size == 0.0005
-        assert config.sparse_matching.max_keypoints == 4096
+        # Other values remain at defaults (not overridden by fast preset)
+        assert config.reconstruction.window_size == 11  # default, not fast=7
 
     def test_preset_round_trip_yaml(self, tmp_path):
-        """Test that preset round-trips correctly through YAML."""
+        """Test that preset field round-trips correctly through YAML."""
         from aquamvs.config import PipelineConfig, QualityPreset
 
         config_path = tmp_path / "config.yaml"
@@ -853,13 +861,12 @@ class TestQualityPresets:
         original.to_yaml(config_path)
         loaded = PipelineConfig.from_yaml(config_path)
 
-        # Preset should be preserved
+        # Preset field should be preserved in YAML
         assert loaded.quality_preset == QualityPreset.FAST
 
-        # Preset values should be applied
-        assert loaded.reconstruction.num_depths == 64
-        assert loaded.reconstruction.window_size == 7
-        assert loaded.sparse_matching.max_keypoints == 1024
+        # But values remain at defaults (preset not auto-applied at load time)
+        assert loaded.reconstruction.num_depths == 128  # default, not fast=64
+        assert loaded.reconstruction.window_size == 11  # default, not fast=7
 
     def test_preset_from_string(self):
         """Test that preset can be specified as string in construction."""
@@ -867,8 +874,9 @@ class TestQualityPresets:
 
         config = PipelineConfig(quality_preset="balanced")
 
+        # Stored as enum, but NOT auto-applied
         assert config.quality_preset == QualityPreset.BALANCED
-        assert config.reconstruction.num_depths == 128
+        assert config.reconstruction.num_depths == 128  # default, not changed
 
     def test_no_preset_uses_defaults(self):
         """Test that no preset uses default values."""

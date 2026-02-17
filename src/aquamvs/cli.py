@@ -27,6 +27,7 @@ def init_config(
     calibration_path: Path,
     output_dir: str,
     config_path: Path,
+    preset: str | None = None,
 ) -> PipelineConfig:
     """Generate a PipelineConfig from an input directory and calibration file.
 
@@ -45,6 +46,10 @@ def init_config(
         calibration_path: Path to AquaCal calibration JSON file.
         output_dir: Output directory for reconstruction results.
         config_path: Path where the generated config YAML will be saved.
+        preset: Optional quality preset to bake into config at init time
+            ("fast", "balanced", or "quality"). Preset values are written as
+            explicit fields; quality_preset is set to null so no runtime
+            override occurs.
 
     Returns:
         The generated PipelineConfig.
@@ -189,6 +194,16 @@ def init_config(
         output_dir=output_dir,
         camera_input_map=camera_input_map,
     )
+
+    # Apply preset at init time — bakes values into explicit fields so that
+    # the saved YAML contains concrete numbers, not a preset name that would
+    # silently override user edits at runtime.
+    if preset is not None:
+        from aquamvs.config import QualityPreset
+
+        config.apply_preset(QualityPreset(preset))
+        config.quality_preset = None  # preset is baked in; no runtime re-apply needed
+        print(f"[OK] Applied preset '{preset}' (values baked into config)")
 
     # 7. Save
     config.to_yaml(config_path)
@@ -698,6 +713,13 @@ def main() -> None:
         default=Path("config.yaml"),
         help="Path to output config YAML file (default: config.yaml)",
     )
+    init_parser.add_argument(
+        "--preset",
+        type=str,
+        choices=["fast", "balanced", "quality"],
+        default=None,
+        help="Quality preset to bake into config (fast, balanced, quality)",
+    )
 
     # run subcommand
     run_parser = subparsers.add_parser(
@@ -887,6 +909,7 @@ def main() -> None:
             calibration_path=args.calibration,
             output_dir=args.output_dir,
             config_path=args.config,
+            preset=args.preset,
         )
     elif args.command == "run":
         run_command(
