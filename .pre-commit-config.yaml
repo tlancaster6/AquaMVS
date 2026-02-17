@@ -44,10 +44,3 @@ repos:
         language: system
         pass_filenames: false
         stages: [pre-push]
-
-      - id: docs-build
-        name: Build documentation
-        entry: bash .hooks/pre-push-docs.sh
-        language: system
-        pass_filenames: false
-        stages: [pre-push]

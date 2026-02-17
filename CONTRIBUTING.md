@@ -42,13 +42,19 @@ Thank you for your interest in contributing to AquaMVS. This guide will help you
 This project uses git hooks via [pre-commit](https://pre-commit.com/) to catch issues early:
 
 - **On commit**: ruff lint/format, trailing whitespace, end-of-file fixer, YAML check, large file check, and secret detection ([detect-secrets](https://github.com/Yelp/detect-secrets))
-- **On push**: full ruff lint/format check across all files, fast test suite (`pytest -m "not slow"`), documentation build, and secret detection
+- **On push**: full ruff lint/format check across all files, fast test suite (`pytest -m "not slow"`), and secret detection
 
 Install both hooks after cloning:
 ```bash
 pre-commit install
 pre-commit install --hook-type pre-push
 ```
+
+If you modify documentation, you can verify the build locally before pushing, or let the GitHub CI catch issues after you push:
+```bash
+sphinx-build -W --keep-going -b html docs docs/_build/html
+```
+
 
 ## Running Tests
 
