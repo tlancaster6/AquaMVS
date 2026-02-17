@@ -248,6 +248,6 @@ approved
 
 ## Session Continuity
 
-Last session: 2026-02-17 (phase 07 plan 03 execution — 13 min)
-Stopped at: Completed 07-03-PLAN.md (Phase 07 complete)
-Resume file: .planning/phases/07-post-qa-bug-triage/07-03-SUMMARY.md
+Last session: 2026-02-17 (phase 08 context gathering)
+Stopped at: Phase 8 context gathered
+Resume file: .planning/phases/08-user-guide-and-tutorials-overhaul/08-CONTEXT.md
