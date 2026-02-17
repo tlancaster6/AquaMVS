@@ -10,18 +10,18 @@ See: .planning/PROJECT.md (updated 2026-02-14)
 ## Current Position
 
 Phase: 07 (Post-QA Bug Triage)
-Plan: 2 of 3 plans complete
-Status: In Progress
-Last activity: 2026-02-17 - Completed plan 02: Profiler wiring via thread-local registry
+Plan: 3 of 3 plans complete
+Status: Complete
+Last activity: 2026-02-17 - Completed plan 03: Unified benchmark command (pathway comparison)
 
-Progress: [████████] 67% (2 of 3 Phase 07 plans complete)
+Progress: [████████████] 100% (3 of 3 Phase 07 plans complete)
 
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 23
+- Total plans completed: 24
 - Average duration: 6.0 min
-- Total execution time: 2.38 hours
+- Total execution time: 2.6 hours
 
 **By Phase:**
 
@@ -33,9 +33,10 @@ Progress: [████████] 67% (2 of 3 Phase 07 plans complete)
 | 03    | 3     | 16min | 5.3min   |
 | 04    | 7     | 24min | 3.4min   |
 | 05    | 8     | 50min | 6.3min   |
+| 07    | 3     | 47min | 15.7min  |
 
 **Recent Trend:**
-- Last 5 plans: 05-02 (4min), 05-05 (5min), 05-06 (5min), 05-07 (3min), 05-08 (13min)
+- Last 5 plans: 05-08 (13min), 07-01 (21min), 07-02 (13min), 07-03 (13min)
 - Trend: Gap closure with execution 13min, wiring fixes very fast (3min), standard tasks moderate (4-5min)
 
 | Plan | Duration | Tasks | Files |
@@ -60,6 +61,7 @@ Progress: [████████] 67% (2 of 3 Phase 07 plans complete)
 | Phase 05 P08 | 13 | 2 tasks | 6 files |
 | Phase 07 P01 | 21 | 3 tasks | 7 files |
 | Phase 07 P02 | 13 | 1 task  | 3 files |
+| Phase 07 P03 | 13 | 2 tasks | 7 files |
 
 ## Accumulated Context
 
@@ -202,6 +204,12 @@ Recent decisions affecting current work:
 - timed_stage else-branch identical to old implementation — backward-compatible, no behavior change for normal aquamvs run usage
 - profile_pipeline uses try/finally to guarantee set_active_profiler(None) always runs even on exception
 
+**Phase 07 Plan 03 (2026-02-17):**
+- aquamvs benchmark accepts a PipelineConfig YAML (not BenchmarkConfig) — removes the synthetic/dataset model entirely
+- Fresh PipelineProfiler() per pathway prevents snapshots dict collision across pathways
+- cloud_density computed from bounding-box XY area as scan-area proxy — not true surface area, but useful relative comparison
+- profile CLI command removed — aquamvs benchmark subsumes it with multi-pathway comparison
+
 ### Roadmap Evolution
 
 - Phase 1.1 inserted after Phase 1: Last-Minute Feature Additions (URGENT)
@@ -215,7 +223,7 @@ Recent decisions affecting current work:
 2. **Build portfolio website for Aqua libraries** (general) — Showcase site for AquaCal/AquaMVS/AquaPose targeting employers; static hosting, 3D viewers, comparison sliders
 3. **Write project retrospective** (general) — Lessons learned (agentic coding, new tech stacks, workflow pain points, future directions)
 4. **Update example dataset to 13-camera set** (docs) — Current dataset missing one camera due to recording mishap; likely to confuse users
-5. **Fix benchmark package broken imports and stale test wiring** (testing) — Phase 05 rewrote benchmark modules but left stale references in __init__.py, report.py, and test_ci_benchmarks.py
+5. ~~**Fix benchmark package broken imports and stale test wiring** (testing)~~ RESOLVED in Phase 07 Plan 03
 6. **Fix pre-existing integration test failure (empty fused cloud)** (testing) — test_end_to_end_reconstruction fails because synthetic scene produces empty fused cloud after fusion
 
 ### Blockers/Concerns
@@ -240,6 +248,6 @@ approved
 
 ## Session Continuity
 
-Last session: 2026-02-17 (phase 07 plan 01 execution — 21 min)
-Stopped at: Completed 07-01-PLAN.md
-Resume file: .planning/phases/07-post-qa-bug-triage/07-01-SUMMARY.md
+Last session: 2026-02-17 (phase 07 plan 03 execution — 13 min)
+Stopped at: Completed 07-03-PLAN.md (Phase 07 complete)
+Resume file: .planning/phases/07-post-qa-bug-triage/07-03-SUMMARY.md
