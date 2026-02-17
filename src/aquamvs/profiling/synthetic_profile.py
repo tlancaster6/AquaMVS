@@ -15,7 +15,6 @@ from pathlib import Path
 import numpy as np
 import torch
 import torch.nn.functional as F
-from torch.profiler import record_function
 
 # Handle both module and script execution
 try:
@@ -222,25 +221,20 @@ def run_synthetic_profile(output_path: Path, device: str = "cpu") -> dict:
     num_depths = 64
     num_features = 2000
 
-    # Create profiler
-    profiler = PipelineProfiler(
-        activities=["cpu", "cuda"] if device == "cuda" else ["cpu"],
-        profile_memory=True,
-        record_shapes=True,
-    )
+    profiler = PipelineProfiler()
 
     with profiler:
         # Stage 1: Undistortion
-        with record_function("undistortion"):
+        with profiler.stage("undistortion"):
             images = torch.randn(num_cameras, 3, height, width, device=device)
             undistorted = synthetic_undistortion(images, device)
 
         # Stage 2: Sparse matching
-        with record_function("sparse_matching"):
+        with profiler.stage("sparse_matching"):
             _ = synthetic_sparse_matching(num_features, device)
 
         # Stage 3: Depth estimation (plane sweep)
-        with record_function("depth_estimation"):
+        with profiler.stage("depth_estimation"):
             ref_gray = F.rgb_to_grayscale(undistorted[0:1])
             src_gray = torch.stack(
                 [
@@ -253,11 +247,10 @@ def run_synthetic_profile(output_path: Path, device: str = "cpu") -> dict:
             )
 
             # Extract depth via winner-takes-all
-            with record_function("extract_depth"):
-                depth_map = torch.argmin(cost_volume, dim=0).float()
+            depth_map = torch.argmin(cost_volume, dim=0).float()
 
         # Stage 4: Fusion
-        with record_function("fusion"):
+        with profiler.stage("fusion"):
             # Simulate multiple depth maps
             depth_maps = torch.stack(
                 [depth_map + torch.randn_like(depth_map) * 0.5 for _ in range(3)]
@@ -265,7 +258,7 @@ def run_synthetic_profile(output_path: Path, device: str = "cpu") -> dict:
             fused_depth = synthetic_fusion(depth_maps, device)
 
         # Stage 5: Surface reconstruction
-        with record_function("surface_reconstruction"):
+        with profiler.stage("surface_reconstruction"):
             # Convert depth to point cloud (simulate)
             valid_mask = fused_depth > 0
             num_valid = valid_mask.sum().item()
@@ -285,12 +278,11 @@ def run_synthetic_profile(output_path: Path, device: str = "cpu") -> dict:
         "total_memory_peak_mb": report.total_memory_peak_mb,
         "stages": {
             name: {
-                "cpu_time_ms": stage.cpu_time_ms,
+                "wall_time_ms": stage.wall_time_ms,
                 "cuda_time_ms": stage.cuda_time_ms,
-                "total_time_ms": stage.cpu_time_ms + stage.cuda_time_ms,
-                "cpu_memory_mb": stage.cpu_memory_mb,
-                "cuda_memory_mb": stage.cuda_memory_mb,
-                "total_memory_mb": abs(stage.cpu_memory_mb) + abs(stage.cuda_memory_mb),
+                "cpu_memory_peak_mb": stage.cpu_memory_peak_mb,
+                "cuda_memory_peak_mb": stage.cuda_memory_peak_mb,
+                "total_memory_mb": stage.cpu_memory_peak_mb + stage.cuda_memory_peak_mb,
             }
             for name, stage in report.stages.items()
         },
