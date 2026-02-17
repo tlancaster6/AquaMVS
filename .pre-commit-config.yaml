@@ -15,3 +15,39 @@ repos:
       - id: check-yaml
       - id: check-added-large-files
         args: ['--maxkb=1000']
+
+  - repo: https://github.com/Yelp/detect-secrets
+    rev: v1.5.0
+    hooks:
+      - id: detect-secrets
+        args: ['--baseline', '.secrets.baseline']
+
+  - repo: local
+    hooks:
+      - id: ruff-check-all
+        name: Ruff lint all files
+        entry: bash .hooks/pre-push-ruff-check.sh
+        language: system
+        pass_filenames: false
+        stages: [pre-push]
+
+      - id: ruff-format-check-all
+        name: Ruff format check all files
+        entry: bash .hooks/pre-push-ruff-format.sh
+        language: system
+        pass_filenames: false
+        stages: [pre-push]
+
+      - id: tests
+        name: Run tests
+        entry: bash .hooks/pre-push-tests.sh
+        language: system
+        pass_filenames: false
+        stages: [pre-push]
+
+      - id: docs-build
+        name: Build documentation
+        entry: bash .hooks/pre-push-docs.sh
+        language: system
+        pass_filenames: false
+        stages: [pre-push]

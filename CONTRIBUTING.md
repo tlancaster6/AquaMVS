@@ -39,7 +39,16 @@ Thank you for your interest in contributing to AquaMVS. This guide will help you
 
   Separate each group with a blank line.
 
-This project uses pre-commit hooks. Install with `pre-commit install` to automatically check formatting and linting before each commit.
+This project uses git hooks via [pre-commit](https://pre-commit.com/) to catch issues early:
+
+- **On commit**: ruff lint/format, trailing whitespace, end-of-file fixer, YAML check, large file check, and secret detection ([detect-secrets](https://github.com/Yelp/detect-secrets))
+- **On push**: full ruff lint/format check across all files, fast test suite (`pytest -m "not slow"`), documentation build, and secret detection
+
+Install both hooks after cloning:
+```bash
+pre-commit install
+pre-commit install --hook-type pre-push
+```
 
 ## Running Tests
 
