@@ -167,15 +167,17 @@ Plans:
 **Plans:** 3 plans
 
 Plans:
-- [ ] 07-01-PLAN.md — Config cleanup + preprocessing quick fixes (deprecated keys, quality presets to init, --output-fps, STL verify, sparse summary close, NAL doc)
-- [ ] 07-02-PLAN.md — Profiler wiring (thread-local registry, timed_stage delegation to PipelineProfiler)
-- [ ] 07-03-PLAN.md — Benchmark rebuild (new unified aquamvs benchmark command, delete old benchmark/profile code)
+- [x] 07-01-PLAN.md — Config cleanup + preprocessing quick fixes (deprecated keys, quality presets to init, --output-fps, STL verify, sparse summary close, NAL doc)
+- [x] 07-02-PLAN.md — Profiler wiring (thread-local registry, timed_stage delegation to PipelineProfiler)
+- [x] 07-03-PLAN.md — Benchmark rebuild (new unified aquamvs benchmark command, delete old benchmark/profile code)
 
 ### Phase 8: User Guide and Tutorials Overhaul
 
 **Goal:** Replace the current thin tutorials section with 4 polished pages: overview (CLI vs API routing), CLI usage example, end-to-end Python API notebook, and benchmarking API notebook. Jupyter notebooks render with static outputs on RTD and include Colab launch buttons. Automated notebook execution tests catch breakage from upstream code changes.
 **Depends on:** Phase 7
-**Plans:** 0 plans
+**Plans:** 3 plans
 
 Plans:
-- [ ] TBD (run /gsd:plan-phase 8 to break down)
+- [ ] 08-01-PLAN.md — myst-nb infrastructure, CLI guide polish, centralized troubleshooting
+- [ ] 08-02-PLAN.md — API notebook polish (Colab badge, auto-download), tutorial overview page
+- [ ] 08-03-PLAN.md — Benchmarking notebook, benchmarks.rst redirect, notebook smoke test
