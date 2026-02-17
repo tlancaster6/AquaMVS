@@ -1,52 +1,39 @@
 Tutorials
 =========
 
-This section provides hands-on tutorials for AquaMVS reconstruction workflows.
+AquaMVS provides two ways to run reconstruction: a command-line interface (CLI) for
+batch processing and scripted workflows, and a Python API for programmatic control
+and integration into custom pipelines.
 
-End-to-End Reconstruction
--------------------------
+Choose Your Workflow
+--------------------
 
-Walk through a complete reconstruction from synchronized camera images to a 3D surface mesh using the Python API.
+**Command-Line Interface (CLI)**
+   Best for: Running reconstructions on new datasets, batch processing, quick experiments.
+   Start with the :doc:`CLI Guide </cli_guide>`.
 
-:download:`Download Jupyter Notebook <notebook.ipynb>`
+   .. code-block:: bash
 
-The notebook demonstrates:
+      aquamvs init --input-dir ./videos --calibration calibration.json --output-dir ./output
+      aquamvs run config.yaml
 
-- Loading and inspecting a pipeline configuration
-- Running the reconstruction pipeline with the ``Pipeline`` class
-- Examining intermediate outputs (depth maps, consistency maps)
-- Visualizing the fused point cloud
-- Exporting meshes to various formats (OBJ, STL, GLB)
+**Python API**
+   Best for: Custom workflows, programmatic access, integration with other tools.
+   Start with the :doc:`End-to-End Tutorial <notebook>`.
 
-See also the :doc:`CLI Guide </cli_guide>` for command-line workflow.
+   .. code-block:: python
 
-Quick Start
------------
+      from aquamvs import Pipeline, PipelineConfig
+      config = PipelineConfig.from_yaml("config.yaml")
+      Pipeline(config).run()
 
-For a minimal working example:
+**Benchmarking**
+   Compare LightGlue and RoMa reconstruction pathways with timing and quality metrics.
+   See the :doc:`Benchmarking Tutorial <benchmark>`.
 
-.. code-block:: python
+.. toctree::
+   :maxdepth: 2
+   :hidden:
 
-   from aquamvs import Pipeline, PipelineConfig
-
-   # Load configuration from YAML
-   config = PipelineConfig.from_yaml("config.yaml")
-
-   # Run reconstruction
-   pipeline = Pipeline(config)
-   pipeline.run()
-
-   # Outputs saved to config.output_dir
-
-Configuration
--------------
-
-The :class:`~aquamvs.config.PipelineConfig` class provides extensive customization:
-
-- **Matcher selection**: ``sparse_matching.matcher_type`` (``"lightglue"`` or ``"roma"``)
-- **Pipeline mode**: ``reconstruction.pipeline_mode`` (``"full"`` for dense stereo, ``"sparse"`` for sparse reconstruction)
-- **Depth range**: ``reconstruction.depth_min`` and ``depth_max``
-- **Device**: ``runtime.device`` (``"cpu"`` or ``"cuda"``)
-- **Output control**: ``runtime.save_*`` flags to enable/disable intermediate outputs
-
-See :doc:`API Reference </api/config>` for full configuration options.
+   notebook
+   benchmark
