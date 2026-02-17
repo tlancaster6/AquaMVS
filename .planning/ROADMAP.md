@@ -144,6 +144,7 @@ Phases execute in numeric order: 1 -> 2 -> 3 -> 4 -> 5
 | 5. Performance and Optimization | 8/8 | Complete | 2026-02-15 |
 | 6. CLI QA Execution | 5/5 | Complete | 2026-02-17 |
 | 7. Post-QA Bug Triage | 0/3 | Planned | - |
+| 8. User Guide and Tutorials Overhaul | 0/0 | Planned | - |
 
 ### Phase 6: CLI QA Execution
 
@@ -169,3 +170,12 @@ Plans:
 - [ ] 07-01-PLAN.md — Config cleanup + preprocessing quick fixes (deprecated keys, quality presets to init, --output-fps, STL verify, sparse summary close, NAL doc)
 - [ ] 07-02-PLAN.md — Profiler wiring (thread-local registry, timed_stage delegation to PipelineProfiler)
 - [ ] 07-03-PLAN.md — Benchmark rebuild (new unified aquamvs benchmark command, delete old benchmark/profile code)
+
+### Phase 8: User Guide and Tutorials Overhaul
+
+**Goal:** Replace the current thin tutorials section with 4 polished pages: overview (CLI vs API routing), CLI usage example, end-to-end Python API notebook, and benchmarking API notebook. Jupyter notebooks render with static outputs on RTD and include Colab launch buttons. Automated notebook execution tests catch breakage from upstream code changes.
+**Depends on:** Phase 7
+**Plans:** 0 plans
+
+Plans:
+- [ ] TBD (run /gsd:plan-phase 8 to break down)
