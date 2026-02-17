@@ -129,6 +129,39 @@ class ImageDirectorySet:
         """Context manager exit (no resources to release)."""
         pass
 
+    def read_frame(self, frame_idx: int) -> dict[str, np.ndarray]:
+        """Read a single frame by index.
+
+        Args:
+            frame_idx: Zero-based frame index.
+
+        Returns:
+            Mapping from camera name to BGR image (H, W, 3) uint8.
+
+        Raises:
+            IndexError: If frame_idx is out of range.
+        """
+        if frame_idx < 0 or frame_idx >= self._frame_count:
+            raise IndexError(
+                f"Frame index {frame_idx} out of range [0, {self._frame_count})"
+            )
+
+        images = {}
+        for cam_name, files in self.frame_files.items():
+            img_path = files[frame_idx]
+            img = cv2.imread(str(img_path))
+            if img is None:
+                logger.warning(
+                    "Failed to read image: %s (camera %s, frame %d)",
+                    img_path,
+                    cam_name,
+                    frame_idx,
+                )
+                continue
+            images[cam_name] = img
+
+        return images
+
     def iterate_frames(
         self, start: int = 0, stop: int | None = None, step: int = 1
     ) -> tuple[int, dict[str, np.ndarray]]:
