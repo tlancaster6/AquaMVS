@@ -379,158 +379,52 @@ def run_command(
     run_pipeline(config)
 
 
-def profile_command(
-    config_path: Path,
-    frame: int = 0,
-    output_dir: Path | None = None,
-) -> None:
-    """Profile pipeline performance and identify bottlenecks.
+def benchmark_command(args) -> None:
+    """Run pathway comparison benchmark.
 
     Args:
-        config_path: Path to the pipeline config YAML file.
-        frame: Frame index to profile (default: 0).
-        output_dir: Optional output directory for Chrome trace JSON.
+        args: Parsed command-line arguments with config, frame, extractors,
+            and with_clahe fields.
     """
-    # 1. Configure logging
     logging.basicConfig(
         level=logging.INFO,
         format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
         datefmt="%H:%M:%S",
     )
-
-    # Silence noisy third-party loggers
+    # Silence noisy loggers
     for name in ("matplotlib", "PIL", "open3d"):
         logging.getLogger(name).setLevel(logging.WARNING)
 
-    # 2. Load config
+    config_path = args.config
     if not config_path.exists():
         print(f"Error: Config file not found: {config_path}", file=sys.stderr)
         sys.exit(1)
 
-    try:
-        config = PipelineConfig.from_yaml(config_path)
-    except ValueError as e:
-        # Pydantic validation errors are already formatted
-        print(f"Configuration validation failed:\n{e}", file=sys.stderr)
-        sys.exit(1)
-    except Exception as e:
-        print(f"Error: Failed to load config: {e}", file=sys.stderr)
-        sys.exit(1)
+    # Parse extractors
+    extractors = None
+    if args.extractors:
+        extractors = [e.strip() for e in args.extractors.split(",")]
 
-    # 3. Run profiler
-    from aquamvs.profiling import format_report, profile_pipeline
+    from aquamvs.benchmark import (
+        format_console_table,
+        run_benchmark,
+        save_markdown_report,
+    )
 
     try:
-        print(f"\nProfiling frame {frame}...\n")
-        report = profile_pipeline(config, frame)
-
-        # 4. Print report
-        print(format_report(report))
-
-        # 5. Export Chrome trace if requested
-        if output_dir is not None:
-            output_dir.mkdir(parents=True, exist_ok=True)
-            trace_path = output_dir / "profile_trace.json"
-            # Note: profile_pipeline would need to return profiler instance
-            # for this to work. For now, this is a placeholder.
-            print(f"\nChrome trace export to {trace_path} (not yet implemented)\n")
-
-    except NotImplementedError as e:
-        print(f"Error: {e}", file=sys.stderr)
-        print("\nNote: profile_pipeline integration is pending.", file=sys.stderr)
-        print(
-            "Use PipelineProfiler directly in Python code for now.\n", file=sys.stderr
+        result = run_benchmark(
+            config_path=config_path,
+            frame=args.frame,
+            extractors=extractors,
+            with_clahe=args.with_clahe,
         )
-        sys.exit(1)
-    except Exception as e:
-        print(f"Error: Profiling failed: {e}", file=sys.stderr)
-        import traceback
 
-        traceback.print_exc()
-        sys.exit(1)
+        # Print console table
+        print(format_console_table(result))
 
-
-def benchmark_command(
-    config_path: Path,
-    compare: list[Path] | None = None,
-    visualize: bool = False,
-) -> None:
-    """Run benchmark tests from a benchmark config YAML.
-
-    Args:
-        config_path: Path to the benchmark config YAML file.
-        compare: Optional list of run directories for comparison (Plan 05 feature).
-        visualize: Whether to generate visualization plots (Plan 05 feature).
-    """
-    # 1. Configure logging
-    logging.basicConfig(
-        level=logging.INFO,
-        format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
-        datefmt="%H:%M:%S",
-    )
-
-    # Silence noisy third-party loggers
-    for name in ("matplotlib", "PIL", "open3d"):
-        logging.getLogger(name).setLevel(logging.WARNING)
-
-    # 2. Load benchmark config
-    if not config_path.exists():
-        print(f"Error: Config file not found: {config_path}", file=sys.stderr)
-        sys.exit(1)
-
-    try:
-        from aquamvs.benchmark.config import BenchmarkConfig
-
-        config = BenchmarkConfig.from_yaml(config_path)
-    except ValueError as e:
-        # Pydantic validation errors are already formatted
-        print(f"Configuration validation failed:\n{e}", file=sys.stderr)
-        sys.exit(1)
-    except Exception as e:
-        print(f"Error: Failed to load config: {e}", file=sys.stderr)
-        sys.exit(1)
-
-    # 3. Run benchmark
-    from aquamvs.benchmark import run_benchmarks
-
-    try:
-        result = run_benchmarks(config)
-
-        # 4. Print summary (already printed by run_benchmarks)
-        print("\nBenchmark complete!")
-        print(f"Run ID: {result.run_id}")
-        print(f"Results directory: {result.run_dir}\n")
-
-        # 5. Handle --visualize flag
-        if visualize:
-            from aquamvs.benchmark import generate_visualizations
-
-            print("Generating visualization plots...")
-            plots = generate_visualizations(result.run_dir, result)
-            print(f"Generated {len(plots)} plots in {result.run_dir}/plots/\n")
-
-        # 6. Handle --compare flag
-        if compare is not None and len(compare) > 0:
-            from aquamvs.benchmark import compare_runs, format_comparison
-
-            if len(compare) != 2:
-                print(
-                    "Error: --compare requires exactly 2 run directories",
-                    file=sys.stderr,
-                )
-                sys.exit(1)
-
-            run1_dir, run2_dir = compare[0], compare[1]
-
-            try:
-                comparison = compare_runs(run1_dir, run2_dir)
-                print(format_comparison(comparison))
-            except FileNotFoundError as e:
-                print(f"Error: {e}", file=sys.stderr)
-                sys.exit(1)
-            except ValueError as e:
-                print(f"Error: {e}", file=sys.stderr)
-                sys.exit(1)
+        # Save markdown report to pipeline output_dir (per locked decision)
+        report_path = save_markdown_report(result, Path(result.output_dir))
+        print(f"\nReport saved to: {report_path}")
 
     except Exception as e:
         print(f"Error: Benchmark failed: {e}", file=sys.stderr)
@@ -768,50 +662,32 @@ def main() -> None:
         help="Frame index to export (default: 0)",
     )
 
-    # profile subcommand
-    profile_parser = subparsers.add_parser(
-        "profile",
-        help="Profile pipeline performance and identify bottlenecks",
-    )
-    profile_parser.add_argument(
-        "config",
-        type=Path,
-        help="Path to pipeline config YAML file",
-    )
-    profile_parser.add_argument(
-        "--frame",
-        type=int,
-        default=0,
-        help="Frame index to profile (default: 0)",
-    )
-    profile_parser.add_argument(
-        "--output-dir",
-        type=Path,
-        default=None,
-        help="Output directory for Chrome trace JSON (optional)",
-    )
-
     # benchmark subcommand
     benchmark_parser = subparsers.add_parser(
         "benchmark",
-        help="Run benchmark tests from benchmark config YAML",
+        help="Compare pipeline pathways (timing and accuracy metrics)",
     )
     benchmark_parser.add_argument(
         "config",
         type=Path,
-        help="Path to benchmark config YAML file",
+        help="Path to pipeline config YAML file (same as 'aquamvs run')",
     )
     benchmark_parser.add_argument(
-        "--compare",
-        type=Path,
-        nargs="+",
+        "--frame",
+        type=int,
+        default=0,
+        help="Frame index to benchmark (default: 0)",
+    )
+    benchmark_parser.add_argument(
+        "--extractors",
+        type=str,
         default=None,
-        help="Compare two run directories (provide exactly 2 paths)",
+        help="Comma-separated list of extractors for LightGlue paths (e.g., superpoint,aliked,disk)",
     )
     benchmark_parser.add_argument(
-        "--visualize",
+        "--with-clahe",
         action="store_true",
-        help="Generate visualization plots (error heatmaps, bar charts, depth comparisons)",
+        help="Include CLAHE preprocessing variants for LightGlue paths",
     )
 
     # temporal-filter subcommand
@@ -930,18 +806,8 @@ def main() -> None:
             config_path=args.config,
             frame=args.frame,
         )
-    elif args.command == "profile":
-        profile_command(
-            config_path=args.config,
-            frame=args.frame,
-            output_dir=args.output_dir,
-        )
     elif args.command == "benchmark":
-        benchmark_command(
-            config_path=args.config,
-            compare=args.compare,
-            visualize=args.visualize,
-        )
+        benchmark_command(args)
     elif args.command == "temporal-filter":
         temporal_filter_command(args)
     elif args.command == "export-mesh":

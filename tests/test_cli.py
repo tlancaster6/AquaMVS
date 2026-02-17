@@ -715,29 +715,51 @@ def test_benchmark_argument_parsing():
     """Test main() correctly parses benchmark subcommand arguments."""
     from unittest.mock import patch
 
-    # Test basic benchmark command (default args)
+    # Test basic benchmark command (default args) — new signature takes args object
     with patch("sys.argv", ["aquamvs", "benchmark", "config.yaml"]):
         with patch("aquamvs.cli.benchmark_command") as mock_benchmark:
             from aquamvs.cli import main
 
             main()
-            mock_benchmark.assert_called_once_with(
-                config_path=Path("config.yaml"),
-                compare=None,
-                visualize=False,
-            )
+            mock_benchmark.assert_called_once()
+            args = mock_benchmark.call_args[0][0]
+            assert args.config == Path("config.yaml")
+            assert args.frame == 0
+            assert args.extractors is None
+            assert args.with_clahe is False
 
-    # Test benchmark with --visualize argument
-    with patch("sys.argv", ["aquamvs", "benchmark", "config.yaml", "--visualize"]):
+    # Test benchmark with --frame argument
+    with patch("sys.argv", ["aquamvs", "benchmark", "config.yaml", "--frame", "5"]):
         with patch("aquamvs.cli.benchmark_command") as mock_benchmark:
             from aquamvs.cli import main
 
             main()
-            mock_benchmark.assert_called_once_with(
-                config_path=Path("config.yaml"),
-                compare=None,
-                visualize=True,
-            )
+            mock_benchmark.assert_called_once()
+            args = mock_benchmark.call_args[0][0]
+            assert args.frame == 5
+
+    # Test benchmark with --extractors argument
+    with patch(
+        "sys.argv",
+        ["aquamvs", "benchmark", "config.yaml", "--extractors", "aliked,disk"],
+    ):
+        with patch("aquamvs.cli.benchmark_command") as mock_benchmark:
+            from aquamvs.cli import main
+
+            main()
+            mock_benchmark.assert_called_once()
+            args = mock_benchmark.call_args[0][0]
+            assert args.extractors == "aliked,disk"
+
+    # Test benchmark with --with-clahe flag
+    with patch("sys.argv", ["aquamvs", "benchmark", "config.yaml", "--with-clahe"]):
+        with patch("aquamvs.cli.benchmark_command") as mock_benchmark:
+            from aquamvs.cli import main
+
+            main()
+            mock_benchmark.assert_called_once()
+            args = mock_benchmark.call_args[0][0]
+            assert args.with_clahe is True
 
 
 def test_benchmark_default_args():
@@ -749,6 +771,9 @@ def test_benchmark_default_args():
             from aquamvs.cli import main
 
             main()
-            # Verify defaults
-            assert mock_benchmark.call_args[1]["compare"] is None
-            assert mock_benchmark.call_args[1]["visualize"] is False
+            mock_benchmark.assert_called_once()
+            # Verify defaults via the args object passed
+            args = mock_benchmark.call_args[0][0]
+            assert args.frame == 0
+            assert args.extractors is None
+            assert args.with_clahe is False
