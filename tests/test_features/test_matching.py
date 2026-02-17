@@ -274,7 +274,6 @@ def test_match_all_pairs_structure():
     # It just documents the expected behavior
 
 
-@pytest.mark.slow
 @pytest.mark.parametrize(
     "device",
     [
@@ -343,7 +342,6 @@ def test_integration_with_lightglue(device):
         assert (result["scores"] <= 1.0).all()
 
 
-@pytest.mark.slow
 def test_matcher_reuse():
     """Test that matcher can be created once and reused."""
     pytest.importorskip("lightglue")
@@ -399,7 +397,6 @@ def test_matcher_reuse():
         assert "scores" in result
 
 
-@pytest.mark.slow
 def test_threshold_filtering():
     """Test that filter_threshold correctly filters matches."""
     pytest.importorskip("lightglue")
@@ -445,7 +442,6 @@ def test_threshold_filtering():
         assert (result_high["scores"] >= 0.5).all()
 
 
-@pytest.mark.slow
 def test_match_all_pairs_dedup():
     """Test that match_all_pairs deduplicates bidirectional pairs."""
     pytest.importorskip("lightglue")
@@ -495,7 +491,6 @@ def test_match_all_pairs_dedup():
     assert ("cam2", "cam0") not in result
 
 
-@pytest.mark.slow
 def test_match_all_pairs_canonical_order():
     """Test that match_all_pairs uses canonical key ordering."""
     pytest.importorskip("lightglue")

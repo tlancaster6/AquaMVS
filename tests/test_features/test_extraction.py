@@ -186,7 +186,6 @@ class TestCreateExtractor:
             SparseMatchingConfig(extractor_type="invalid")
 
 
-@pytest.mark.slow
 class TestExtractorOutputFormat:
     """Tests for output format consistency across extractors."""
 
@@ -235,9 +234,8 @@ class TestExtractorOutputFormat:
         assert result["scores"].dtype == torch.float32
 
 
-@pytest.mark.slow
 class TestSuperPointExtraction:
-    """Tests that require SuperPoint model weights (marked slow)."""
+    """Tests that require SuperPoint model weights."""
 
     def test_output_structure(self, device):
         """Test that extract_features returns correct structure."""
@@ -296,6 +294,7 @@ class TestSuperPointExtraction:
         assert result1["keypoints"].shape[0] > 0
         assert result2["keypoints"].shape[0] > 0
 
+    @pytest.mark.slow
     def test_batch_extraction(self, device):
         """Test batch extraction produces same results as individual extraction."""
         config = SparseMatchingConfig()
@@ -370,7 +369,6 @@ class TestSuperPointExtraction:
         assert torch.allclose(result_gray["scores"], result_color["scores"])
 
 
-@pytest.mark.slow
 class TestIntegration:
     """Integration tests for complete extraction workflow."""
 
@@ -496,7 +494,6 @@ class TestApplyCLAHE:
         assert result.device.type == "cuda"
 
 
-@pytest.mark.slow
 class TestCLAHEIntegration:
     """Tests for CLAHE integration in extract_features."""
 
