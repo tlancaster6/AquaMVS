@@ -3,7 +3,7 @@
 ## Task 1: Run profiler and Pipeline API smoke test
 
 ### Step 1: Run profiler
-- [ ] 1.1: Run `aquamvs profile config.yaml --frame 0`
+- [x] 1.1: Run `aquamvs profile config.yaml --frame 0`
 - [ ] 1.2: If NotImplementedError is raised (stub from Phase 5), log it as a known issue
 - [ ] 1.3: If profiler succeeds, verify all stages are present (undistortion, matching, depth_estimation, fusion, surface)
 - [ ] 1.4: Check timing breakdown: does depth_estimation appear as the bottleneck?

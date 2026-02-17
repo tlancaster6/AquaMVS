@@ -98,23 +98,40 @@ outputs, such as the fused point cloud visualizations.
 - **Status**: fixed
 - **Notes**:
 
-### [Phase].[Plan] / [Step] — [Brief Title]
-- **Description**: 
-- **Impact**: 
-- **Status**: 
-- **Notes**:
+### 6.3 / 4.1: benchmarking is broken
+- **Description**: CLI benchmark command was trying to import legacy functions. Stripped those out, but now it doesn't output anything very meaningful
+- **Impact**: Medium
+- **Status**: logged for later
+- **Notes**: It appears the addition of the new benchmark mode did not go very well. We need to revisit the phase 5
+planning docs to see what happened and likely perform a careful multi-step rebuild
 
-### [Phase].[Plan] / [Step] — [Brief Title]
-- **Description**: 
-- **Impact**: 
-- **Status**: 
-- **Notes**:
+### 6.4 / 3.1: STL write failure
+- **Description**: ply to stl conversion fails
+- **Impact**: low
+- **Status**: logged for later
+- **Notes**: non-critical. Fix if easy, remove stl option if not. Error log below: 
 
-### [Phase].[Plan] / [Step] — [Brief Title]
-- **Description**: 
-- **Impact**: 
-- **Status**: 
-- **Notes**:
+07:43:28 [INFO] aquamvs.surface: Loading mesh from output_roma\frame_000000\mesh\surface.ply
+07:43:28 [INFO] aquamvs.surface: Loaded mesh: 398468 vertices, 795745 faces
+07:43:28 [WARNING] aquamvs.surface: STL format does not support vertex colors (colors will be lost)
+07:43:28 [INFO] aquamvs.surface: Exporting to output_roma\frame_000000\mesh\surface.stl (format: .stl)
+[Open3D WARNING] Write STL failed: compute normals first.
+Error: Export failed: Failed to write mesh to output_roma\frame_000000\mesh\surface.stl
+Traceback (most recent call last):
+  File "C:\Users\tucke\PycharmProjects\AquaMVS\src\aquamvs\cli.py", line 643, in export_mesh_command
+    export_mesh(
+  File "C:\Users\tucke\PycharmProjects\AquaMVS\src\aquamvs\surface.py", line 409, in export_mesh
+    raise RuntimeError(f"Failed to write mesh to {output_path}")
+RuntimeError: Failed to write mesh to output_roma\frame_000000\mesh\surface.stl
+
+### 6.5 / 1.1 ImageDirectorySet missing read_frame method
+- **Description**: ImageDirectorySet does not have all the methods that VideoSet does
+- **Impact**: medium
+- **Status**: blockers fixed, further refactor logged
+- **Notes**: We should refactor to add an abstraction layer above ImageDirectorySet set and VideoSet. Possibly a class
+that, base on input type, routes to the correct VideoSet or ImageDirectorySet class. VideoSet and ImageDirectorySet
+should probably also share a base class that serves as a contract for shared methods and properties. To remove immediate
+blockers, we added a read_frame method to ImageDirectorySet
 
 ### [Phase].[Plan] / [Step] — [Brief Title]
 - **Description**: 
