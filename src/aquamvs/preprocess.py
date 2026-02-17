@@ -20,6 +20,7 @@ def process_video_temporal_median(
     window: int = 30,
     framestep: int = 1,
     output_format: str = "png",
+    output_fps: int = 30,
     exact_seek: bool = False,
     window_step: int = 1,
 ) -> int:
@@ -35,6 +36,9 @@ def process_video_temporal_median(
         window: Number of frames in median window (default: 30).
         framestep: Output every Nth frame (default: 1 = every frame).
         output_format: Output format, "png" for image sequence or "mp4" for video.
+        output_fps: Frame rate for mp4 output (default: 30). Only used when
+            output_format is "mp4". The source video FPS is not used because
+            cv2.CAP_PROP_FPS can return 0.0 for some container formats.
         exact_seek: Force sequential reading (default: False = hybrid seek mode).
         window_step: Sample every Nth frame within the median window (default: 1).
 
@@ -78,13 +82,12 @@ def process_video_temporal_median(
 
     video_writer = None
     if output_format == "mp4":
-        output_fps = fps / framestep
         output_path = output_dir / f"{video_path.stem}_median.mp4"
         fourcc = cv2.VideoWriter_fourcc(*"mp4v")
         video_writer = cv2.VideoWriter(
             str(output_path), fourcc, output_fps, (width, height)
         )
-        logger.info(f"Writing video to: {output_path} @ {output_fps:.1f} fps")
+        logger.info(f"Writing video to: {output_path} @ {output_fps} fps")
 
     output_count = 0
 
@@ -271,6 +274,7 @@ def process_batch(
     window: int = 30,
     framestep: int = 1,
     output_format: str = "png",
+    output_fps: int = 30,
     exact_seek: bool = False,
     window_step: int = 1,
 ) -> dict[str, int]:
@@ -283,6 +287,8 @@ def process_batch(
         window: Median window size in frames.
         framestep: Output every Nth frame.
         output_format: Output format ("png" or "mp4").
+        output_fps: Frame rate for mp4 output (default: 30). Only used when
+            output_format is "mp4".
         exact_seek: Force sequential reading (default: False = hybrid seek mode).
         window_step: Sample every Nth frame within the median window (default: 1).
 
@@ -307,6 +313,7 @@ def process_batch(
             window=window,
             framestep=framestep,
             output_format=output_format,
+            output_fps=output_fps,
             exact_seek=exact_seek,
             window_step=window_step,
         )
@@ -344,6 +351,7 @@ def process_batch(
                     window=window,
                     framestep=framestep,
                     output_format=output_format,
+                    output_fps=output_fps,
                     exact_seek=exact_seek,
                     window_step=window_step,
                 )

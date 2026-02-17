@@ -570,6 +570,7 @@ def temporal_filter_command(args) -> None:
             window=args.window,
             framestep=args.framestep,
             output_format=args.format,
+            output_fps=args.output_fps,
             exact_seek=args.exact_seek,
             window_step=args.window_step,
         )
@@ -847,6 +848,12 @@ def main() -> None:
         choices=["png", "mp4"],
         default="png",
         help="Output format (default: png)",
+    )
+    preprocess_parser.add_argument(
+        "--output-fps",
+        type=int,
+        default=30,
+        help="Output video frame rate when --format=mp4 (default: 30)",
     )
     preprocess_parser.add_argument(
         "--exact-seek",
