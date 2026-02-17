@@ -5,6 +5,7 @@ runs) with wall-clock timing, CUDA event timing, and explicit memory snapshots
 at stage boundaries.
 """
 
+import logging
 import time
 import tracemalloc
 from contextlib import contextmanager
@@ -15,6 +16,30 @@ import torch
 
 from ..config import PipelineConfig
 from .analyzer import ProfileReport, build_report
+
+
+@contextmanager
+def timed_stage(name: str, logger: logging.Logger):
+    """Log wall-clock duration of a pipeline stage.
+
+    Drop-in replacement for torch.profiler.record_function that emits
+    a timing log line when the block exits.
+
+    Args:
+        name: Stage name (e.g., "depth_estimation").
+        logger: Logger instance from the calling module.
+
+    Yields:
+        None.
+    """
+    if torch.cuda.is_available():
+        torch.cuda.synchronize()
+    start = time.perf_counter()
+    yield
+    if torch.cuda.is_available():
+        torch.cuda.synchronize()
+    elapsed_ms = (time.perf_counter() - start) * 1000.0
+    logger.info("%s: %.1f ms", name, elapsed_ms)
 
 
 @dataclass

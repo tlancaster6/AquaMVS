@@ -6,7 +6,6 @@ from pathlib import Path
 import numpy as np
 import open3d as o3d
 import torch
-from torch.profiler import record_function
 
 from ...fusion import filter_all_depth_maps, fuse_depth_maps, save_point_cloud
 from ..context import PipelineContext
@@ -38,7 +37,9 @@ def run_fusion_stage(
     Returns:
         Fused point cloud (after outlier removal if enabled).
     """
-    with record_function("fusion"):
+    from ...profiling import timed_stage
+
+    with timed_stage("fusion", logger):
         config = ctx.config
 
         # --- Stage 7: Geometric Consistency Filtering ---

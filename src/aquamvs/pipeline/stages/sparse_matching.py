@@ -4,7 +4,6 @@ import logging
 from pathlib import Path
 
 import torch
-from torch.profiler import record_function
 
 from ...features import extract_features_batch, match_all_pairs
 from ...triangulation import (
@@ -38,7 +37,9 @@ def run_lightglue_path(
     Returns:
         Dict with "all_matches" key containing match results.
     """
-    with record_function("sparse_matching"):
+    from ...profiling import timed_stage
+
+    with timed_stage("sparse_matching", logger):
         config = ctx.config
         device = ctx.device
 

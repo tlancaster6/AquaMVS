@@ -5,7 +5,6 @@ import sys
 from pathlib import Path
 
 import torch
-from torch.profiler import record_function
 from tqdm import tqdm
 
 from ...dense import extract_depth, plane_sweep_stereo, save_depth_map
@@ -35,7 +34,9 @@ def run_depth_estimation(
             - depth_maps: Dict mapping camera name to depth map tensor.
             - confidence_maps: Dict mapping camera name to confidence map tensor.
     """
-    with record_function("depth_estimation"):
+    from ...profiling import timed_stage
+
+    with timed_stage("depth_estimation", logger):
         config = ctx.config
         device = ctx.device
 

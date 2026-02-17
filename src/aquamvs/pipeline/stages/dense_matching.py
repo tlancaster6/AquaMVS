@@ -4,7 +4,6 @@ import logging
 from pathlib import Path
 
 import torch
-from torch.profiler import record_function
 
 from ...dense import roma_warps_to_depth_maps, save_depth_map
 from ...features import match_all_pairs_roma, run_roma_all_pairs
@@ -32,7 +31,9 @@ def run_roma_full_path(
             - depth_maps: Dict mapping camera name to depth map tensor.
             - confidence_maps: Dict mapping camera name to confidence map tensor.
     """
-    with record_function("dense_matching"):
+    from ...profiling import timed_stage
+
+    with timed_stage("dense_matching", logger):
         config = ctx.config
         device = ctx.device
 
@@ -88,7 +89,9 @@ def run_roma_sparse_path(
     Returns:
         Dict with "all_matches" key containing match results.
     """
-    with record_function("dense_matching"):
+    from ...profiling import timed_stage
+
+    with timed_stage("dense_matching", logger):
         config = ctx.config
         device = ctx.device
 

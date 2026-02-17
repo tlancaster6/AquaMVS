@@ -6,7 +6,6 @@ from pathlib import Path
 import cv2
 import numpy as np
 import torch
-from torch.profiler import record_function
 
 from ...calibration import undistort_image
 from ..context import PipelineContext
@@ -40,7 +39,9 @@ def run_undistortion_stage(
             - undistorted_tensors: Dict of undistorted BGR images as torch.Tensor.
             - camera_centers: Dict of camera positions in world frame, shape (3,) float64.
     """
-    with record_function("undistortion"):
+    from ...profiling import timed_stage
+
+    with timed_stage("undistortion", logger):
         config = ctx.config
 
         # Filter out None images (cameras that failed to read)

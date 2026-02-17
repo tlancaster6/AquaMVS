@@ -6,7 +6,6 @@ from pathlib import Path
 import numpy as np
 import open3d as o3d
 import torch
-from torch.profiler import record_function
 
 from ...fusion import save_point_cloud
 from ...surface import reconstruct_surface, save_mesh
@@ -37,7 +36,9 @@ def run_surface_stage(
     Returns:
         Reconstructed mesh or None if point cloud is empty.
     """
-    with record_function("surface_reconstruction"):
+    from ...profiling import timed_stage
+
+    with timed_stage("surface_reconstruction", logger):
         config = ctx.config
 
         # --- Stage 9: Surface Reconstruction ---
@@ -108,7 +109,9 @@ def run_sparse_surface_stage(
         frame_dir: Frame output directory.
         frame_idx: Frame index (for logging).
     """
-    with record_function("surface_reconstruction"):
+    from ...profiling import timed_stage
+
+    with timed_stage("surface_reconstruction", logger):
         config = ctx.config
 
         # Convert sparse cloud to Open3D PointCloud
