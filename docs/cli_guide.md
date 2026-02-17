@@ -71,6 +71,7 @@ aquamvs init \
 - `--pattern`: Regex pattern to extract camera name from filename. The first capture group is used as the camera name. Example: `"^([a-z0-9]+)-"` extracts `e3v82e0` from `e3v82e0-cam1.mp4`
 - `--calibration`: Path to AquaCal calibration JSON
 - `--output-dir`: Output directory for reconstruction results
+- `--preset`: (Optional) Quality preset (`fast`, `balanced`, `quality`). Bakes optimized parameters into the generated config. Default: `balanced`.
 - `--config`: (Optional) Output path for generated config YAML (default: `config.yaml`)
 
 **Output:**
@@ -305,15 +306,17 @@ runtime:
 
 ### Quality vs. Speed
 
-Use a quality preset for one-line tuning:
+Use a quality preset when generating your configuration:
 
-```yaml
-quality_preset: fast       # Fewer depth planes, larger batches — quickest results
-# quality_preset: balanced # Default tradeoffs
-# quality_preset: quality  # Maximum depth planes, smallest batches — best accuracy
+```bash
+aquamvs init --input-dir ... --preset fast      # Fewer depth planes, larger batches — quickest results
+aquamvs init --input-dir ... --preset balanced   # Default tradeoffs (default)
+aquamvs init --input-dir ... --preset quality    # Maximum depth planes, best accuracy
 ```
 
-Or manually increase depth hypotheses for higher quality (slower):
+The preset bakes optimized values directly into the generated `config.yaml`. To regenerate with a different preset, re-run `aquamvs init` with the desired `--preset` value.
+
+For fine-grained control, manually adjust depth hypotheses in the generated config:
 
 ```yaml
 reconstruction:
@@ -359,13 +362,20 @@ runtime:
 
 ## Benchmarking
 
-Compare different feature extractor configurations on a single frame:
+Compare LightGlue and RoMa reconstruction pathways on a single frame:
 
 ```bash
 aquamvs benchmark config.yaml --frame 0
 ```
 
-This runs reconstruction with multiple matcher/detector combinations and generates a comparison report in `output/benchmark/`.
+This runs four pathway variants (LightGlue sparse, LightGlue full, RoMa sparse, RoMa full) and prints a comparison table with timing, point count, and cloud density for each.
+
+**Optional flags:**
+
+- `--extractors lightglue roma`: Run only specific extractors (default: all)
+- `--with-clahe`: Enable CLAHE preprocessing for all pathways
+
+Results are printed to the console as a formatted table. For detailed analysis with visualizations, see the [Benchmarking Tutorial](tutorial/benchmark).
 
 ## Temporal Filtering
 
@@ -381,6 +391,7 @@ aquamvs temporal-filter input_video.mp4 --output-dir filtered/ --window 30
 - `--output-dir`: Output directory
 - `--window`: Median window size in frames (default: 30)
 - `--framestep`: Output every Nth frame (default: 1)
+- `--output-fps`: (Optional) Target output frame rate. Overrides automatic FPS detection (useful when source video metadata is unreliable).
 - `--format`: Output format (`png` or `mp4`, default: `png`)
 
 The median filter removes moving objects (fish, particles) while preserving static structure (water surface).
@@ -393,24 +404,4 @@ The median filter removes moving objects (fish, particles) while preserving stat
 
 ## Troubleshooting
 
-**Issue:** `No cameras matched`
-
-**Solution:** Check your regex pattern. The first capture group must extract the camera name. Test with: `python -c "import re; print(re.match(r'^([a-z0-9]+)-', 'e3v82e0-cam1.mp4').group(1))"`
-
----
-
-**Issue:** `ModuleNotFoundError: No module named 'torch'`
-
-**Solution:** Install PyTorch first: `pip install torch --index-url https://download.pytorch.org/whl/cu121` (adjust CUDA version)
-
----
-
-**Issue:** Pipeline crashes with CUDA out of memory
-
-**Solution:** Switch to CPU (`--device cpu`) or reduce resolution/depth hypotheses in config
-
----
-
-**Issue:** Depth maps are mostly NaN
-
-**Solution:** Check depth range — adjust `reconstruction.depth_min` and `depth_max` to match your scene. Inspect sparse cloud depth statistics with `o3d.io.read_point_cloud("output/frame_000000/sparse.ply")`.
+See the [Troubleshooting Guide](troubleshooting) for solutions to common issues with installation, pipeline errors, notebook usage, and configuration.
