@@ -8,8 +8,11 @@ extensions = [
     "sphinx.ext.viewcode",
     "sphinx.ext.intersphinx",
     "sphinxcontrib.mermaid",
-    "myst_parser",
+    "myst_nb",
 ]
+
+# myst-nb: do not re-execute notebooks on RTD; use pre-executed outputs
+nb_execution_mode = "off"
 
 templates_path = ["_templates"]
 exclude_patterns = ["_build", "Thumbs.db", ".DS_Store"]
@@ -17,7 +20,8 @@ exclude_patterns = ["_build", "Thumbs.db", ".DS_Store"]
 # Source file suffixes
 source_suffix = {
     ".rst": "restructuredtext",
-    ".md": "markdown",
+    ".md": "myst-markdown",
+    ".ipynb": "myst-nb",
 }
 
 # HTML theme and branding
