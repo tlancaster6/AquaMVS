@@ -1,227 +1,228 @@
-"""Markdown report generation and comparison visualizations."""
+"""Benchmark report formatting (console table and markdown file)."""
 
-import logging
+import platform
+from datetime import datetime, timezone
 from pathlib import Path
+from typing import TYPE_CHECKING
 
-import matplotlib
+if TYPE_CHECKING:
+    from .runner import BenchmarkResult
 
-# Use non-interactive backend for headless environments
-matplotlib.use("Agg")
+# Stage names as they appear in profiler snapshots — mapped to display headers.
+# Stages not present for a pathway show "—" in the table.
+_STAGE_MAP = {
+    "undistortion": "Undist (s)",
+    "sparse_matching": "Match (s)",
+    "dense_matching": "Match (s)",  # RoMa dense path uses a different key
+    "depth_estimation": "Depth (s)",
+    "fusion": "Fusion (s)",
+    "surface": "Surface (s)",
+}
 
-import matplotlib.pyplot as plt
+_DISPLAY_STAGES = [
+    ("undistortion", "Undist (s)"),
+    ("sparse_matching", "Match (s)"),
+    ("depth_estimation", "Depth (s)"),
+    ("fusion", "Fusion (s)"),
+    ("surface", "Surface (s)"),
+]
 
-from .metrics import BenchmarkResults, total_keypoints, total_matches
 
-logger = logging.getLogger(__name__)
-
-
-def generate_report(
-    results: BenchmarkResults,
-    output_dir: Path,
-) -> Path:
-    """Generate a comparative Markdown report with charts.
-
-    Creates:
-    - {output_dir}/benchmark/report.md -- Markdown report
-    - {output_dir}/benchmark/comparison/*.png -- Chart images
+def _get_stage_time(report, stage_name: str) -> str:
+    """Get formatted wall time for a stage, or '—' if not present.
 
     Args:
-        results: Benchmark results from run_benchmark.
-        output_dir: Root output directory (benchmark/ subdirectory will be created).
+        report: ProfileReport (may be None).
+        stage_name: Stage name key to look up.
 
     Returns:
-        Path to the generated report.md file.
+        Formatted time string (e.g. "1.2") or "—".
     """
-    # Create output directories
-    report_dir = Path(output_dir) / "benchmark"
-    comparison_dir = report_dir / "comparison"
-    report_dir.mkdir(parents=True, exist_ok=True)
-    comparison_dir.mkdir(parents=True, exist_ok=True)
+    if report is None:
+        return "—"
+    stage = report.stages.get(stage_name)
+    if stage is None:
+        return "—"
+    return f"{stage.wall_time_ms / 1000.0:.1f}"
 
-    # Generate charts
-    _generate_charts(results, comparison_dir)
 
-    # Generate Markdown
-    report_path = report_dir / "report.md"
-    _write_markdown(results, report_path)
+def format_console_table(result: "BenchmarkResult") -> str:
+    """Format benchmark results as a pretty-printed console table.
 
-    logger.info("Benchmark report generated: %s", report_path)
+    Columns: Pathway | Undist (s) | Match (s) | Depth (s) | Fusion (s) |
+             Surface (s) | Total (s) | Points | Density (pts/m²) | Outlier %
+
+    Uses tabulate when available (already a project dependency). Stages not
+    run by a pathway (e.g., depth/fusion in sparse mode) show "—".
+    Times in seconds with 1 decimal place.
+
+    Args:
+        result: BenchmarkResult from run_benchmark.
+
+    Returns:
+        Formatted console table as a string.
+    """
+    try:
+        from tabulate import tabulate
+
+        _have_tabulate = True
+    except ImportError:
+        _have_tabulate = False
+
+    headers = [
+        "Pathway",
+        "Undist (s)",
+        "Match (s)",
+        "Depth (s)",
+        "Fusion (s)",
+        "Surface (s)",
+        "Total (s)",
+        "Points",
+        "Density (pts/m²)",
+        "Outlier %",
+    ]
+
+    rows = []
+    for pw in result.results:
+        report = pw.timing
+        total_s = report.total_time_ms / 1000.0 if report else 0.0
+
+        # For "Match (s)": use sparse_matching; fall back to dense_matching for RoMa full
+        match_time = _get_stage_time(report, "sparse_matching")
+        if match_time == "—":
+            match_time = _get_stage_time(report, "dense_matching")
+
+        row = [
+            pw.pathway_name,
+            _get_stage_time(report, "undistortion"),
+            match_time,
+            _get_stage_time(report, "depth_estimation"),
+            _get_stage_time(report, "fusion"),
+            _get_stage_time(report, "surface"),
+            f"{total_s:.1f}",
+            f"{int(pw.point_count):,}" if pw.point_count > 0 else "0",
+            f"{pw.cloud_density:.0f}" if pw.cloud_density > 0 else "0",
+            f"{pw.outlier_removal_pct:.1f}" if pw.outlier_removal_pct > 0 else "—",
+        ]
+        rows.append(row)
+
+    if _have_tabulate:
+        return tabulate(rows, headers=headers, tablefmt="grid")
+    else:
+        # Minimal fallback without tabulate
+        col_widths = [
+            max(len(h), max((len(str(r[i])) for r in rows), default=0))
+            for i, h in enumerate(headers)
+        ]
+        sep = "-+-".join("-" * w for w in col_widths)
+        header_line = " | ".join(
+            h.ljust(w) for h, w in zip(headers, col_widths, strict=False)
+        )
+        lines = [header_line, sep]
+        for row in rows:
+            lines.append(
+                " | ".join(
+                    str(v).ljust(w) for v, w in zip(row, col_widths, strict=False)
+                )
+            )
+        return "\n".join(lines)
+
+
+def format_markdown_report(result: "BenchmarkResult") -> str:
+    """Format benchmark results as a markdown report.
+
+    Includes:
+    - Header with config path, frame index, timestamp
+    - Results table (same layout as console)
+    - System info (device, platform)
+
+    Args:
+        result: BenchmarkResult from run_benchmark.
+
+    Returns:
+        Markdown report content as a string.
+    """
+    import torch
+
+    lines: list[str] = []
+    timestamp = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S UTC")
+
+    lines.append("# AquaMVS Benchmark Report")
+    lines.append("")
+    lines.append(f"**Config:** `{result.config_path}`")
+    lines.append(f"**Frame:** {result.frame}")
+    lines.append(f"**Generated:** {timestamp}")
+    lines.append("")
+
+    # Results table
+    lines.append("## Results")
+    lines.append("")
+    lines.append(
+        "| Pathway | Undist (s) | Match (s) | Depth (s) | Fusion (s) "
+        "| Surface (s) | Total (s) | Points | Density (pts/m²) | Outlier % |"
+    )
+    lines.append(
+        "|---------|-----------|----------|----------|----------|"
+        "-----------|----------|--------|----------------|-----------|"
+    )
+
+    for pw in result.results:
+        report = pw.timing
+        total_s = report.total_time_ms / 1000.0 if report else 0.0
+
+        match_time = _get_stage_time(report, "sparse_matching")
+        if match_time == "—":
+            match_time = _get_stage_time(report, "dense_matching")
+
+        lines.append(
+            f"| {pw.pathway_name} "
+            f"| {_get_stage_time(report, 'undistortion')} "
+            f"| {match_time} "
+            f"| {_get_stage_time(report, 'depth_estimation')} "
+            f"| {_get_stage_time(report, 'fusion')} "
+            f"| {_get_stage_time(report, 'surface')} "
+            f"| {total_s:.1f} "
+            f"| {int(pw.point_count):,} "
+            f"| {pw.cloud_density:.0f} "
+            f"| {'—' if pw.outlier_removal_pct == 0 else f'{pw.outlier_removal_pct:.1f}'} |"
+        )
+
+    lines.append("")
+
+    # System info
+    lines.append("## System Info")
+    lines.append("")
+    device = "cuda" if torch.cuda.is_available() else "cpu"
+    lines.append(f"**Device:** {device}")
+    if torch.cuda.is_available():
+        lines.append(f"**CUDA:** {torch.version.cuda}")
+        lines.append(f"**GPU:** {torch.cuda.get_device_name(0)}")
+    lines.append(f"**Platform:** {platform.platform()}")
+    lines.append(f"**Python:** {platform.python_version()}")
+    lines.append(f"**PyTorch:** {torch.__version__}")
+    lines.append("")
+
+    return "\n".join(lines)
+
+
+def save_markdown_report(result: "BenchmarkResult", output_dir: Path) -> Path:
+    """Save markdown report to output_dir/benchmark_YYYYMMDD_HHMMSS.md.
+
+    Args:
+        result: BenchmarkResult from run_benchmark.
+        output_dir: Directory where the report file will be saved.
+
+    Returns:
+        Path to the saved report file.
+    """
+    output_dir = Path(output_dir)
+    output_dir.mkdir(parents=True, exist_ok=True)
+    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    report_path = output_dir / f"benchmark_{timestamp}.md"
+    content = format_markdown_report(result)
+    with open(report_path, "w") as f:
+        f.write(content)
     return report_path
 
 
-def _generate_charts(results: BenchmarkResults, output_dir: Path) -> None:
-    """Generate comparison bar charts.
-
-    Args:
-        results: Benchmark results.
-        output_dir: Directory to save charts.
-    """
-    # Try to use a clean style, fall back to default
-    try:
-        plt.style.use("seaborn-v0_8-whitegrid")
-    except OSError:
-        # Style not available, use default
-        pass
-
-    # Extract data
-    config_names = [r.config_name for r in results.results]
-    keypoint_totals = [total_keypoints(r) for r in results.results]
-    match_totals = [total_matches(r) for r in results.results]
-    extraction_times = [r.extraction_time for r in results.results]
-    matching_times = [r.matching_time for r in results.results]
-    triangulation_times = [r.triangulation_time for r in results.results]
-
-    # Color map by extractor type
-    extractor_colors = {
-        "superpoint": "#1f77b4",
-        "aliked": "#ff7f0e",
-        "disk": "#2ca02c",
-    }
-    colors = [
-        extractor_colors.get(r.extractor_type, "#7f7f7f") for r in results.results
-    ]
-
-    # Chart 1: Keypoint counts
-    fig, ax = plt.subplots(figsize=(10, 6))
-    ax.bar(config_names, keypoint_totals, color=colors)
-    ax.set_xlabel("Configuration")
-    ax.set_ylabel("Total Keypoints")
-    ax.set_title("Keypoint Detection Counts")
-    ax.tick_params(axis="x", rotation=45)
-    plt.tight_layout()
-    plt.savefig(output_dir / "keypoint_counts.png", dpi=150, bbox_inches="tight")
-    plt.close()
-
-    # Chart 2: Match counts
-    fig, ax = plt.subplots(figsize=(10, 6))
-    ax.bar(config_names, match_totals, color=colors)
-    ax.set_xlabel("Configuration")
-    ax.set_ylabel("Total Matches")
-    ax.set_title("Feature Match Counts")
-    ax.tick_params(axis="x", rotation=45)
-    plt.tight_layout()
-    plt.savefig(output_dir / "match_counts.png", dpi=150, bbox_inches="tight")
-    plt.close()
-
-    # Chart 3: Timing breakdown (stacked bar)
-    fig, ax = plt.subplots(figsize=(10, 6))
-    ax.bar(config_names, extraction_times, label="Extraction", color="#1f77b4")
-    ax.bar(
-        config_names,
-        matching_times,
-        bottom=extraction_times,
-        label="Matching",
-        color="#ff7f0e",
-    )
-    bottom_tri = [e + m for e, m in zip(extraction_times, matching_times, strict=True)]
-    ax.bar(
-        config_names,
-        triangulation_times,
-        bottom=bottom_tri,
-        label="Triangulation",
-        color="#2ca02c",
-    )
-    ax.set_xlabel("Configuration")
-    ax.set_ylabel("Time (s)")
-    ax.set_title("Per-Stage Timing Breakdown")
-    ax.legend()
-    ax.tick_params(axis="x", rotation=45)
-    plt.tight_layout()
-    plt.savefig(output_dir / "timing.png", dpi=150, bbox_inches="tight")
-    plt.close()
-
-    logger.info("Generated 3 comparison charts in %s", output_dir)
-
-
-def _write_markdown(results: BenchmarkResults, output_path: Path) -> None:
-    """Write Markdown report to file.
-
-    Args:
-        results: Benchmark results.
-        output_path: Path to output .md file.
-    """
-    lines = []
-
-    # Header
-    lines.append("# AquaMVS Benchmark Report")
-    lines.append("")
-    lines.append(f"Frame: {results.frame_idx}")
-    lines.append(f"Configurations: {len(results.results)}")
-    lines.append("")
-
-    # Summary table
-    lines.append("## Summary")
-    lines.append("")
-    lines.append("| Config | Keypoints | Matches | Sparse Points | Total Time |")
-    lines.append("|--------|-----------|---------|---------------|------------|")
-    for result in results.results:
-        lines.append(
-            f"| {result.config_name} | "
-            f"{total_keypoints(result):,} | "
-            f"{total_matches(result):,} | "
-            f"{result.sparse_point_count:,} | "
-            f"{result.total_time:.2f}s |"
-        )
-    lines.append("")
-
-    # Per-stage timing table
-    lines.append("## Per-Stage Timing")
-    lines.append("")
-    lines.append("| Config | Extraction | Matching | Triangulation | Total |")
-    lines.append("|--------|------------|----------|---------------|-------|")
-    for result in results.results:
-        lines.append(
-            f"| {result.config_name} | "
-            f"{result.extraction_time:.3f}s | "
-            f"{result.matching_time:.3f}s | "
-            f"{result.triangulation_time:.3f}s | "
-            f"{result.total_time:.3f}s |"
-        )
-    lines.append("")
-
-    # Per-camera keypoints table
-    lines.append("## Per-Camera Keypoints")
-    lines.append("")
-    # Header row
-    header = "| Camera | " + " | ".join([r.config_name for r in results.results]) + " |"
-    lines.append(header)
-    separator = "|--------|" + "|".join(["---" for _ in results.results]) + "|"
-    lines.append(separator)
-    # Data rows
-    for cam_name in results.camera_names:
-        row = f"| {cam_name} | "
-        row += " | ".join(
-            [str(r.keypoint_counts.get(cam_name, 0)) for r in results.results]
-        )
-        row += " |"
-        lines.append(row)
-    lines.append("")
-
-    # Visualizations
-    lines.append("## Visualizations")
-    lines.append("")
-    lines.append("### Metrics")
-    lines.append("")
-    lines.append("![Keypoint Counts](comparison/keypoint_counts.png)")
-    lines.append("")
-    lines.append("![Match Counts](comparison/match_counts.png)")
-    lines.append("")
-    lines.append("![Timing Breakdown](comparison/timing.png)")
-    lines.append("")
-    lines.append("### Comparison Grids")
-    lines.append("")
-    lines.append("![Keypoints Grid](comparison/keypoints_grid.png)")
-    lines.append("")
-    lines.append("![Sparse Renders Grid](comparison/sparse_renders_grid.png)")
-    lines.append("")
-    lines.append("![Mesh Renders Grid](comparison/mesh_grid.png)")
-    lines.append("")
-
-    # Write to file
-    with open(output_path, "w") as f:
-        f.write("\n".join(lines))
-
-    logger.info("Markdown report written to %s", output_path)
-
-
-__all__ = ["generate_report"]
+__all__ = ["format_console_table", "format_markdown_report", "save_markdown_report"]

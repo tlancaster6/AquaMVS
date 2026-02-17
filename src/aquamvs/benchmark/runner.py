@@ -1,532 +1,254 @@
-"""Benchmark orchestration for comparing pipeline configurations."""
+"""Benchmark runner for comparing pipeline execution pathways."""
 
-import json
+import copy
 import logging
-import time
-from dataclasses import dataclass
-from datetime import datetime
+from dataclasses import dataclass, field
 from pathlib import Path
 
-import numpy as np
-import open3d as o3d
-import torch
-from tabulate import tabulate
-
 from ..config import PipelineConfig
-from ..pipeline import Pipeline
-from .config import BenchmarkConfig
-from .datasets import load_dataset
-from .metrics import compute_accuracy_metrics
+from ..profiling.analyzer import ProfileReport
+from ..profiling.profiler import PipelineProfiler, set_active_profiler
 
 logger = logging.getLogger(__name__)
 
 
 @dataclass
-class TestResult:
-    """Results from a single benchmark test.
+class PathwayResult:
+    """Results from a single pathway execution.
 
     Attributes:
-        test_name: Name of the test (e.g., "clahe_comparison").
-        configs: Per-config results mapping config_name to metrics dict.
+        pathway_name: Human-readable name for this pathway configuration.
+        timing: ProfileReport with per-stage wall times and memory metrics.
+        point_count: Number of points in the fused cloud (0 if no cloud).
+        cloud_density: Points per m² (bounding-box XY area proxy, 0 if no cloud).
+        outlier_removal_pct: Percentage of points removed as outliers.
+        stages_run: Names of pipeline stages that actually executed.
     """
 
-    test_name: str
-    configs: dict[str, dict[str, float]]
+    pathway_name: str
+    timing: ProfileReport
+    point_count: int = 0
+    cloud_density: float = 0.0
+    outlier_removal_pct: float = 0.0
+    stages_run: list[str] = field(default_factory=list)
 
 
 @dataclass
-class BenchmarkRunResult:
+class BenchmarkResult:
     """Results from a complete benchmark run.
 
     Attributes:
-        run_id: Unique run identifier (timestamp).
-        run_dir: Directory containing run results.
-        test_results: Results from each enabled test.
-        summary: Aggregated metrics across all tests.
+        results: Per-pathway results in run order.
+        config_path: Path string of the PipelineConfig that was benchmarked.
+        output_dir: Populated from config.output_dir — used by CLI for report saving.
+        frame: Frame index that was benchmarked.
     """
 
-    run_id: str
-    run_dir: Path
-    test_results: dict[str, TestResult]
-    summary: dict[str, float]
+    results: list[PathwayResult] = field(default_factory=list)
+    config_path: str = ""
+    output_dir: str = ""
+    frame: int = 0
 
 
-def run_benchmarks(config: BenchmarkConfig) -> BenchmarkRunResult:
-    """Run all enabled benchmark tests and produce structured results.
+def build_pathways(
+    base_config: PipelineConfig,
+    extractors: list[str] | None = None,
+    with_clahe: bool = False,
+) -> list[tuple[str, PipelineConfig]]:
+    """Build list of (name, config) tuples for each pathway to benchmark.
 
-    Creates a timestamped run directory, copies config YAML, runs enabled tests,
-    computes accuracy metrics, records timing, and writes summary.json.
+    Always includes 4 base pathways:
+
+    1. LG+SP sparse — LightGlue + SuperPoint, pipeline_mode=sparse
+    2. LG+SP full   — LightGlue + SuperPoint, pipeline_mode=full
+    3. RoMa sparse  — RoMa dense matcher,     pipeline_mode=sparse
+    4. RoMa full    — RoMa dense matcher,     pipeline_mode=full
+
+    With ``extractors``: adds LightGlue variants per extractor name.
+    With ``with_clahe``: adds CLAHE-on variants for all LightGlue paths.
 
     Args:
-        config: Benchmark configuration with datasets and test toggles.
+        base_config: Loaded PipelineConfig to use as the template.
+        extractors: Optional list of extractor names (e.g., ["aliked", "disk"]).
+            Each creates additional LightGlue+sparse and LightGlue+full variants.
+        with_clahe: If True, add CLAHE-enabled variants for all LightGlue paths.
 
     Returns:
-        BenchmarkRunResult with per-test metrics and aggregated summary.
+        List of (pathway_name, modified_config) tuples.
     """
-    # Create timestamped run directory
-    run_id = datetime.now().strftime("%Y%m%d_%H%M%S")
-    run_dir = Path(config.output_dir) / run_id
-    run_dir.mkdir(parents=True, exist_ok=True)
+    pathways: list[tuple[str, PipelineConfig]] = []
 
-    logger.info(f"Starting benchmark run: {run_id}")
-    logger.info(f"Output directory: {run_dir}")
+    def _make_config(
+        matcher: str,
+        mode: str,
+        extractor: str = "superpoint",
+        clahe: bool = False,
+    ) -> PipelineConfig:
+        cfg = copy.deepcopy(base_config)
+        cfg.matcher_type = matcher
+        cfg.pipeline_mode = mode
+        if matcher == "lightglue":
+            cfg.sparse_matching.extractor_type = extractor
+            cfg.sparse_matching.clahe_enabled = clahe
+        return cfg
 
-    # Copy config YAML to run directory
-    # (Config lives in same directory as output per user decision)
-    config.to_yaml(run_dir / "config.yaml")
+    # --- 4 base pathways ---
+    pathways.append(("LG+SP sparse", _make_config("lightglue", "sparse", "superpoint")))
+    pathways.append(("LG+SP full", _make_config("lightglue", "full", "superpoint")))
+    pathways.append(("RoMa sparse", _make_config("roma", "sparse")))
+    pathways.append(("RoMa full", _make_config("roma", "full")))
 
-    # Initialize results storage
-    test_results: dict[str, TestResult] = {}
-
-    # Run enabled tests
-    if config.tests.clahe_comparison:
-        logger.info("Running CLAHE comparison test...")
-        test_results["clahe_comparison"] = _run_clahe_comparison(config, run_dir)
-
-    if config.tests.execution_mode_comparison:
-        logger.info("Running execution mode comparison test...")
-        test_results["execution_mode_comparison"] = _run_execution_mode_comparison(
-            config, run_dir
-        )
-
-    if config.tests.surface_reconstruction_comparison:
-        logger.info("Running surface reconstruction comparison test...")
-        test_results["surface_reconstruction_comparison"] = (
-            _run_surface_reconstruction_comparison(config, run_dir)
-        )
-
-    # Aggregate summary metrics
-    summary = _aggregate_summary(test_results)
-
-    # Write summary.json
-    summary_path = run_dir / "summary.json"
-    with open(summary_path, "w") as f:
-        json.dump(
-            {
-                "run_id": run_id,
-                "test_results": {
-                    name: {"configs": result.configs}
-                    for name, result in test_results.items()
-                },
-                "summary": summary,
-            },
-            f,
-            indent=2,
-        )
-
-    logger.info(f"Summary written to {summary_path}")
-
-    # Print ASCII summary table
-    _print_summary_table(test_results)
-
-    return BenchmarkRunResult(
-        run_id=run_id,
-        run_dir=run_dir,
-        test_results=test_results,
-        summary=summary,
-    )
-
-
-def _run_clahe_comparison(config: BenchmarkConfig, run_dir: Path) -> TestResult:
-    """Run CLAHE on vs off comparison across extractors.
-
-    Tests CLAHE with LightGlue (SuperPoint, ALIKED, DISK) and RoMa, all in sparse mode.
-
-    Args:
-        config: Benchmark configuration.
-        run_dir: Run output directory.
-
-    Returns:
-        TestResult with per-config accuracy and timing metrics.
-    """
-    test_dir = run_dir / "clahe_comparison"
-    test_dir.mkdir(parents=True, exist_ok=True)
-
-    # Define config variants to test
-    extractor_variants = ["superpoint", "aliked", "disk", "roma"]
-    clahe_variants = [True, False]
-
-    configs_to_test = []
-    for extractor in extractor_variants:
-        for clahe in clahe_variants:
-            config_name = _make_config_name(extractor, clahe, "sparse", None)
-            configs_to_test.append((config_name, extractor, clahe, "sparse", None))
-
-    # Run each config variant
-    results = {}
-    for config_name, extractor, clahe, mode, surface_method in configs_to_test:
-        logger.info(f"  Testing: {config_name}")
-        metrics = _run_pipeline_config(
-            benchmark_config=config,
-            extractor=extractor,
-            clahe=clahe,
-            mode=mode,
-            surface_method=surface_method,
-            output_dir=test_dir / config_name,
-        )
-        results[config_name] = metrics
-
-    # Write per-config results
-    with open(test_dir / "results.json", "w") as f:
-        json.dump(results, f, indent=2)
-
-    return TestResult(test_name="clahe_comparison", configs=results)
-
-
-def _run_execution_mode_comparison(
-    config: BenchmarkConfig, run_dir: Path
-) -> TestResult:
-    """Run execution mode comparison: sparse vs full reconstruction.
-
-    Tests all 4 modes: LightGlue+sparse, LightGlue+full, RoMa+sparse, RoMa+full.
-
-    Args:
-        config: Benchmark configuration.
-        run_dir: Run output directory.
-
-    Returns:
-        TestResult with per-config accuracy and timing metrics.
-    """
-    test_dir = run_dir / "execution_mode_comparison"
-    test_dir.mkdir(parents=True, exist_ok=True)
-
-    # Define config variants (LightGlue uses user-selectable extractor)
-    configs_to_test = [
-        (
-            f"lightglue_{config.lightglue_extractor}_sparse",
-            config.lightglue_extractor,
-            False,
-            "sparse",
-            None,
-        ),
-        (
-            f"lightglue_{config.lightglue_extractor}_full",
-            config.lightglue_extractor,
-            False,
-            "full",
-            None,
-        ),
-        ("roma_sparse", "roma", False, "sparse", None),
-        ("roma_full", "roma", False, "full", None),
-    ]
-
-    # Run each config variant
-    results = {}
-    for config_name, extractor, clahe, mode, surface_method in configs_to_test:
-        logger.info(f"  Testing: {config_name}")
-        metrics = _run_pipeline_config(
-            benchmark_config=config,
-            extractor=extractor,
-            clahe=clahe,
-            mode=mode,
-            surface_method=surface_method,
-            output_dir=test_dir / config_name,
-        )
-        results[config_name] = metrics
-
-    # Write per-config results
-    with open(test_dir / "results.json", "w") as f:
-        json.dump(results, f, indent=2)
-
-    return TestResult(test_name="execution_mode_comparison", configs=results)
-
-
-def _run_surface_reconstruction_comparison(
-    config: BenchmarkConfig, run_dir: Path
-) -> TestResult:
-    """Run surface reconstruction method comparison.
-
-    Tests Poisson, heightfield, and BPA on same depth maps.
-
-    Args:
-        config: Benchmark configuration.
-        run_dir: Run output directory.
-
-    Returns:
-        TestResult with per-config accuracy and timing metrics.
-    """
-    test_dir = run_dir / "surface_reconstruction_comparison"
-    test_dir.mkdir(parents=True, exist_ok=True)
-
-    # Define config variants (vary only surface method, keep same depth estimation)
-    surface_methods = ["poisson", "heightfield", "bpa"]
-
-    configs_to_test = [
-        (f"surface_{method}", config.lightglue_extractor, False, "full", method)
-        for method in surface_methods
-    ]
-
-    # Run each config variant
-    results = {}
-    for config_name, extractor, clahe, mode, surface_method in configs_to_test:
-        logger.info(f"  Testing: {config_name}")
-        metrics = _run_pipeline_config(
-            benchmark_config=config,
-            extractor=extractor,
-            clahe=clahe,
-            mode=mode,
-            surface_method=surface_method,
-            output_dir=test_dir / config_name,
-        )
-        results[config_name] = metrics
-
-    # Write per-config results
-    with open(test_dir / "results.json", "w") as f:
-        json.dump(results, f, indent=2)
-
-    return TestResult(test_name="surface_reconstruction_comparison", configs=results)
-
-
-def _run_pipeline_config(
-    benchmark_config: BenchmarkConfig,
-    extractor: str,
-    clahe: bool,
-    mode: str,
-    surface_method: str | None,
-    output_dir: Path,
-) -> dict[str, float]:
-    """Run pipeline with a specific configuration and compute metrics.
-
-    Args:
-        benchmark_config: Benchmark configuration with datasets.
-        extractor: Feature extractor (superpoint, aliked, disk, roma).
-        clahe: Whether to enable CLAHE preprocessing.
-        mode: Pipeline mode (sparse or full).
-        surface_method: Surface reconstruction method (poisson, heightfield, bpa).
-        output_dir: Output directory for this config variant.
-
-    Returns:
-        Dictionary with accuracy metrics and timing.
-    """
-    output_dir.mkdir(parents=True, exist_ok=True)
-
-    # Aggregate metrics across all datasets
-    all_metrics = []
-
-    for dataset_config in benchmark_config.datasets:
-        logger.info(f"    Dataset: {dataset_config.name}")
-
-        # Load ground truth
-        dataset_ctx = load_dataset(dataset_config)
-
-        # Build pipeline config for this dataset
-        pipeline_config = _build_pipeline_config(
-            dataset_config=dataset_config,
-            extractor=extractor,
-            clahe=clahe,
-            mode=mode,
-            surface_method=surface_method,
-            output_dir=str(output_dir / dataset_config.name),
-        )
-
-        # Run pipeline with timing
-        t_start = time.perf_counter()
-        if torch.cuda.is_available():
-            torch.cuda.synchronize()
-
-        pipeline = Pipeline(pipeline_config)
-        pipeline.run()
-
-        if torch.cuda.is_available():
-            torch.cuda.synchronize()
-        t_end = time.perf_counter()
-        total_time = t_end - t_start
-
-        # Compute accuracy metrics
-        if dataset_ctx.mesh is not None:
-            # Synthetic dataset: compute point-to-mesh accuracy
-            # Find reconstructed point cloud file
-            output_path = Path(output_dir) / dataset_config.name
-            cloud_files = list(output_path.rglob("fused_points.ply")) + list(
-                output_path.rglob("sparse_cloud.ply")
+    # --- Extra extractor variants ---
+    if extractors:
+        for ext in extractors:
+            if ext.lower() == "superpoint":
+                # Already covered by base pathways — skip duplicates
+                continue
+            pathways.append(
+                (f"LG+{ext.upper()} sparse", _make_config("lightglue", "sparse", ext))
+            )
+            pathways.append(
+                (f"LG+{ext.upper()} full", _make_config("lightglue", "full", ext))
             )
 
-            if cloud_files:
-                # Load first found point cloud
-                cloud_path = cloud_files[0]
-                logger.info(f"    Loading reconstructed point cloud: {cloud_path}")
-                cloud = o3d.io.read_point_cloud(str(cloud_path))
-                points = np.asarray(cloud.points)
+    # --- CLAHE variants ---
+    if with_clahe:
+        # Collect the current LightGlue pathways (before adding more) and add CLAHE versions
+        base_count = len(pathways)
+        for i in range(base_count):
+            name, cfg = pathways[i]
+            if cfg.matcher_type == "lightglue":
+                clahe_cfg = copy.deepcopy(cfg)
+                clahe_cfg.sparse_matching.clahe_enabled = True
+                pathways.append((f"{name}+CLAHE", clahe_cfg))
 
-                # Compute accuracy metrics
-                accuracy = compute_accuracy_metrics(
-                    points, dataset_ctx.mesh, dataset_ctx.tolerance_mm
-                )
-                metrics = {**accuracy, "timing_seconds": total_time}
-            else:
-                logger.warning(
-                    f"    No point cloud found in {output_path}, returning timing only"
-                )
-                metrics = {"timing_seconds": total_time}
-        elif dataset_ctx.charuco_corners is not None:
-            # ChArUco dataset: compute corner reprojection error
-            # TODO: Load reconstructed corners from output_dir and compute reprojection error
-            # For now, just return timing
-            logger.warning("ChArUco metric computation not yet implemented")
-            metrics = {"timing_seconds": total_time}
-        else:
-            metrics = {"timing_seconds": total_time}
-
-        all_metrics.append(metrics)
-
-    # Average metrics across datasets
-    if not all_metrics:
-        return {"timing_seconds": 0.0}
-
-    # Aggregate by averaging
-    aggregated = {}
-    for key in all_metrics[0].keys():
-        values = [m[key] for m in all_metrics if key in m]
-        aggregated[key] = sum(values) / len(values) if values else 0.0
-
-    return aggregated
+    return pathways
 
 
-def _build_pipeline_config(
-    dataset_config,
-    extractor: str,
-    clahe: bool,
-    mode: str,
-    surface_method: str | None,
-    output_dir: str,
-) -> PipelineConfig:
-    """Build a PipelineConfig for a specific test configuration.
+def _read_single_frame(
+    config: PipelineConfig,
+    frame: int,
+) -> "dict[str, object]":
+    """Read a single frame from the configured video/image source.
 
     Args:
-        dataset_config: Dataset configuration.
-        extractor: Feature extractor.
-        clahe: CLAHE enabled.
-        mode: Pipeline mode.
-        surface_method: Surface reconstruction method.
-        output_dir: Output directory.
+        config: PipelineConfig with camera_input_map set.
+        frame: Frame index to read.
 
     Returns:
-        PipelineConfig ready for pipeline execution.
+        Dictionary mapping camera name to raw BGR NumPy array.
     """
-    # Load base config from dataset path
-    dataset_path = Path(dataset_config.path)
-    base_config_path = dataset_path / "config.yaml"
+    import numpy as np
+    from aquacal.io.video import VideoSet
 
-    if base_config_path.exists():
-        config = PipelineConfig.from_yaml(base_config_path)
+    from ..io import ImageDirectorySet, detect_input_type
+
+    input_type = detect_input_type(config.camera_input_map)
+    if input_type == "images":
+        context_manager = ImageDirectorySet(config.camera_input_map)
     else:
-        # Create minimal config (for synthetic datasets)
-        config = PipelineConfig(
-            calibration_path=str(dataset_path / "calibration.json"),
-            output_dir=output_dir,
-            camera_input_map={},
+        context_manager = VideoSet(config.camera_input_map)
+
+    with context_manager as source:
+        raw_images: dict[str, np.ndarray] = source.read_frame(frame)
+
+    return raw_images
+
+
+def run_benchmark(
+    config_path: Path,
+    frame: int = 0,
+    extractors: list[str] | None = None,
+    with_clahe: bool = False,
+) -> BenchmarkResult:
+    """Run benchmark comparison across all pathways.
+
+    For each pathway:
+
+    1. Deep-copy and modify config for the pathway (matcher, mode, extractor, CLAHE).
+    2. Set output directory to ``{base_output}/benchmark/{pathway_name}/``.
+    3. Create a FRESH ``PipelineProfiler()`` instance for this pathway.
+       (Do NOT reuse a single profiler — ``profiler.snapshots`` is a plain dict
+       so reusing it overwrites same-named stage keys across pathways.)
+    4. Set active profiler via ``set_active_profiler(fresh_profiler)``.
+    5. Read frame, build context, run ``process_frame``.
+    6. Collect profiler report + relative metrics.
+    7. Deactivate profiler via ``set_active_profiler(None)``.
+
+    Args:
+        config_path: Path to the pipeline config YAML (same as ``aquamvs run``).
+        frame: Frame index to benchmark (default 0).
+        extractors: Additional LightGlue extractor variants (e.g., ["aliked", "disk"]).
+        with_clahe: Add CLAHE-on variants for LightGlue pathways.
+
+    Returns:
+        BenchmarkResult with per-pathway timing, point counts, and cloud density.
+    """
+    from ..pipeline.builder import build_pipeline_context
+    from ..pipeline.runner import process_frame
+    from .metrics import compute_relative_metrics
+
+    config_path = Path(config_path)
+    base_config = PipelineConfig.from_yaml(config_path)
+    base_output_dir = Path(base_config.output_dir)
+
+    # Read frame once (shared across pathways — same raw images for all)
+    logger.info("Reading frame %d from %s", frame, config_path)
+    raw_images = _read_single_frame(base_config, frame)
+
+    pathways = build_pathways(base_config, extractors=extractors, with_clahe=with_clahe)
+    logger.info("Running %d pathway(s)...", len(pathways))
+
+    benchmark_result = BenchmarkResult(
+        config_path=str(config_path),
+        output_dir=str(base_output_dir),
+        frame=frame,
+    )
+
+    for pathway_name, pathway_cfg in pathways:
+        # Redirect pathway output to a benchmark subdirectory
+        safe_name = pathway_name.replace("+", "_").replace(" ", "_")
+        pathway_cfg.output_dir = str(base_output_dir / "benchmark" / safe_name)
+
+        logger.info("  Pathway: %s -> %s", pathway_name, pathway_cfg.output_dir)
+
+        ctx = build_pipeline_context(pathway_cfg)
+
+        # Fresh profiler per pathway — isolated snapshots dict
+        profiler = PipelineProfiler()
+
+        with profiler:
+            set_active_profiler(profiler)
+            try:
+                process_frame(frame, raw_images, ctx)
+            except Exception:
+                logger.exception("  Pathway %s: processing failed", pathway_name)
+            finally:
+                set_active_profiler(None)
+
+        timing = profiler.get_report()
+
+        # Collect relative metrics from output
+        pathway_output_dir = Path(pathway_cfg.output_dir)
+        rel_metrics = compute_relative_metrics(pathway_output_dir)
+
+        pw_result = PathwayResult(
+            pathway_name=pathway_name,
+            timing=timing,
+            point_count=int(rel_metrics["point_count"]),
+            cloud_density=rel_metrics["cloud_density"],
+            outlier_removal_pct=rel_metrics["outlier_removal_pct"],
+            stages_run=list(timing.stages.keys()),
+        )
+        benchmark_result.results.append(pw_result)
+        logger.info(
+            "  Pathway %s: %.1f s total, %d points",
+            pathway_name,
+            timing.total_time_ms / 1000.0,
+            pw_result.point_count,
         )
 
-    # Override settings for this test variant
-    config.output_dir = output_dir
-
-    # Set matcher and extractor
-    if extractor == "roma":
-        config.matcher_type = "roma"
-    else:
-        config.matcher_type = "lightglue"
-        config.sparse_matching.extractor_type = extractor
-
-    # Set CLAHE
-    config.sparse_matching.clahe_enabled = clahe
-
-    # Set pipeline mode
-    config.pipeline_mode = mode
-
-    # Set surface reconstruction method
-    if surface_method is not None:
-        config.reconstruction.surface_method = surface_method
-
-    return config
+    return benchmark_result
 
 
-def _make_config_name(
-    extractor: str, clahe: bool, mode: str, surface_method: str | None
-) -> str:
-    """Generate a config name for a test variant.
-
-    Args:
-        extractor: Feature extractor.
-        clahe: CLAHE enabled.
-        mode: Pipeline mode.
-        surface_method: Surface reconstruction method.
-
-    Returns:
-        Config name string.
-    """
-    parts = [extractor]
-    if clahe:
-        parts.append("clahe")
-    parts.append(mode)
-    if surface_method is not None:
-        parts.append(surface_method)
-    return "_".join(parts)
-
-
-def _aggregate_summary(test_results: dict[str, TestResult]) -> dict[str, float]:
-    """Aggregate summary metrics across all tests.
-
-    Args:
-        test_results: Results from all tests.
-
-    Returns:
-        Dictionary with aggregated metrics.
-    """
-    # Collect all timing values
-    all_timings = []
-    for result in test_results.values():
-        for metrics in result.configs.values():
-            if "timing_seconds" in metrics:
-                all_timings.append(metrics["timing_seconds"])
-
-    if not all_timings:
-        return {"mean_timing_seconds": 0.0, "total_configs_tested": 0}
-
-    return {
-        "mean_timing_seconds": sum(all_timings) / len(all_timings),
-        "total_configs_tested": sum(len(r.configs) for r in test_results.values()),
-    }
-
-
-def _print_summary_table(test_results: dict[str, TestResult]) -> None:
-    """Print ASCII summary table to terminal.
-
-    Args:
-        test_results: Results from all tests.
-    """
-    print("\n" + "=" * 80)
-    print("BENCHMARK RESULTS SUMMARY")
-    print("=" * 80 + "\n")
-
-    for test_name, result in test_results.items():
-        print(f"Test: {test_name}")
-        print("-" * 80)
-
-        # Build table rows
-        headers = ["Config"]
-        metric_keys = []
-
-        # Determine metric keys from first config
-        if result.configs:
-            first_config = next(iter(result.configs.values()))
-            metric_keys = list(first_config.keys())
-            headers.extend(metric_keys)
-
-        rows = []
-        for config_name, metrics in result.configs.items():
-            row = [config_name]
-            for key in metric_keys:
-                value = metrics.get(key, 0.0)
-                row.append(f"{value:.1f}")
-            rows.append(row)
-
-        # Print table
-        print(tabulate(rows, headers=headers, tablefmt="grid"))
-        print()
-
-
-__all__ = [
-    "run_benchmarks",
-    "BenchmarkRunResult",
-    "TestResult",
-]
+__all__ = ["run_benchmark", "BenchmarkResult", "PathwayResult", "build_pathways"]

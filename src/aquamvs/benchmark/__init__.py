@@ -1,52 +1,14 @@
-"""Benchmark suite for comparing feature extraction configurations and reconstruction accuracy."""
+"""Benchmark tools for comparing pipeline execution pathways."""
 
-from .comparison import (
-    ComparisonResult,
-    MetricDelta,
-    compare_runs,
-    detect_regressions,
-    format_comparison,
-)
-from .config import BenchmarkConfig, BenchmarkDataset, BenchmarkTests
-from .datasets import DatasetContext, load_charuco_ground_truth, load_dataset
-from .metrics import (
-    BenchmarkResults,
-    ConfigResult,
-    compute_accuracy_metrics,
-    compute_charuco_metrics,
-    compute_plane_fit_metrics,
-)
-from .report import generate_report
-from .runner import BenchmarkRunResult, TestResult, run_benchmarks
-from .visualization import generate_visualizations
+from .report import format_console_table, format_markdown_report, save_markdown_report
+from .runner import BenchmarkResult, PathwayResult, build_pathways, run_benchmark
 
 __all__ = [
-    # Configuration models
-    "BenchmarkConfig",
-    "BenchmarkDataset",
-    "BenchmarkTests",
-    # Dataset loaders
-    "DatasetContext",
-    "load_dataset",
-    "load_charuco_ground_truth",
-    # Accuracy metrics (new)
-    "compute_accuracy_metrics",
-    "compute_charuco_metrics",
-    "compute_plane_fit_metrics",
-    # Benchmark orchestration (new)
-    "run_benchmarks",
-    "BenchmarkRunResult",
-    "TestResult",
-    # Feature extraction benchmark (legacy)
-    "ConfigResult",
-    "BenchmarkResults",
-    "generate_report",
-    # Visualization
-    "generate_visualizations",
-    # Comparison (new)
-    "compare_runs",
-    "detect_regressions",
-    "format_comparison",
-    "ComparisonResult",
-    "MetricDelta",
+    "run_benchmark",
+    "BenchmarkResult",
+    "PathwayResult",
+    "build_pathways",
+    "format_console_table",
+    "format_markdown_report",
+    "save_markdown_report",
 ]
