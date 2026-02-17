@@ -133,6 +133,33 @@ that, base on input type, routes to the correct VideoSet or ImageDirectorySet cl
 should probably also share a base class that serves as a contract for shared methods and properties. To remove immediate
 blockers, we added a read_frame method to ImageDirectorySet
 
+### 6.1 / 1.1 — Profiler OOM errors
+- **Description**: the profiler code, as originally written, used the torch profiler, which accumulates millions of
+kernels over the full pipeline and causes an OOM/hang while trying to serialize them during __exit__
+- **Impact**: Medium
+- **Status**: fixed
+- **Notes**: dropped torch.profiler entirely, switched to time.perf_counter + torch.cuda.Event for wall/GPU timing per 
+stage, tracemalloc for CPU memory peaks per stage, and torch.cuda.memory_allocated / max_memory_allocated for GPU memory 
+per stage
+
+### [Phase].[Plan] / [Step] — [Brief Title]
+- **Description**: 
+- **Impact**: 
+- **Status**: 
+- **Notes**:
+
+### [Phase].[Plan] / [Step] — [Brief Title]
+- **Description**: 
+- **Impact**: 
+- **Status**: 
+- **Notes**:
+
+### [Phase].[Plan] / [Step] — [Brief Title]
+- **Description**: 
+- **Impact**: 
+- **Status**: 
+- **Notes**:
+
 ### [Phase].[Plan] / [Step] — [Brief Title]
 - **Description**: 
 - **Impact**: 
