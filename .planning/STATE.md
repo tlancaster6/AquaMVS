@@ -9,12 +9,12 @@ See: .planning/PROJECT.md (updated 2026-02-14)
 
 ## Current Position
 
-Phase: 07 (Post-QA Bug Triage)
-Plan: 3 of 3 plans complete
-Status: Complete
-Last activity: 2026-02-17 - Completed plan 03: Unified benchmark command (pathway comparison)
+Phase: 08 (User Guide and Tutorials Overhaul)
+Plan: 3 of 4 plans complete
+Status: In Progress
+Last activity: 2026-02-17 - Completed plan 03: Benchmarking notebook and smoke tests
 
-Progress: [████████████] 100% (3 of 3 Phase 07 plans complete)
+Progress: [█████████░░░] 75% (3 of 4 Phase 08 plans complete)
 
 ## Performance Metrics
 
@@ -62,6 +62,7 @@ Progress: [████████████] 100% (3 of 3 Phase 07 plans com
 | Phase 07 P01 | 21 | 3 tasks | 7 files |
 | Phase 07 P02 | 13 | 1 task  | 3 files |
 | Phase 07 P03 | 13 | 2 tasks | 7 files |
+| Phase 08 P03 | 12 | 2 tasks | 4 files |
 
 ## Accumulated Context
 
@@ -210,6 +211,12 @@ Recent decisions affecting current work:
 - cloud_density computed from bounding-box XY area as scan-area proxy — not true surface area, but useful relative comparison
 - profile CLI command removed — aquamvs benchmark subsumes it with multi-pathway comparison
 
+**Phase 08 Plan 03 (2026-02-17):**
+- importlib.util.find_spec used instead of try/import for Colab install guard (ruff F401 compliance)
+- strict=False on zip() calls in notebook visualizations (ruff B905 compliance)
+- Smoke test discovers all docs/**/*.ipynb via Path.rglob — picks up both tutorial notebooks and _build copies automatically
+- Notebook code cells with shell commands (lines starting with !) are skipped in both syntax and import checks
+
 ### Roadmap Evolution
 
 - Phase 1.1 inserted after Phase 1: Last-Minute Feature Additions (URGENT)
@@ -248,6 +255,6 @@ approved
 
 ## Session Continuity
 
-Last session: 2026-02-17 (phase 08 context gathering)
-Stopped at: Phase 8 context gathered
-Resume file: .planning/phases/08-user-guide-and-tutorials-overhaul/08-CONTEXT.md
+Last session: 2026-02-17 (phase 08 plan 03 execution)
+Stopped at: Completed 08-03-PLAN.md (benchmarking notebook and smoke tests)
+Resume file: .planning/phases/08-user-guide-and-tutorials-overhaul/08-04-PLAN.md
