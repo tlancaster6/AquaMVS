@@ -58,7 +58,7 @@ Progress: [████████] 67% (2 of 3 Phase 07 plans complete)
 | Phase 05 P06 | 5 | 2 tasks | 7 files |
 | Phase 05 P07 | 3 | 2 tasks | 5 files |
 | Phase 05 P08 | 13 | 2 tasks | 6 files |
-| Phase 07 P01 | ~8 | 3 tasks | 7 files |
+| Phase 07 P01 | 21 | 3 tasks | 7 files |
 | Phase 07 P02 | 13 | 1 task  | 3 files |
 
 ## Accumulated Context
@@ -190,6 +190,13 @@ Recent decisions affecting current work:
 - CPU-only profiling baseline with documented GPU behavior predictions for batching optimization
 - RaycastingScene for point-to-mesh distance computation (not compute_point_cloud_distance which requires two point clouds)
 
+**Phase 07 Plan 01 (2026-02-17):**
+- Preset baked at init time (aquamvs init --preset fast); quality_preset=None in saved YAML so no runtime re-apply
+- auto_apply_preset validator gutted to warn-only (method kept, Pydantic needs the signature)
+- output_fps explicit parameter replaces fps/framestep computation (cv2 returns 0.0 for some containers)
+- bottleneck.median optional: try-import at module level with logger.warning fallback to np.median
+- REMOVED_KEYS = {save_depth_maps, save_point_cloud, save_mesh} stripped in _migrate_legacy_config with clear warning
+
 **Phase 07 Plan 02 (2026-02-17):**
 - Thread-local storage (threading.local) for profiler registry — ensures per-thread isolation, safe for concurrent pipeline runs
 - timed_stage else-branch identical to old implementation — backward-compatible, no behavior change for normal aquamvs run usage
@@ -233,6 +240,6 @@ approved
 
 ## Session Continuity
 
-Last session: 2026-02-17 (phase 07 plan 02 execution)
-Stopped at: Completed 07-02-PLAN.md
-Resume file: .planning/phases/07-post-qa-bug-triage/07-02-SUMMARY.md
+Last session: 2026-02-17 (phase 07 plan 01 execution — 21 min)
+Stopped at: Completed 07-01-PLAN.md
+Resume file: .planning/phases/07-post-qa-bug-triage/07-01-SUMMARY.md
