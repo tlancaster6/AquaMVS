@@ -133,7 +133,7 @@ that, base on input type, routes to the correct VideoSet or ImageDirectorySet cl
 should probably also share a base class that serves as a contract for shared methods and properties. To remove immediate
 blockers, we added a read_frame method to ImageDirectorySet
 
-### 6.1 / 1.1 — Profiler OOM errors
+### 6.5 / 1.1 — Profiler OOM errors
 - **Description**: the profiler code, as originally written, used the torch profiler, which accumulates millions of
 kernels over the full pipeline and causes an OOM/hang while trying to serialize them during __exit__
 - **Impact**: Medium
@@ -142,26 +142,102 @@ kernels over the full pipeline and causes an OOM/hang while trying to serialize 
 stage, tracemalloc for CPU memory peaks per stage, and torch.cuda.memory_allocated / max_memory_allocated for GPU memory 
 per stage
 
-### [Phase].[Plan] / [Step] — [Brief Title]
-- **Description**: 
-- **Impact**: 
-- **Status**: 
-- **Notes**:
+### 6.5 / 1.1: no profiler output
+- **Description**: profiler now runs without error (after making the fix above) but the table/report printed to the 
+console looks empty
+- **Impact**: medium
+- **Status**: logged for later
+- **Notes**: See full console output below:
 
-### [Phase].[Plan] / [Step] — [Brief Title]
-- **Description**: 
-- **Impact**: 
-- **Status**: 
-- **Notes**:
+"
+(AquaMVS) PS C:\Users\tucke\Desktop\021026\021026_prereset\temporal_medians> aquamvs profile config.yaml --frame 0
+09:55:58 [WARNING] aquamvs.config: Unknown config keys in RuntimeConfig (ignored): ['save_depth_maps', 'save_point_cloud', 'save_mesh']
 
-### [Phase].[Plan] / [Step] — [Brief Title]
-- **Description**: 
-- **Impact**: 
-- **Status**: 
-- **Notes**:
+Profiling frame 0...
 
-### [Phase].[Plan] / [Step] — [Brief Title]
-- **Description**: 
-- **Impact**: 
-- **Status**: 
-- **Notes**:
+09:55:59 [INFO] aquamvs.pipeline.builder: Loading calibration from C:\Users\tucke\Desktop\021026\021026_prereset\temporal_medians\calibration.json
+09:55:59 [WARNING] aquamvs.pipeline.builder: Ring cameras in calibration but missing input (skipped): ['e3v82f9']
+09:55:59 [INFO] aquamvs.pipeline.builder: Found 11 ring cameras, 1 auxiliary cameras (of 12/1 in calibration)
+09:55:59 [INFO] aquamvs.pipeline.builder: Computing undistortion maps
+09:55:59 [INFO] aquamvs.pipeline.builder: Creating projection models
+09:55:59 [INFO] aquamvs.pipeline.builder: Selecting camera pairs
+09:55:59 [INFO] aquamvs.masks: Loaded 13 mask(s) from C:\Users\tucke\Desktop\021026\021026_prereset\temporal_medians\masks
+09:55:59 [INFO] aquamvs.pipeline.builder: Config saved to C:\Users\tucke\Desktop\021026\021026_prereset\temporal_medians\output\config.yaml
+09:55:59 [INFO] aquamvs.io: Detected 5 frames across 12 cameras (image directory input)
+09:56:00 [INFO] aquamvs.pipeline.stages.undistortion: Frame 0: undistorting images
+09:56:01 [INFO] aquamvs.pipeline.stages.undistortion: undistortion: 1096.7 ms
+09:56:01 [INFO] aquamvs.pipeline.stages.dense_matching: Frame 0: running RoMa v2 dense matching (full mode)
+Using cache found in C:\Users\tucke/.cache\torch\hub\facebookresearch_dinov3_adc254450203739c8149213a7a69d8d905b4fcfa
+09:56:04 [INFO] dinov3: using base=100 for rope new
+09:56:04 [INFO] dinov3: using min_period=None for rope new
+09:56:04 [INFO] dinov3: using max_period=None for rope new
+09:56:04 [INFO] dinov3: using normalize_coords=separate for rope new
+09:56:04 [INFO] dinov3: using shift_coords=None for rope new
+09:56:04 [INFO] dinov3: using rescale_coords=2 for rope new
+09:56:04 [INFO] dinov3: using jitter_coords=None for rope new
+09:56:04 [INFO] dinov3: using dtype=fp32 for rope new
+09:56:04 [INFO] dinov3: using mlp layer as FFN
+2026-02-17 09:56:15 INFO     romav2.romav2 - romav2:116 in __init__ - RoMa
+                             v2 initialized.
+10:04:33 [INFO] aquamvs.pipeline.stages.dense_matching: Frame 0: converting RoMa warps to depth maps
+10:04:39 [INFO] aquamvs.pipeline.stages.dense_matching: dense_matching: 517887.9 ms
+10:04:39 [INFO] aquamvs.pipeline.stages.fusion: Frame 0: skipping geometric consistency filter (RoMa path)
+10:04:39 [INFO] aquamvs.pipeline.stages.fusion: Frame 0: fusing depth maps
+10:06:23 [INFO] aquamvs.pipeline.stages.fusion: Frame 0: removed 499882 outliers (3.9%) from fused cloud
+10:06:23 [INFO] aquamvs.pipeline.stages.fusion: fusion: 104270.3 ms
+10:06:23 [INFO] aquamvs.pipeline.stages.surface: Frame 0: reconstructing surface
+10:07:35 [INFO] aquamvs.pipeline.stages.surface: surface_reconstruction: 72269.8 ms
+10:07:35 [INFO] aquamvs.pipeline.runner: Frame 0: complete
+Profile Report (device: cuda)
+Total time: 0.00 ms
+Peak memory: 0.00 MB
+
++---------+-------------+-------------+----------------+-----------------+
+| Stage   | Wall (ms)   | CUDA (ms)   | CPU Mem (MB)   | CUDA Mem (MB)   |
++=========+=============+=============+================+=================+
++---------+-------------+-------------+----------------+-----------------+
+
+Top 3 Bottlenecks:
+"
+
+### 6.5 / 3.1 pipeline api references deprecated config values
+- **Description**: when running the pipeline via the API, we get "Unknown config keys in RuntimeConfig 
+(ignored): ['save_depth_maps', 'save_point_cloud', 'save_mesh']".
+- **Impact**: low
+- **Status**: logged for later
+- **Notes**: We removed these config parameters to ensure everything needed for our 2-pass calculate-then-visualize
+pipeline remodel was saved automatically. Probably just need to strip out some dead code, but confirm. 
+
+---
+
+## Final Summary
+
+### Fixed During QA (5 issues)
+| Issue | Description |
+|-------|-------------|
+| 6.1/1.1 | natsort import — fixed (root cause resolved by AquaCal dep update) |
+| 6.1/3.1 | Incomplete image dir input — renamed camera_video_map → camera_input_map throughout |
+| 6.3/3.2 | Missing output in RoMa full mode — fixed |
+| 6.5/1.1 | ImageDirectorySet missing read_frame — added method |
+| 6.5/1.1 | Profiler OOM — replaced torch.profiler with manual timing |
+
+### Logged for Phase 7 (9 issues)
+
+**Medium priority:**
+| Issue | Description | Notes |
+|-------|-------------|-------|
+| 6.1/1.1 | natsort workaround cleanup | Remove hacky utility inlining in .benchmarks/ |
+| 6.1/2.1 | Optimize preprocessing | Determine bottleneck (decoding vs median), apply targeted fix |
+| 6.3/4.1 | Benchmarking broken | Needs careful rebuild per Phase 5 planning docs |
+| 6.5/1.1 | Profiler output empty | Timing hooks not wired to report table |
+| 6.5/1.1 | ImageDirectorySet refactor | Add shared base class / abstraction over VideoSet and ImageDirectorySet |
+
+**Low priority:**
+| Issue | Description | Notes |
+|-------|-------------|-------|
+| 6.1/2.1 | Preprocessing output video FPS | Add --output-fps flag, fix "writing @0.0 fps" |
+| 6.1/2.1 | NAL unit error | Investigate if real problem; silence or document if benign |
+| 6.2/1.3 | Quality presets unclear | Move preset application to init-time instead of silent override |
+| 6.2/2.3 | No summary output in sparse mode | Check if expected or missing visualization |
+| 6.4/3.1 | STL write failure | Compute normals before write, or remove STL option |
+| 6.5/3.1 | Deprecated config keys warning | Strip dead save_depth_maps/save_point_cloud/save_mesh code |

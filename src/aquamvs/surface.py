@@ -352,8 +352,8 @@ def simplify_mesh(
 
 
 def export_mesh(
-    input_path: Path,
-    output_path: Path,
+    input_path: str | Path,
+    output_path: str | Path,
     simplify: int | None = None,
 ) -> None:
     """Export a mesh to a different format with optional simplification.
@@ -387,12 +387,15 @@ def export_mesh(
         mesh = simplify_mesh(mesh, simplify)
 
     # Format-specific preprocessing
+    output_path = Path(output_path)
     output_format = output_path.suffix.lower()
 
     if output_format == ".stl":
-        # STL requires vertex normals
+        # STL requires triangle normals (and vertex normals for shading)
+        if not mesh.has_triangle_normals():
+            logger.info("Computing triangle normals for STL export")
+            mesh.compute_triangle_normals()
         if not mesh.has_vertex_normals():
-            logger.info("Computing vertex normals for STL export")
             mesh.compute_vertex_normals()
 
         # Warn about color loss

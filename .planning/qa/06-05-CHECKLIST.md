@@ -14,27 +14,27 @@
 - [ ] 2.2: Check if Chrome trace JSON is produced (log if not implemented)
 
 ### Step 3: Pipeline API smoke test
-- [ ] 3.1: Run the following Python command:
-  ```
-  python -c "
-  from aquamvs import Pipeline
-  from aquamvs.config import PipelineConfig
+- [x] 3.1: Run the following Python command:
+```
+python -c "
+from aquamvs import Pipeline
+from aquamvs.config import PipelineConfig
 
-  config = PipelineConfig.from_yaml('config.yaml')
-  config.runtime.device = 'cuda'
-  pipeline = Pipeline(config)
-  pipeline.run()
-  print('Pipeline API: OK')
-  "
-  ```
-- [ ] 3.2: Verify command exits with code 0 and prints "Pipeline API: OK"
-- [ ] 3.3: Verify output matches that of `aquamvs run config.yaml`
-- [ ] 3.4: If it fails with import or API errors, diagnose and fix
+config = PipelineConfig.from_yaml('config.yaml')
+config.runtime.device = 'cuda'
+pipeline = Pipeline(config)
+pipeline.run()
+print('Pipeline API: OK')
+"
+```
+- [x] 3.2: Verify command exits with code 0 and prints "Pipeline API: OK"
+- [x] 3.3: Verify output matches that of `aquamvs run config.yaml`
+- [x] 3.4: If it fails with import or API errors, diagnose and fix
 
 ### Step 4: Final issue summary
-- [ ] 4.1: Review .planning/qa/issues-found.md
-- [ ] 4.2: Add a final summary section listing all issues found across Plans 01-05
-- [ ] 4.3: Categorize issues as: fixed inline, logged for later, or won't fix
+- [x] 4.1: Review .planning/qa/issues-found.md
+- [x] 4.2: Add a final summary section listing all issues found across Plans 01-05
+- [x] 4.3: Categorize issues as: fixed inline, logged for later, or won't fix
 
 ## Task 2: User review and final QA assessment
 
