@@ -1,9 +1,12 @@
 """Benchmark runner for comparing pipeline execution pathways."""
 
 import copy
+import gc
 import logging
 from dataclasses import dataclass, field
 from pathlib import Path
+
+import torch
 
 from ..config import PipelineConfig
 from ..profiling.analyzer import ProfileReport
@@ -247,6 +250,12 @@ def run_benchmark(
             timing.total_time_ms / 1000.0,
             pw_result.point_count,
         )
+
+        # Free GPU memory before next pathway loads different models
+        del ctx
+        gc.collect()
+        if torch.cuda.is_available():
+            torch.cuda.empty_cache()
 
     return benchmark_result
 
