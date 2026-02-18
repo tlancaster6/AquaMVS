@@ -232,6 +232,7 @@ Recent decisions affecting current work:
 4. **Update example dataset to 13-camera set** (docs) — Current dataset missing one camera due to recording mishap; likely to confuse users
 5. ~~**Fix benchmark package broken imports and stale test wiring** (testing)~~ RESOLVED in Phase 07 Plan 03
 6. **Fix pre-existing integration test failure (empty fused cloud)** (testing) — test_end_to_end_reconstruction fails because synthetic scene produces empty fused cloud after fusion
+7. **Repackage example dataset with updated Pydantic config** (docs) — GitHub Release zip has legacy config.yaml with pre-Pydantic keys; update packaging script to use `aquamvs init --preset balanced`
 
 ### Blockers/Concerns
 
