@@ -14,7 +14,9 @@ from pathlib import Path
 
 import pytest
 
-NOTEBOOK_PATHS = sorted(Path("docs").rglob("*.ipynb"))
+NOTEBOOK_PATHS = sorted(
+    p for p in Path("docs").rglob("*.ipynb") if ".ipynb_checkpoints" not in p.parts
+)
 
 # Modules that require hardware/dataset and should be skipped in import check
 SKIP_IMPORT_MODULES = {"google.colab"}
@@ -46,7 +48,7 @@ def _extract_imports(source: str) -> list[str]:
 @pytest.mark.parametrize("nb_path", NOTEBOOK_PATHS, ids=lambda p: p.stem)
 def test_notebook_syntax(nb_path):
     """All notebook code cells must parse as valid Python."""
-    with open(nb_path) as f:
+    with open(nb_path, encoding="utf-8") as f:
         nb = json.load(f)
     for i, cell in enumerate(nb["cells"]):
         if cell["cell_type"] != "code":
@@ -66,7 +68,7 @@ def test_notebook_syntax(nb_path):
 @pytest.mark.parametrize("nb_path", NOTEBOOK_PATHS, ids=lambda p: p.stem)
 def test_notebook_imports(nb_path):
     """All import statements in notebook code cells must resolve."""
-    with open(nb_path) as f:
+    with open(nb_path, encoding="utf-8") as f:
         nb = json.load(f)
     for i, cell in enumerate(nb["cells"]):
         if cell["cell_type"] != "code":
