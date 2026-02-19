@@ -502,24 +502,27 @@ class TestPlaneSweepStereo:
 
 class TestDepthBatching:
     def test_batch_size_consistency(self):
+        import torch
+
+        from aquamvs.config import DenseStereoConfig
         from aquamvs.dense.plane_sweep import build_cost_volume
         from aquamvs.projection.refractive import RefractiveProjectionModel
-        from aquamvs.config import DenseStereoConfig
-        import torch
 
         K = torch.eye(3, dtype=torch.float32)
         K[0, 0], K[1, 1] = 500.0, 500.0
         K[0, 2], K[1, 2] = 16.0, 16.0
         R, t = torch.eye(3), torch.zeros(3)
-        model = RefractiveProjectionModel(K, R, t, 0.978, torch.tensor([0., 0., -1.]), 1.0, 1.333)
-        
+        model = RefractiveProjectionModel(
+            K, R, t, 0.978, torch.tensor([0.0, 0.0, -1.0]), 1.0, 1.333
+        )
+
         image = torch.rand(32, 32)
         depths = torch.linspace(0.3, 0.8, 16)
-        
+
         config1 = DenseStereoConfig(num_depths=16, depth_batch_size=1)
         config4 = DenseStereoConfig(num_depths=16, depth_batch_size=4)
-        
+
         cv1 = build_cost_volume(model, [model], image, [image], depths, config1)
         cv4 = build_cost_volume(model, [model], image, [image], depths, config4)
-        
+
         assert torch.allclose(cv1, cv4, atol=1e-6)
