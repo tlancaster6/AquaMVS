@@ -404,4 +404,4 @@ The median filter removes moving objects (fish, particles) while preserving stat
 
 ## Troubleshooting
 
-See the [Troubleshooting Guide](troubleshooting) for solutions to common issues with installation, pipeline errors, notebook usage, and configuration.
+See the {doc}`Troubleshooting Guide <troubleshooting>` for solutions to common issues with installation, pipeline errors, notebook usage, and configuration.

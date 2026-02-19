@@ -15,7 +15,12 @@ extensions = [
 nb_execution_mode = "off"
 
 templates_path = ["_templates"]
-exclude_patterns = ["_build", "Thumbs.db", ".DS_Store"]
+exclude_patterns = [
+    "_build",
+    "Thumbs.db",
+    ".DS_Store",
+    "tutorial/aquamvs-example-dataset",
+]
 
 # HTML theme and branding
 html_theme = "furo"
