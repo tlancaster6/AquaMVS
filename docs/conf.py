@@ -17,13 +17,6 @@ nb_execution_mode = "off"
 templates_path = ["_templates"]
 exclude_patterns = ["_build", "Thumbs.db", ".DS_Store"]
 
-# Source file suffixes
-source_suffix = {
-    ".rst": "restructuredtext",
-    ".md": "myst-markdown",
-    ".ipynb": "myst-nb",
-}
-
 # HTML theme and branding
 html_theme = "furo"
 html_title = "AquaMVS"
