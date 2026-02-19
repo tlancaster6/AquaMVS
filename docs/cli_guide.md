@@ -51,7 +51,7 @@ project_data/
 
 ### Download Example Dataset
 
-An example dataset is available at: [https://github.com/tlancaster6/AquaMVS/releases/download/v0.1.0-example-data/aquamvs-example-dataset.zip](https://github.com/tlancaster6/AquaMVS/releases/download/v0.1.0-example-data/aquamvs-example-dataset.zip)
+An example dataset is available on Zenodo: [https://doi.org/10.5281/zenodo.18702024](https://doi.org/10.5281/zenodo.18702024)
 
 ## Step 2: Generate Configuration
 
