@@ -47,7 +47,7 @@ dev = [
     "pytest-cov",
     "ruff",
     "pre-commit",
-    "sphinx",
+    "sphinx>=7,<8",
     "furo",
     "sphinxcontrib-mermaid",
     "myst-nb",
