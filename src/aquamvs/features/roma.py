@@ -1,5 +1,7 @@
 """Dense matching using RoMa v2."""
 
+import logging
+
 import numpy as np
 import torch
 from PIL import Image
@@ -7,6 +9,8 @@ from romav2 import RoMaV2
 from romav2.geometry import to_pixel
 
 from ..config import DenseMatchingConfig
+
+logger = logging.getLogger(__name__)
 
 
 def create_roma_matcher(device: str = "cpu") -> RoMaV2:
@@ -311,10 +315,17 @@ def run_roma_all_pairs(
     # Create matcher once for all pairs
     matcher = create_roma_matcher(device)
 
+    # Count total pairs for progress logging
+    total_pairs = sum(len(srcs) for srcs in pairs.values())
     all_warps = {}
+    pair_idx = 0
 
     for ref_cam, src_cams in pairs.items():
         for src_cam in src_cams:
+            pair_idx += 1
+            logger.info(
+                "Matching pair %d/%d: %s -> %s", pair_idx, total_pairs, ref_cam, src_cam
+            )
             # Use directed keys (ref, src) -- no deduplication
             # This ensures each reference camera has warps pointing to its sources
             img_ref = undistorted_images[ref_cam]
@@ -349,6 +360,13 @@ def match_all_pairs_roma(
     # Create matcher once for all pairs
     matcher = create_roma_matcher(device)
 
+    # Count unique pairs for progress logging
+    unique_pairs: set[tuple[str, str]] = set()
+    for ref_cam, src_cams in pairs.items():
+        for src_cam in src_cams:
+            unique_pairs.add((min(ref_cam, src_cam), max(ref_cam, src_cam)))
+    total_pairs = len(unique_pairs)
+
     # Match all pairs, avoiding duplicates from bidirectional pair lists
     all_matches = {}
     seen_pairs: set[tuple[str, str]] = set()
@@ -360,6 +378,12 @@ def match_all_pairs_roma(
             if canonical in seen_pairs:
                 continue
             seen_pairs.add(canonical)
+            logger.info(
+                "Matching pair %d/%d: %s <-> %s",
+                len(seen_pairs),
+                total_pairs,
+                *canonical,
+            )
 
             # Always match in canonical order (A < B)
             img_a = undistorted_images[canonical[0]]
