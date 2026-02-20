@@ -9,6 +9,7 @@ from pathlib import Path
 import torch
 
 from ..config import PipelineConfig
+from ..pipeline.visualization import run_visualization_pass
 from ..profiling.analyzer import ProfileReport
 from ..profiling.profiler import PipelineProfiler, set_active_profiler
 
@@ -230,6 +231,12 @@ def run_benchmark(
                 set_active_profiler(None)
 
         timing = profiler.get_report()
+
+        # Viz pass (outside profiler so render time doesn't pollute metrics)
+        if pathway_cfg.runtime.viz_enabled:
+            if torch.cuda.is_available():
+                torch.cuda.empty_cache()
+            run_visualization_pass(pathway_cfg, ctx)
 
         # Collect relative metrics from output
         pathway_output_dir = Path(pathway_cfg.output_dir)
