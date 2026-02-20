@@ -1,4 +1,9 @@
-![AquaMVS reconstruction - multi-view stereo reconstruction of underwater surfaces](docs/_static/hero.png)
+<table>
+  <tr>
+    <td><img src="docs/_static/tank_image.jpg" alt="Experimental setup" width="480"></td>
+    <td><img src="docs/_static/orbit.gif" alt="3D surface reconstruction" width="480"></td>
+  </tr>
+</table>
 
 [![PyPI](https://img.shields.io/pypi/v/aquamvs)](https://pypi.org/project/aquamvs/)
 [![Python](https://img.shields.io/pypi/pyversions/aquamvs)](https://pypi.org/project/aquamvs/)
