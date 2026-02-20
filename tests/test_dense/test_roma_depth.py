@@ -185,7 +185,7 @@ class TestAggregatePairwiseDepths:
 
         pairwise_depths = [depth1, depth2, depth3, depth4, depth5]
 
-        depth_map, confidence = aggregate_pairwise_depths(
+        depth_map, confidence, consistency = aggregate_pairwise_depths(
             pairwise_depths,
             depth_tolerance=0.005,
             min_consistent_views=3,
@@ -200,6 +200,10 @@ class TestAggregatePairwiseDepths:
         # Confidence should be 3/5 = 0.6
         assert torch.allclose(confidence, torch.tensor(0.6))
 
+        # Consistency count should be 3 (int32)
+        assert consistency.dtype == torch.int32
+        assert (consistency == 3).all()
+
     def test_insufficient_agreement(self):
         """Test that pixels with insufficient agreement are filtered."""
         H, W = 5, 5
@@ -211,7 +215,7 @@ class TestAggregatePairwiseDepths:
 
         pairwise_depths = [depth1, depth2, depth3]
 
-        depth_map, confidence = aggregate_pairwise_depths(
+        depth_map, confidence, _ = aggregate_pairwise_depths(
             pairwise_depths,
             depth_tolerance=0.01,
             min_consistent_views=3,
@@ -236,7 +240,7 @@ class TestAggregatePairwiseDepths:
 
         pairwise_depths = [depth1, depth2, depth3]
 
-        depth_map, confidence = aggregate_pairwise_depths(
+        depth_map, confidence, _ = aggregate_pairwise_depths(
             pairwise_depths,
             depth_tolerance=0.005,
             min_consistent_views=2,
@@ -273,7 +277,7 @@ class TestAggregatePairwiseDepths:
 
         pairwise_depths = [depth1, depth2, depth3]
 
-        depth_map, confidence = aggregate_pairwise_depths(
+        depth_map, confidence, _ = aggregate_pairwise_depths(
             pairwise_depths,
             depth_tolerance=0.005,
             min_consistent_views=2,
@@ -352,7 +356,7 @@ class TestRomaWarpsToDepthMaps:
             min_consistent_views=2,
         )
 
-        depth_maps, confidence_maps = roma_warps_to_depth_maps(
+        depth_maps, confidence_maps, _ = roma_warps_to_depth_maps(
             ring_cameras=ring_cameras,
             pairs=pairs,
             all_warps=all_warps,
@@ -416,7 +420,7 @@ class TestRomaWarpsToDepthMaps:
             min_consistent_views=1,
         )
 
-        depth_maps, confidence_maps = roma_warps_to_depth_maps(
+        depth_maps, confidence_maps, _ = roma_warps_to_depth_maps(
             ring_cameras=ring_cameras,
             pairs=pairs,
             all_warps=all_warps,
@@ -441,7 +445,7 @@ class TestRomaWarpsToDepthMaps:
         dense_matching_config = DenseMatchingConfig()
         reconstruction_config = ReconstructionConfig()
 
-        depth_maps, confidence_maps = roma_warps_to_depth_maps(
+        depth_maps, confidence_maps, _ = roma_warps_to_depth_maps(
             ring_cameras=ring_cameras,
             pairs=pairs,
             all_warps=all_warps,

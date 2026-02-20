@@ -17,7 +17,7 @@ def run_roma_full_path(
     ctx: PipelineContext,
     frame_dir: Path,
     frame_idx: int,
-) -> tuple[dict, dict]:
+) -> tuple[dict, dict, dict]:
     """Run RoMa v2 dense matching in full mode (warps to depth maps).
 
     Args:
@@ -27,9 +27,10 @@ def run_roma_full_path(
         frame_idx: Frame index (for logging).
 
     Returns:
-        Tuple of (depth_maps, confidence_maps):
+        Tuple of (depth_maps, confidence_maps, consistency_maps):
             - depth_maps: Dict mapping camera name to depth map tensor.
             - confidence_maps: Dict mapping camera name to confidence map tensor.
+            - consistency_maps: Dict mapping camera name to consistency count tensor.
     """
     from ...profiling import timed_stage
 
@@ -48,7 +49,7 @@ def run_roma_full_path(
         )
 
         logger.info("Frame %d: converting RoMa warps to depth maps", frame_idx)
-        depth_maps, confidence_maps = roma_warps_to_depth_maps(
+        depth_maps, confidence_maps, consistency_maps = roma_warps_to_depth_maps(
             ring_cameras=ctx.ring_cameras,
             pairs=ctx.pairs,
             all_warps=all_warps,
@@ -69,7 +70,7 @@ def run_roma_full_path(
                 depth_dir / f"{cam_name}.npz",
             )
 
-        return depth_maps, confidence_maps
+        return depth_maps, confidence_maps, consistency_maps
 
 
 def run_roma_sparse_path(

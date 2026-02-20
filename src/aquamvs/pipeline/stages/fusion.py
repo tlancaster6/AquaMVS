@@ -22,6 +22,7 @@ def run_fusion_stage(
     frame_dir: Path,
     frame_idx: int,
     skip_filter: bool = False,
+    roma_consistency_maps: dict[str, torch.Tensor] | None = None,
 ) -> o3d.geometry.PointCloud:
     """Run geometric consistency filtering, depth map fusion, and outlier removal.
 
@@ -33,6 +34,9 @@ def run_fusion_stage(
         frame_dir: Frame output directory.
         frame_idx: Frame index (for logging).
         skip_filter: If True, skip geometric consistency filtering (used by roma+full path).
+        roma_consistency_maps: Pre-computed consistency count maps from
+            aggregate_pairwise_depths (RoMa path only). Used for saving when
+            skip_filter is True.
 
     Returns:
         Fused point cloud (after outlier removal if enabled).
@@ -53,6 +57,22 @@ def run_fusion_stage(
             )
             filtered_depths = depth_maps
             filtered_confs = confidence_maps
+
+            # Save consistency maps from RoMa aggregation (opt-in)
+            if config.runtime.save_consistency_maps and roma_consistency_maps:
+                consistency_dir = frame_dir / "consistency_maps"
+                consistency_dir.mkdir(parents=True, exist_ok=True)
+                for cam_name, consistency in roma_consistency_maps.items():
+                    _save_consistency_map(
+                        consistency=consistency,
+                        output_stem=consistency_dir / cam_name,
+                        max_value=len(ctx.pairs[cam_name]),
+                    )
+                logger.info(
+                    "Frame %d: saved consistency maps for %d cameras",
+                    frame_idx,
+                    len(roma_consistency_maps),
+                )
         else:
             logger.info("Frame %d: filtering depth maps", frame_idx)
             filtered = filter_all_depth_maps(

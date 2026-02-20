@@ -60,7 +60,7 @@ def process_frame(
         # --- RoMa path: branch on pipeline_mode ---
         if config.pipeline_mode == "full":
             # --- RoMa + full: warps -> depth maps -> fusion -> surface ---
-            depth_maps, confidence_maps = run_roma_full_path(
+            depth_maps, confidence_maps, consistency_maps = run_roma_full_path(
                 undistorted_tensors, ctx, frame_dir, frame_idx
             )
 
@@ -73,6 +73,7 @@ def process_frame(
                 frame_dir,
                 frame_idx,
                 skip_filter=True,
+                roma_consistency_maps=consistency_maps,
             )
 
             # Surface reconstruction (full mode)

@@ -104,7 +104,7 @@ def aggregate_pairwise_depths(
     pairwise_depths: list[torch.Tensor],
     depth_tolerance: float,
     min_consistent_views: int,
-) -> tuple[torch.Tensor, torch.Tensor]:
+) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
     """Aggregate multiple pairwise depth maps via consistency-filtered median.
 
     For each pixel, finds the median of all non-NaN depth values, counts how
@@ -119,6 +119,7 @@ def aggregate_pairwise_depths(
     Returns:
         depth_map: (H, W) float32, aggregated depths. NaN where insufficient agreement.
         confidence: (H, W) float32, n_agreeing / n_available. 0 where invalid.
+        consistency: (H, W) int32, raw count of agreeing source views per pixel.
     """
     if len(pairwise_depths) == 0:
         raise ValueError("pairwise_depths cannot be empty")
@@ -159,7 +160,14 @@ def aggregate_pairwise_depths(
         torch.zeros(H, W, device=device),
     )
 
-    return depth_map, confidence_map
+    # 7. Raw consistency count (int32 for save/viz)
+    consistency_map = torch.where(
+        passes,
+        n_agreeing.int(),
+        torch.zeros(H, W, device=device, dtype=torch.int32),
+    )
+
+    return depth_map, confidence_map, consistency_map
 
 
 def roma_warps_to_depth_maps(
@@ -171,7 +179,7 @@ def roma_warps_to_depth_maps(
     reconstruction_config: ReconstructionConfig,
     image_size: tuple[int, int],
     masks: dict[str, np.ndarray] | None = None,
-) -> tuple[dict[str, torch.Tensor], dict[str, torch.Tensor]]:
+) -> tuple[dict[str, torch.Tensor], dict[str, torch.Tensor], dict[str, torch.Tensor]]:
     """Convert all RoMa warps to per-camera depth maps + confidence maps.
 
     For each ring camera (reference), collects warps from all sources,
@@ -191,10 +199,12 @@ def roma_warps_to_depth_maps(
     Returns:
         depth_maps: {camera_name: (H, W) float32 depth map}
         confidence_maps: {camera_name: (H, W) float32 confidence}
+        consistency_maps: {camera_name: (H, W) int32 agreeing view count}
     """
     W_full, H_full = image_size  # image_size is (width, height) per OpenCV convention
     depth_maps = {}
     confidence_maps = {}
+    consistency_maps = {}
 
     for ref_name in ring_cameras:
         src_names = pairs.get(ref_name, [])
@@ -228,7 +238,7 @@ def roma_warps_to_depth_maps(
         # Aggregate pairwise depths (use roma_depth_tolerance, which is
         # relaxed vs plane-sweep depth_tolerance to account for coarser
         # warp-resolution triangulation noise -- B.16)
-        depth_warp, conf_warp = aggregate_pairwise_depths(
+        depth_warp, conf_warp, consist_warp = aggregate_pairwise_depths(
             pairwise_depths_list,
             reconstruction_config.roma_depth_tolerance,
             reconstruction_config.min_consistent_views,
@@ -238,6 +248,13 @@ def roma_warps_to_depth_maps(
         depth_full = _upsample_depth_map(depth_warp, (H_full, W_full))
         conf_full = _upsample_confidence_map(conf_warp, (H_full, W_full))
 
+        # Upsample consistency counts (nearest-neighbor to preserve integers)
+        consist_full = F.interpolate(
+            consist_warp.float()[None, None],
+            size=(H_full, W_full),
+            mode="nearest",
+        )[0, 0].to(torch.int32)
+
         # Apply mask if available
         if masks is not None and ref_name in masks:
             from ..masks import apply_mask_to_depth
@@ -245,11 +262,18 @@ def roma_warps_to_depth_maps(
             depth_full, conf_full = apply_mask_to_depth(
                 depth_full, conf_full, masks[ref_name]
             )
+            # Zero out consistency where mask kills the depth
+            consist_full = torch.where(
+                torch.isnan(depth_full),
+                torch.zeros_like(consist_full),
+                consist_full,
+            )
 
         depth_maps[ref_name] = depth_full
         confidence_maps[ref_name] = conf_full
+        consistency_maps[ref_name] = consist_full
 
-    return depth_maps, confidence_maps
+    return depth_maps, confidence_maps, consistency_maps
 
 
 def _upsample_depth_map(
