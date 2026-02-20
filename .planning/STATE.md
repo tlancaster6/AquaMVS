@@ -233,6 +233,7 @@ Recent decisions affecting current work:
 5. ~~**Fix benchmark package broken imports and stale test wiring** (testing)~~ RESOLVED in Phase 07 Plan 03
 6. **Fix pre-existing integration test failure (empty fused cloud)** (testing) — test_end_to_end_reconstruction fails because synthetic scene produces empty fused cloud after fusion
 7. **Repackage example dataset with updated Pydantic config** (docs) — GitHub Release zip has legacy config.yaml with pre-Pydantic keys; update packaging script to use `aquamvs init --preset balanced`
+8. **Rename ring_camera to core_camera across codebase** (general) — Generalize rig-specific "ring" terminology to rig-agnostic "core" in code, docs, and tutorials
 
 ### Blockers/Concerns
 
