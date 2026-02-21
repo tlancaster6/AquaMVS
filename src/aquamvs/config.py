@@ -450,6 +450,17 @@ class PipelineConfig(BaseModel):
             logger.info("Enabling save_features (required by features visualization)")
             self.runtime.save_features = True
 
+        # Warn about RoMa + sparse (wasteful — pays full dense matching cost
+        # but discards most of the warp field to extract sparse correspondences)
+        if self.matcher_type == "roma" and self.pipeline_mode == "sparse":
+            logger.warning(
+                "matcher_type=roma with pipeline_mode=sparse is not recommended. "
+                "RoMa produces dense warps; sparse mode discards most of that "
+                "output to extract keypoints. Use pipeline_mode=full to leverage "
+                "the full warp field, or switch to matcher_type=lightglue for "
+                "efficient sparse matching."
+            )
+
         # Warn about unknown top-level keys
         if self.__pydantic_extra__:
             logger.warning(

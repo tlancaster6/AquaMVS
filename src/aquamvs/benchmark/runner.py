@@ -3,6 +3,7 @@
 import copy
 import gc
 import logging
+import os
 from dataclasses import dataclass, field
 from pathlib import Path
 
@@ -61,12 +62,14 @@ def build_pathways(
 ) -> list[tuple[str, PipelineConfig]]:
     """Build list of (name, config) tuples for each pathway to benchmark.
 
-    Always includes 4 base pathways:
+    Always includes 3 base pathways:
 
-    1. LG+SP sparse — LightGlue + SuperPoint, pipeline_mode=sparse
+    1. RoMa full    — RoMa dense matcher,     pipeline_mode=full
     2. LG+SP full   — LightGlue + SuperPoint, pipeline_mode=full
-    3. RoMa sparse  — RoMa dense matcher,     pipeline_mode=sparse
-    4. RoMa full    — RoMa dense matcher,     pipeline_mode=full
+    3. LG+SP sparse — LightGlue + SuperPoint, pipeline_mode=sparse
+
+    RoMa sparse is excluded because it pays the same dense-matching cost as
+    RoMa full but discards most of the warp field to extract sparse keypoints.
 
     With ``extractors``: adds LightGlue variants per extractor name.
     With ``with_clahe``: adds CLAHE-on variants for all LightGlue paths.
@@ -96,11 +99,16 @@ def build_pathways(
             cfg.sparse_matching.clahe_enabled = clahe
         return cfg
 
-    # --- 4 base pathways ---
-    pathways.append(("LG+SP sparse", _make_config("lightglue", "sparse", "superpoint")))
-    pathways.append(("LG+SP full", _make_config("lightglue", "full", "superpoint")))
-    pathways.append(("RoMa sparse", _make_config("roma", "sparse")))
+    # --- 3 base pathways ---
+    # RoMa full runs first: it has the highest peak GPU memory and benefits
+    # from a clean CUDA allocator with no prior fragmentation.
+    #
+    # RoMa sparse is excluded: it pays the same dense-matching cost as RoMa
+    # full but discards most of the warp field to extract sparse keypoints.
+    # Use LG+SP sparse for fast sparse reconstruction instead.
     pathways.append(("RoMa full", _make_config("roma", "full")))
+    pathways.append(("LG+SP full", _make_config("lightglue", "full", "superpoint")))
+    pathways.append(("LG+SP sparse", _make_config("lightglue", "sparse", "superpoint")))
 
     # --- Extra extractor variants ---
     if extractors:
@@ -192,6 +200,16 @@ def run_benchmark(
     from ..pipeline.runner import process_frame
     from .metrics import compute_relative_metrics
 
+    # Reduce CUDA memory fragmentation across sequential pathway runs.
+    # Without this, reserved-but-unallocated memory from earlier pathways
+    # can prevent large contiguous allocations in later ones (e.g. RoMa full).
+    if torch.cuda.is_available():
+        _alloc_conf = os.environ.get("PYTORCH_CUDA_ALLOC_CONF", "")
+        if "expandable_segments" not in _alloc_conf:
+            os.environ["PYTORCH_CUDA_ALLOC_CONF"] = (
+                f"{_alloc_conf},expandable_segments:True".lstrip(",")
+            )
+
     config_path = Path(config_path)
     base_config = PipelineConfig.from_yaml(config_path)
     base_output_dir = Path(base_config.output_dir)
@@ -213,6 +231,7 @@ def run_benchmark(
         # Redirect pathway output to a benchmark subdirectory
         safe_name = pathway_name.replace("+", "_").replace(" ", "_")
         pathway_cfg.output_dir = str(base_output_dir / "benchmark" / safe_name)
+        pathway_cfg.runtime.viz_enabled = True
 
         logger.info("  Pathway: %s -> %s", pathway_name, pathway_cfg.output_dir)
 
