@@ -246,6 +246,14 @@ def generate_reconstruction_comparison(
 
 def main() -> None:
     """Run benchmark and generate all comparison figures."""
+    import logging
+
+    logging.basicConfig(
+        level=logging.DEBUG,
+        format="%(asctime)s %(levelname)-8s %(name)s - %(message)s",
+        datefmt="%H:%M:%S",
+    )
+
     parser = argparse.ArgumentParser(
         description="Generate benchmark comparison figures for AquaMVS documentation."
     )

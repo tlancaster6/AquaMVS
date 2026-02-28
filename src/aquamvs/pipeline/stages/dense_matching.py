@@ -59,7 +59,7 @@ def run_roma_full_path(
         matcher = create_roma_matcher(device)
 
         # Count total pairs for progress logging
-        total_pairs = sum(len(srcs) for srcs in ctx.pairs.items())
+        total_pairs = sum(len(srcs) for srcs in ctx.pairs.values())
         pair_idx = 0
 
         # Step 2: Match each pair and immediately convert warp to depth
