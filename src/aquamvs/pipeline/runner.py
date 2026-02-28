@@ -145,6 +145,10 @@ def process_frame(
             fused, undistorted_tensors, camera_centers, ctx, frame_dir, frame_idx
         )
 
+    # Free per-frame GPU cached blocks before next frame
+    if torch.cuda.is_available():
+        torch.cuda.empty_cache()
+
     logger.info("Frame %d: complete", frame_idx)
 
 
