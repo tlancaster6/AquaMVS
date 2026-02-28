@@ -12,7 +12,7 @@ See: .planning/PROJECT.md (updated 2026-02-14)
 Phase: 08 (User Guide and Tutorials Overhaul)
 Plan: 3 of 4 plans complete
 Status: In Progress
-Last activity: 2026-02-17 - Completed plan 03: Benchmarking notebook and smoke tests
+Last activity: 2026-02-28 - Completed quick task 7: Replace benchmark.ipynb with docs/scripts visualization generator
 
 Progress: [█████████░░░] 75% (3 of 4 Phase 08 plans complete)
 
