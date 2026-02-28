@@ -35,6 +35,19 @@ def warp_to_pairwise_depth(
         depth_map: (H_warp, W_warp) float32, ray depths in meters. NaN for invalid.
         certainty: (H_warp, W_warp) float32, overlap values (0 where invalid).
     """
+    with torch.no_grad():
+        return _warp_to_pairwise_depth_impl(
+            roma_result, ref_model, src_model, certainty_threshold
+        )
+
+
+def _warp_to_pairwise_depth_impl(
+    roma_result: dict,
+    ref_model: ProjectionModel,
+    src_model: ProjectionModel,
+    certainty_threshold: float,
+) -> tuple[torch.Tensor, torch.Tensor]:
+    """Inner implementation of warp_to_pairwise_depth (no_grad wrapped by caller)."""
     warp_AB = roma_result["warp_AB"]  # (H_warp, W_warp, 2), normalized [-1, 1]
     overlap_AB = roma_result["overlap_AB"]  # (H_warp, W_warp)
     H_ref = roma_result["H_ref"]
@@ -245,8 +258,8 @@ def roma_warps_to_depth_maps(
         )
 
         # Upsample to full resolution with NaN handling
-        depth_full = _upsample_depth_map(depth_warp, (H_full, W_full))
-        conf_full = _upsample_confidence_map(conf_warp, (H_full, W_full))
+        depth_full = upsample_depth_map(depth_warp, (H_full, W_full))
+        conf_full = upsample_confidence_map(conf_warp, (H_full, W_full))
 
         # Upsample consistency counts (nearest-neighbor to preserve integers)
         consist_full = F.interpolate(
@@ -276,7 +289,7 @@ def roma_warps_to_depth_maps(
     return depth_maps, confidence_maps, consistency_maps
 
 
-def _upsample_depth_map(
+def upsample_depth_map(
     depth: torch.Tensor,
     target_size: tuple[int, int],
 ) -> torch.Tensor:
@@ -328,7 +341,7 @@ def _upsample_depth_map(
     return depth_up
 
 
-def _upsample_confidence_map(
+def upsample_confidence_map(
     confidence: torch.Tensor,
     target_size: tuple[int, int],
 ) -> torch.Tensor:

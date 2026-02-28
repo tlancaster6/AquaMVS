@@ -13,6 +13,8 @@ from .plane_sweep import (
 from .roma_depth import (
     aggregate_pairwise_depths,
     roma_warps_to_depth_maps,
+    upsample_confidence_map,
+    upsample_depth_map,
     warp_to_pairwise_depth,
 )
 
@@ -31,4 +33,6 @@ __all__ = [
     "warp_to_pairwise_depth",
     "aggregate_pairwise_depths",
     "roma_warps_to_depth_maps",
+    "upsample_depth_map",
+    "upsample_confidence_map",
 ]
