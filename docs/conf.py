@@ -20,6 +20,7 @@ exclude_patterns = [
     "Thumbs.db",
     ".DS_Store",
     "tutorial/aquamvs-example-dataset",
+    "tutorial/.ipynb_checkpoints",
 ]
 
 # HTML theme and branding
@@ -39,3 +40,6 @@ autodoc_member_order = "bysource"
 
 # Napoleon settings
 napoleon_google_docstrings = True
+
+# Suppress warnings for benchmark images that are generated on-demand
+suppress_warnings = ["image.not_readable"]

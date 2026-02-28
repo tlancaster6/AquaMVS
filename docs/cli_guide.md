@@ -375,7 +375,7 @@ This runs four pathway variants (LightGlue sparse, LightGlue full, RoMa sparse, 
 - `--extractors lightglue roma`: Run only specific extractors (default: all)
 - `--with-clahe`: Enable CLAHE preprocessing for all pathways
 
-Results are printed to the console as a formatted table. For detailed analysis with visualizations, see the [Benchmarking Tutorial](tutorial/benchmark).
+Results are printed to the console as a formatted table. For sample output and pathway comparisons, see the [Sample Output](benchmarks) page.
 
 ## Temporal Filtering
 

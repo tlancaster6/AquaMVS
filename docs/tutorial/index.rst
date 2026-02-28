@@ -27,13 +27,8 @@ Choose Your Workflow
       config = PipelineConfig.from_yaml("config.yaml")
       Pipeline(config).run()
 
-**Benchmarking**
-   Compare LightGlue and RoMa reconstruction pathways with timing and quality metrics.
-   See the :doc:`Benchmarking Tutorial <benchmark>`.
-
 .. toctree::
    :maxdepth: 2
    :hidden:
 
    notebook
-   benchmark
