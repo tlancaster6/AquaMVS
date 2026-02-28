@@ -254,9 +254,10 @@ approved
 | 2 | Fix pre-commit and CI test failures (lint, imports, Open3D headless) | 2026-02-15 | 8fabc94 | [2-fix-pre-commit-lint-issues-noqa-directiv](./quick/2-fix-pre-commit-lint-issues-noqa-directiv/) |
 | 3 | Fix test failures from Pydantic config migration (mock patch paths) | 2026-02-15 | 53ff2f8 | [3-fix-test-failures-from-pydantic-config-m](./quick/3-fix-test-failures-from-pydantic-config-m/) |
 | 4 | Optimize aquamvs preprocess for speed and memory (hybrid seek, window-step, optimized buffers) | 2026-02-16 | 076bea0 | [4-optimize-aquamvs-preprocess-for-speed-an](./quick/4-optimize-aquamvs-preprocess-for-speed-an/) |
+| 7 | Replace benchmark notebook with standalone figure generator script | 2026-02-28 | 2f2fd9e | [7-replace-benchmark-ipynb-with-docs-script](./quick/7-replace-benchmark-ipynb-with-docs-script/) |
 
 ## Session Continuity
 
-Last session: 2026-02-17 (phase 08 plan 03 execution)
-Stopped at: Completed 08-03-PLAN.md (benchmarking notebook and smoke tests)
+Last session: 2026-02-28 (quick task 7 execution)
+Stopped at: Completed quick task 7 (replace benchmark notebook with docs script)
 Resume file: .planning/phases/08-user-guide-and-tutorials-overhaul/08-04-PLAN.md
