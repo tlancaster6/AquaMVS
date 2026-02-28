@@ -214,6 +214,7 @@ CLAUDE.md
 # Example data files (keep README only)
 example_data/*
 !example_data/README.md
+docs/tutorial/aquamvs-example-dataset/
 
 # Benchmark results (local only, not committed)
 .benchmarks/
