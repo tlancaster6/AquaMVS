@@ -44,7 +44,7 @@ See the [full documentation](https://aquamvs.readthedocs.io/) for configuration 
 
 ## Installation
 
-AquaMVS requires several prerequisites (PyTorch, AquaCal, LightGlue, RoMa v2) to be installed first.
+AquaMVS requires several prerequisites (PyTorch, LightGlue, RoMa v2) to be installed first. AquaCal is installed automatically as a dependency.
 
 **See [INSTALL.md](INSTALL.md) for complete installation instructions.**
 
@@ -53,13 +53,10 @@ Quick summary:
 # 1. Install PyTorch from pytorch.org
 pip install torch torchvision --index-url https://download.pytorch.org/whl/cu121
 
-# 2. Install AquaCal
-pip install git+https://github.com/tlancaster6/AquaCal.git
-
-# 3. Install git-based prerequisites (LightGlue, RoMa v2)
+# 2. Install git-based prerequisites (LightGlue, RoMa v2)
 pip install -r requirements-prereqs.txt
 
-# 4. Install AquaMVS
+# 3. Install AquaMVS (pulls AquaCal automatically)
 pip install aquamvs
 ```
 

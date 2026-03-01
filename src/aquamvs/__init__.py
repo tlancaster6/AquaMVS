@@ -11,12 +11,6 @@ if find_spec("torch") is None:
         "Example: pip install torch torchvision --index-url https://download.pytorch.org/whl/cu121"
     )
 
-if find_spec("aquacal") is None:
-    raise ImportError(
-        "AquaCal is required but not installed. "
-        "Install from git: pip install git+https://github.com/tlancaster6/AquaCal.git"
-    )
-
 if find_spec("lightglue") is None:
     raise ImportError(
         "LightGlue is required but not installed. "
