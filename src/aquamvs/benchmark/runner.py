@@ -26,7 +26,6 @@ class PathwayResult:
         timing: ProfileReport with per-stage wall times and memory metrics.
         point_count: Number of points in the fused cloud (0 if no cloud).
         cloud_density: Points per m² (bounding-box XY area proxy, 0 if no cloud).
-        outlier_removal_pct: Percentage of points removed as outliers.
         stages_run: Names of pipeline stages that actually executed.
     """
 
@@ -34,7 +33,6 @@ class PathwayResult:
     timing: ProfileReport
     point_count: int = 0
     cloud_density: float = 0.0
-    outlier_removal_pct: float = 0.0
     stages_run: list[str] = field(default_factory=list)
 
 
@@ -266,7 +264,6 @@ def run_benchmark(
             timing=timing,
             point_count=int(rel_metrics["point_count"]),
             cloud_density=rel_metrics["cloud_density"],
-            outlier_removal_pct=rel_metrics["outlier_removal_pct"],
             stages_run=list(timing.stages.keys()),
         )
         benchmark_result.results.append(pw_result)

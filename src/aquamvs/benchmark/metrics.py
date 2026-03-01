@@ -16,7 +16,8 @@ except ImportError:
 def compute_relative_metrics(pathway_output_dir: Path) -> dict[str, float]:
     """Compute relative metrics from a pathway's output.
 
-    Looks for ``fused_points.ply`` inside the pathway output directory tree.
+    Looks for ``fused.ply`` (full mode) or ``sparse.ply`` (sparse mode) inside
+    the pathway output directory tree.
     If no cloud is found, all metrics default to 0.
 
     Args:
@@ -29,17 +30,17 @@ def compute_relative_metrics(pathway_output_dir: Path) -> dict[str, float]:
         - ``point_count``: number of points in fused cloud (0 if no cloud)
         - ``cloud_density``: points per m² based on bounding-box XY area
           (0 if no cloud)
-        - ``outlier_removal_pct``: percentage of points removed as outliers
-          (0 — not computed from file, set by caller if available)
     """
     if not _OPEN3D_AVAILABLE:
-        return {"point_count": 0, "cloud_density": 0.0, "outlier_removal_pct": 0.0}
+        return {"point_count": 0, "cloud_density": 0.0}
 
-    # Search for fused point cloud in frame subdirectories
-    cloud_files = list(pathway_output_dir.rglob("fused_points.ply"))
+    # Search for point cloud in frame subdirectories (fused.ply for full, sparse.ply for sparse)
+    cloud_files = list(pathway_output_dir.rglob("fused.ply"))
+    if not cloud_files:
+        cloud_files = list(pathway_output_dir.rglob("sparse.ply"))
 
     if not cloud_files:
-        return {"point_count": 0, "cloud_density": 0.0, "outlier_removal_pct": 0.0}
+        return {"point_count": 0, "cloud_density": 0.0}
 
     # Use the first found cloud (there's one per frame in benchmark mode)
     cloud_path = cloud_files[0]
@@ -48,7 +49,7 @@ def compute_relative_metrics(pathway_output_dir: Path) -> dict[str, float]:
     point_count = len(points)
 
     if point_count == 0:
-        return {"point_count": 0, "cloud_density": 0.0, "outlier_removal_pct": 0.0}
+        return {"point_count": 0, "cloud_density": 0.0}
 
     # Compute bounding-box XY area as a scan-area proxy
     bbox = pcd.get_axis_aligned_bounding_box()
@@ -65,7 +66,6 @@ def compute_relative_metrics(pathway_output_dir: Path) -> dict[str, float]:
     return {
         "point_count": float(point_count),
         "cloud_density": cloud_density,
-        "outlier_removal_pct": 0.0,  # Populated externally if available
     }
 
 

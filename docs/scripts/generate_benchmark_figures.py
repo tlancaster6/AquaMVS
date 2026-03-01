@@ -22,7 +22,7 @@ STAGE_ORDER = [
     ("dense_matching", "Dense Matching"),
     ("depth_estimation", "Depth Estimation"),
     ("fusion", "Fusion"),
-    ("surface", "Surface"),
+    ("surface_reconstruction", "Surface"),
 ]
 
 

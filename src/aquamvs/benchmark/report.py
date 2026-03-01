@@ -16,7 +16,7 @@ _STAGE_MAP = {
     "dense_matching": "Match (s)",  # RoMa dense path uses a different key
     "depth_estimation": "Depth (s)",
     "fusion": "Fusion (s)",
-    "surface": "Surface (s)",
+    "surface_reconstruction": "Surface (s)",
 }
 
 _DISPLAY_STAGES = [
@@ -24,7 +24,7 @@ _DISPLAY_STAGES = [
     ("sparse_matching", "Match (s)"),
     ("depth_estimation", "Depth (s)"),
     ("fusion", "Fusion (s)"),
-    ("surface", "Surface (s)"),
+    ("surface_reconstruction", "Surface (s)"),
 ]
 
 
@@ -50,7 +50,7 @@ def format_console_table(result: "BenchmarkResult") -> str:
     """Format benchmark results as a pretty-printed console table.
 
     Columns: Pathway | Undist (s) | Match (s) | Depth (s) | Fusion (s) |
-             Surface (s) | Total (s) | Points | Density (pts/m²) | Outlier %
+             Surface (s) | Total (s) | Points | Density (pts/m²)
 
     Uses tabulate when available (already a project dependency). Stages not
     run by a pathway (e.g., depth/fusion in sparse mode) show "—".
@@ -79,7 +79,6 @@ def format_console_table(result: "BenchmarkResult") -> str:
         "Total (s)",
         "Points",
         "Density (pts/m²)",
-        "Outlier %",
     ]
 
     rows = []
@@ -98,11 +97,10 @@ def format_console_table(result: "BenchmarkResult") -> str:
             match_time,
             _get_stage_time(report, "depth_estimation"),
             _get_stage_time(report, "fusion"),
-            _get_stage_time(report, "surface"),
+            _get_stage_time(report, "surface_reconstruction"),
             f"{total_s:.1f}",
             f"{int(pw.point_count):,}" if pw.point_count > 0 else "0",
             f"{pw.cloud_density:.0f}" if pw.cloud_density > 0 else "0",
-            f"{pw.outlier_removal_pct:.1f}" if pw.outlier_removal_pct > 0 else "—",
         ]
         rows.append(row)
 
@@ -159,11 +157,11 @@ def format_markdown_report(result: "BenchmarkResult") -> str:
     lines.append("")
     lines.append(
         "| Pathway | Undist (s) | Match (s) | Depth (s) | Fusion (s) "
-        "| Surface (s) | Total (s) | Points | Density (pts/m²) | Outlier % |"
+        "| Surface (s) | Total (s) | Points | Density (pts/m²) |"
     )
     lines.append(
         "|---------|-----------|----------|----------|----------|"
-        "-----------|----------|--------|----------------|-----------|"
+        "-----------|----------|--------|----------------|"
     )
 
     for pw in result.results:
@@ -180,11 +178,10 @@ def format_markdown_report(result: "BenchmarkResult") -> str:
             f"| {match_time} "
             f"| {_get_stage_time(report, 'depth_estimation')} "
             f"| {_get_stage_time(report, 'fusion')} "
-            f"| {_get_stage_time(report, 'surface')} "
+            f"| {_get_stage_time(report, 'surface_reconstruction')} "
             f"| {total_s:.1f} "
             f"| {int(pw.point_count):,} "
-            f"| {pw.cloud_density:.0f} "
-            f"| {'—' if pw.outlier_removal_pct == 0 else f'{pw.outlier_removal_pct:.1f}'} |"
+            f"| {pw.cloud_density:.0f} |"
         )
 
     lines.append("")
@@ -220,7 +217,7 @@ def save_markdown_report(result: "BenchmarkResult", output_dir: Path) -> Path:
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
     report_path = output_dir / f"benchmark_{timestamp}.md"
     content = format_markdown_report(result)
-    with open(report_path, "w") as f:
+    with open(report_path, "w", encoding="utf-8") as f:
         f.write(content)
     return report_path
 
