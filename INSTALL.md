@@ -16,7 +16,15 @@ pip install torch torchvision --index-url https://download.pytorch.org/whl/cu121
 pip install torch torchvision --index-url https://download.pytorch.org/whl/cpu
 ```
 
-## 2. Install Git-Based Prerequisites
+## 2. Install AquaCal
+
+AquaCal (refractive multi-camera calibration) is not on PyPI and must be installed from git:
+
+```bash
+pip install git+https://github.com/tlancaster6/AquaCal.git
+```
+
+## 3. Install Git-Based Prerequisites
 
 LightGlue and RoMa v2 are not available on PyPI and must be installed directly from git repositories.
 
@@ -35,11 +43,11 @@ Notes:
 - LightGlue is pinned to commit `edb2b83` (v0.2 release)
 - RoMa v2 uses a fork with a dataclasses metadata bug fix (PR submitted upstream)
 
-## 3. Install AquaMVS
+## 4. Install AquaMVS
 
 After prerequisites are installed, install AquaMVS:
 
-**From PyPI (when published):**
+**From PyPI:**
 ```bash
 pip install aquamvs
 ```
@@ -65,7 +73,10 @@ aquamvs --help
 - Follow Step 1 to install PyTorch before AquaMVS
 
 **ModuleNotFoundError: No module named 'lightglue'**
-- Follow Step 2 to install git-based prerequisites
+- Follow Step 3 to install git-based prerequisites
 
 **ModuleNotFoundError: No module named 'romav2'**
-- Follow Step 2 to install git-based prerequisites
+- Follow Step 3 to install git-based prerequisites
+
+**ImportError: AquaCal is required but not installed**
+- Follow Step 2 to install AquaCal from git

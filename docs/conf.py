@@ -1,5 +1,5 @@
 project = "AquaMVS"
-copyright = "2024-2025, Tucker Lancaster"
+copyright = "2024-2026, Tucker Lancaster"
 author = "Tucker Lancaster"
 
 extensions = [
@@ -42,4 +42,4 @@ autodoc_member_order = "bysource"
 napoleon_google_docstrings = True
 
 # Suppress warnings for benchmark images that are generated on-demand
-suppress_warnings = ["image.not_readable"]
+suppress_warnings = ["image.not_readable", "toc.not_included", "myst.xref_missing"]

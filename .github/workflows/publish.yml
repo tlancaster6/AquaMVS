@@ -43,10 +43,13 @@ jobs:
           python-version: '3.12'
 
       - name: Install build tools
-        run: pip install build check-manifest
+        run: pip install build twine
 
       - name: Build package
         run: python -m build
+
+      - name: Verify package metadata
+        run: twine check dist/*
 
       - name: Upload distribution artifact
         uses: actions/upload-artifact@v4

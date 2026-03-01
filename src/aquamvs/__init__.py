@@ -1,5 +1,6 @@
 """Multi-view stereo reconstruction of underwater surfaces with refractive modeling."""
 
+from importlib.metadata import PackageNotFoundError, version
 from importlib.util import find_spec
 
 if find_spec("torch") is None:
@@ -8,6 +9,24 @@ if find_spec("torch") is None:
         "Install it from https://pytorch.org/get-started/locally/ "
         "choosing the appropriate CUDA version for your system. "
         "Example: pip install torch torchvision --index-url https://download.pytorch.org/whl/cu121"
+    )
+
+if find_spec("aquacal") is None:
+    raise ImportError(
+        "AquaCal is required but not installed. "
+        "Install from git: pip install git+https://github.com/tlancaster6/AquaCal.git"
+    )
+
+if find_spec("lightglue") is None:
+    raise ImportError(
+        "LightGlue is required but not installed. "
+        "Install from git: pip install git+https://github.com/cvg/LightGlue.git@edb2b83"
+    )
+
+if find_spec("romav2") is None:
+    raise ImportError(
+        "RoMa v2 is required but not installed. "
+        "Install from git: pip install git+https://github.com/tlancaster6/RoMaV2.git"
     )
 
 from .calibration import (
@@ -85,7 +104,10 @@ from .triangulation import (
     triangulate_rays,
 )
 
-__version__ = "0.1.0"
+try:
+    __version__ = version("aquamvs")
+except PackageNotFoundError:
+    __version__ = "0.0.0.dev0"
 
 __all__ = [
     "PipelineConfig",

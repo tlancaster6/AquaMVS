@@ -15,11 +15,8 @@
 
 Multi-view-stereo (MVS) reconstruction of underwater surfaces viewed through a flat water surface, with Snell's law refraction modeling.
 
-## :construction: Status :construction:
-**02/17/26: This project is under active and rapid development.**
-The API and internal structure are subject to frequent breaking changes without notice. It is not yet recommended for
-production use. A stable release is planned by the end of the month. This section will be updated accordingly once that
-milestone is reached.
+## Status
+**v1.3.5 released.** AquaMVS is feature-complete for the v1.0 milestone and available on [PyPI](https://pypi.org/project/aquamvs/). The API is considered stable; breaking changes will follow semantic versioning.
 
 ## What it does
 
@@ -47,7 +44,7 @@ See the [full documentation](https://aquamvs.readthedocs.io/) for configuration 
 
 ## Installation
 
-AquaMVS requires several prerequisites (PyTorch, LightGlue, RoMa v2) to be installed first.
+AquaMVS requires several prerequisites (PyTorch, AquaCal, LightGlue, RoMa v2) to be installed first.
 
 **See [INSTALL.md](INSTALL.md) for complete installation instructions.**
 
@@ -56,10 +53,13 @@ Quick summary:
 # 1. Install PyTorch from pytorch.org
 pip install torch torchvision --index-url https://download.pytorch.org/whl/cu121
 
-# 2. Install git-based prerequisites
+# 2. Install AquaCal
+pip install git+https://github.com/tlancaster6/AquaCal.git
+
+# 3. Install git-based prerequisites (LightGlue, RoMa v2)
 pip install -r requirements-prereqs.txt
 
-# 3. Install AquaMVS
+# 4. Install AquaMVS
 pip install aquamvs
 ```
 
