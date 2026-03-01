@@ -70,6 +70,7 @@ instance/
 
 # Sphinx documentation
 docs/_build/
+docs/jupyter_execute/
 
 # PyBuilder
 .pybuilder/
@@ -207,6 +208,7 @@ marimo/_lsp/
 __marimo__/
 
 .claude/
+.planning/
 dev/
 tmp/
 CLAUDE.md
