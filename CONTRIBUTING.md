@@ -16,14 +16,16 @@ Thank you for your interest in contributing to AquaMVS. This guide will help you
    source venv/bin/activate  # On Windows: venv\Scripts\activate
    ```
 
-3. Install the package with development dependencies:
+3. Install the pre-reqs then install package with development dependencies:
    ```bash
+   pip install torch torchvision --index-url https://download.pytorch.org/whl/cu121
+   pip install -r requirements-prereqs.txt
    pip install -e ".[dev]"
    ```
 
 4. Run tests to verify your setup:
    ```bash
-   python -m pytest tests/
+   python -m pytest tests/ -m "not slow"
    ```
 
 ## Code Style
