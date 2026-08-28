@@ -69,20 +69,30 @@ def _collect_height_maps(
 ) -> list[tuple[int, np.ndarray, np.ndarray, np.ndarray]]:
     """Collect height maps from completed frame outputs for the gallery.
 
-    Loads fused point clouds from each frame's output directory and
-    grids them into height maps using scipy.
+    Loads fused point clouds from each frame's output directory and grids them
+    onto a *shared* lattice using scipy. The grid spans the union of all
+    frames' XY bounds so the maps are spatially registered to one another --
+    required for frame-to-frame differencing (render_delta_gallery), and it
+    also makes the timeseries gallery comparable panel to panel.
+
+    Reads each cloud twice (once to measure bounds, once to grid) rather than
+    holding every frame's points in memory at once.
 
     Args:
         config: Pipeline config (for output_dir and surface.grid_resolution).
 
     Returns:
-        List of (frame_idx, height_map, grid_x, grid_y) tuples.
+        List of (frame_idx, height_map, grid_x, grid_y) tuples, ordered by
+        frame index. All height maps share the same grid_x/grid_y.
     """
     output_dir = Path(config.output_dir)
-    height_maps = []
 
     # Note: sparse mode produces no depth maps or fused point clouds, so this
     # loop finds nothing and returns empty — by design. The gallery is skipped.
+    frame_clouds: list[tuple[int, Path]] = []
+    bounds: np.ndarray | None = None
+
+    # Pass 1: enumerate usable frames and accumulate the union of XY bounds.
     for frame_dir in sorted(output_dir.glob("frame_*")):
         pcd_path = frame_dir / "point_cloud" / "fused.ply"
         if not pcd_path.exists():
@@ -95,15 +105,44 @@ def _collect_height_maps(
 
             pts = np.asarray(pcd.points)
             frame_idx = int(frame_dir.name.split("_")[1])
+        except Exception:
+            logger.warning("Could not load height map from %s", frame_dir.name)
+            continue
 
-            # Grid the points
-            resolution = config.reconstruction.grid_resolution
-            x_min, y_min = pts[:, 0].min(), pts[:, 1].min()
-            x_max, y_max = pts[:, 0].max(), pts[:, 1].max()
-            grid_x = np.arange(x_min, x_max + resolution, resolution)
-            grid_y = np.arange(y_min, y_max + resolution, resolution)
-            gx, gy = np.meshgrid(grid_x, grid_y)
+        frame_bounds = np.array(
+            [
+                pts[:, 0].min(),
+                pts[:, 1].min(),
+                pts[:, 0].max(),
+                pts[:, 1].max(),
+            ]
+        )
+        if bounds is None:
+            bounds = frame_bounds
+        else:
+            bounds[:2] = np.minimum(bounds[:2], frame_bounds[:2])
+            bounds[2:] = np.maximum(bounds[2:], frame_bounds[2:])
 
+        frame_clouds.append((frame_idx, pcd_path))
+
+    if bounds is None:
+        return []
+
+    resolution = config.reconstruction.grid_resolution
+    x_min, y_min, x_max, y_max = bounds
+    grid_x = np.arange(x_min, x_max + resolution, resolution)
+    grid_y = np.arange(y_min, y_max + resolution, resolution)
+    gx, gy = np.meshgrid(grid_x, grid_y)
+
+    # Pass 2: grid every frame onto that shared lattice.
+    height_maps = []
+    for frame_idx, pcd_path in frame_clouds:
+        try:
+            pcd = o3d.io.read_point_cloud(str(pcd_path))
+            if not pcd.has_points():
+                continue
+
+            pts = np.asarray(pcd.points)
             height_map = griddata(
                 pts[:, :2],
                 pts[:, 2],
@@ -113,7 +152,9 @@ def _collect_height_maps(
             )
             height_maps.append((frame_idx, height_map, grid_x, grid_y))
         except Exception:
-            logger.warning("Could not load height map from %s", frame_dir.name)
+            logger.warning(
+                "Could not load height map from %s", pcd_path.parent.parent.name
+            )
             continue
 
     return height_maps
