@@ -190,7 +190,8 @@ output/
 ├── frame_000010/
 │   └── ...
 └── summary/                             # viz_stages: summary (multi-frame runs)
-    └── timeseries_gallery.png
+    ├── timeseries_gallery.png
+    └── delta_gallery.png
 ```
 
 ### Data outputs
@@ -221,7 +222,9 @@ All visualizations require `runtime.viz_enabled: true` (default: off). The `runt
 
 **`viz/rig.png`** -- Camera rig diagram showing camera frustums and the water plane, optionally overlaid with the fused point cloud. *Stage: `rig`.*
 
-**`summary/timeseries_gallery.png`** -- Grid gallery of height maps across all processed frames. Only generated for multi-frame runs. *Stage: `summary`.*
+**`summary/timeseries_gallery.png`** -- Grid gallery of height maps across all processed frames. All frames are gridded onto a common lattice spanning the union of their XY bounds and share one color scale, so panels are directly comparable. Only generated for multi-frame runs. *Stage: `summary`.*
+
+**`summary/delta_gallery.png`** -- Grid gallery of frame-to-frame height change, one panel per consecutive pair (`frame[i] - frame[i-1]`). Uses a diverging colormap centered at zero with a single shared colorbar, so erosion reads blue and deposition reads red. The color limit is the 99th percentile of the absolute change, which keeps outlier cells from flattening the scale. Requires at least two frames with fused point clouds. *Stage: `summary`.*
 
 ### View Results
 

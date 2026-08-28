@@ -5,6 +5,7 @@ import numpy as np
 from PIL import Image
 
 from aquamvs.visualization.summary import (
+    render_delta_gallery,
     render_distance_map,
     render_error_histogram,
     render_evaluation_summary,
@@ -238,5 +239,129 @@ def test_render_distance_map_custom_params(tmp_path):
         title="Custom Height Difference",
         dpi=100,
     )
+
+    assert output_path.exists()
+
+
+def _shared_grid_maps(n_frames, ny=15, nx=20, seed=0):
+    """Build n_frames height maps on one shared grid, with a drifting surface."""
+    rng = np.random.default_rng(seed)
+    grid_x = np.linspace(0.0, 0.2, nx)
+    grid_y = np.linspace(0.0, 0.15, ny)
+    base = rng.random((ny, nx)) * 0.01 + 0.98
+    height_maps = []
+    for i in range(n_frames):
+        # Each frame settles ~1mm lower than the last, plus noise
+        hm = base - i * 0.001 + rng.normal(0.0, 0.0002, (ny, nx))
+        height_maps.append((i * 10, hm, grid_x, grid_y))
+    return height_maps
+
+
+def test_render_delta_gallery(tmp_path):
+    """Render delta gallery from 5 frames on a shared grid (4 delta panels)."""
+    height_maps = _shared_grid_maps(5)
+    output_path = tmp_path / "delta.png"
+
+    render_delta_gallery(height_maps, output_path, n_cols=2)
+
+    assert output_path.exists()
+    img = Image.open(output_path)
+    # 4 deltas with n_cols=2 → 2 rows × 2 cols, ~4in wide subplots at dpi=150
+    assert img.size[0] > 800
+    assert img.size[1] > 600
+
+
+def test_render_delta_gallery_empty(tmp_path):
+    """Empty input returns early without creating a file."""
+    output_path = tmp_path / "delta_empty.png"
+
+    render_delta_gallery([], output_path)
+
+    assert not output_path.exists()
+
+
+def test_render_delta_gallery_single_frame(tmp_path):
+    """A single frame yields no deltas, so no file is written."""
+    height_maps = _shared_grid_maps(1)
+    output_path = tmp_path / "delta_single.png"
+
+    render_delta_gallery(height_maps, output_path)
+
+    assert not output_path.exists()
+
+
+def test_render_delta_gallery_two_frames(tmp_path):
+    """Two frames produce exactly one delta panel."""
+    height_maps = _shared_grid_maps(2)
+    output_path = tmp_path / "delta_pair.png"
+
+    render_delta_gallery(height_maps, output_path)
+
+    assert output_path.exists()
+
+
+def test_render_delta_gallery_with_nans(tmp_path):
+    """NaN cells (no data) do not crash rendering."""
+    height_maps = _shared_grid_maps(4)
+    # Punch holes in a couple of frames
+    height_maps[1][1][0:4, 0:6] = np.nan
+    height_maps[2][1][10:15, 12:20] = np.nan
+    output_path = tmp_path / "delta_nan.png"
+
+    render_delta_gallery(height_maps, output_path, n_cols=3)
+
+    assert output_path.exists()
+
+
+def test_render_delta_gallery_all_nan(tmp_path):
+    """All-NaN height maps still render (colorbar falls back to ±1mm)."""
+    grid_x = np.linspace(0.0, 0.1, 12)
+    grid_y = np.linspace(0.0, 0.08, 10)
+    height_maps = [(i, np.full((10, 12), np.nan), grid_x, grid_y) for i in range(3)]
+    output_path = tmp_path / "delta_all_nan.png"
+
+    render_delta_gallery(height_maps, output_path)
+
+    assert output_path.exists()
+
+
+def test_render_delta_gallery_unsorted_input(tmp_path):
+    """Frames are ordered by index internally, so caller order is irrelevant."""
+    height_maps = _shared_grid_maps(4)
+    shuffled = [height_maps[2], height_maps[0], height_maps[3], height_maps[1]]
+    sorted_path = tmp_path / "delta_sorted.png"
+    shuffled_path = tmp_path / "delta_shuffled.png"
+
+    render_delta_gallery(height_maps, sorted_path)
+    render_delta_gallery(shuffled, shuffled_path)
+
+    assert sorted_path.read_bytes() == shuffled_path.read_bytes()
+
+
+def test_render_delta_gallery_skips_mismatched_shapes(tmp_path):
+    """Pairs whose grids disagree are skipped rather than raising."""
+    height_maps = _shared_grid_maps(3)
+    # Replace the middle frame with a differently-shaped map
+    odd = np.random.rand(8, 9) + 0.98
+    height_maps[1] = (
+        height_maps[1][0],
+        odd,
+        np.linspace(0.0, 0.09, 9),
+        np.linspace(0.0, 0.08, 8),
+    )
+    output_path = tmp_path / "delta_mismatch.png"
+
+    render_delta_gallery(height_maps, output_path)
+
+    # Both consecutive pairs involve the odd frame → nothing to plot
+    assert not output_path.exists()
+
+
+def test_render_delta_gallery_custom_params(tmp_path):
+    """Custom percentile and dpi are accepted."""
+    height_maps = _shared_grid_maps(3)
+    output_path = tmp_path / "delta_custom.png"
+
+    render_delta_gallery(height_maps, output_path, n_cols=1, percentile=95.0, dpi=100)
 
     assert output_path.exists()

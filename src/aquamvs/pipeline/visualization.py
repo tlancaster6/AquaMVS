@@ -38,7 +38,10 @@ def run_visualization_pass(config: PipelineConfig, ctx: PipelineContext) -> None
     # Summary plots (multi-frame)
     if _should_viz(config, "summary"):
         try:
-            from ..visualization.summary import render_timeseries_gallery
+            from ..visualization.summary import (
+                render_delta_gallery,
+                render_timeseries_gallery,
+            )
 
             logger.info("Rendering summary visualizations")
             summary_dir = output_dir / "summary"
@@ -49,6 +52,8 @@ def run_visualization_pass(config: PipelineConfig, ctx: PipelineContext) -> None
                 render_timeseries_gallery(
                     height_maps, summary_dir / "timeseries_gallery.png"
                 )
+                # Needs >= 2 frames; returns without writing a file otherwise.
+                render_delta_gallery(height_maps, summary_dir / "delta_gallery.png")
         except Exception:
             logger.exception("Summary visualization failed")
 

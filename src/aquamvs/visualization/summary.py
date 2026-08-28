@@ -4,10 +4,13 @@ import matplotlib
 
 matplotlib.use("Agg")
 
+import logging
 from pathlib import Path
 
 import matplotlib.pyplot as plt
 import numpy as np
+
+logger = logging.getLogger(__name__)
 
 
 def render_error_histogram(
@@ -246,4 +249,115 @@ def render_timeseries_gallery(
     fig.suptitle("Surface Evolution", fontsize=14)
     fig.tight_layout()
     fig.savefig(output_path, dpi=dpi, bbox_inches="tight", pad_inches=0.1)
+    plt.close(fig)
+
+
+def render_delta_gallery(
+    height_maps: list[tuple[int, np.ndarray, np.ndarray, np.ndarray]],
+    output_path: str | Path,
+    n_cols: int = 4,
+    percentile: float = 99.0,
+    dpi: int = 150,
+) -> None:
+    """Create a grid gallery of frame-to-frame height changes.
+
+    Each panel shows the Z difference between consecutive frames
+    (frame[i] - frame[i-1]) on a diverging colormap centred at zero, so
+    erosion reads blue and deposition reads red. A single shared colorbar
+    covers the whole gallery.
+
+    Requires that every height map lie on the same grid -- consecutive pairs
+    whose shapes disagree are skipped with a warning. `_collect_height_maps`
+    grids all frames onto a common lattice for exactly this reason.
+
+    Args:
+        height_maps: List of (frame_idx, height_map, grid_x, grid_y) tuples.
+            height_map is a 2D array (Ny, Nx) of Z values, NaN for no data.
+            grid_x, grid_y define the spatial extent. Sorted by frame index
+            internally, so caller ordering does not matter.
+        output_path: Path to save the PNG gallery.
+        n_cols: Number of columns in the grid.
+        percentile: Percentile of |delta| used for the symmetric color limit.
+            Clips outliers so a single bad cell does not flatten the scale.
+        dpi: Output resolution.
+    """
+    if len(height_maps) < 2:
+        return
+
+    ordered = sorted(height_maps, key=lambda item: item[0])
+
+    deltas: list[tuple[int, int, np.ndarray, np.ndarray, np.ndarray]] = []
+    for (prev_idx, prev_hm, _, _), (cur_idx, cur_hm, gx, gy) in zip(
+        ordered, ordered[1:], strict=False
+    ):
+        if prev_hm.shape != cur_hm.shape:
+            logger.warning(
+                "Skipping delta %d->%d: height map shapes differ (%s vs %s)",
+                prev_idx,
+                cur_idx,
+                prev_hm.shape,
+                cur_hm.shape,
+            )
+            continue
+        deltas.append((prev_idx, cur_idx, cur_hm - prev_hm, gx, gy))
+
+    if not deltas:
+        return
+
+    output_path = Path(output_path)
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+
+    n = len(deltas)
+    n_rows = (n + n_cols - 1) // n_cols
+    fig, axes = plt.subplots(
+        n_rows,
+        n_cols,
+        figsize=(4 * n_cols, 3 * n_rows),
+        squeeze=False,
+        constrained_layout=True,
+    )
+    axes = axes.ravel()
+
+    # Shared symmetric color range across all panels, in mm
+    finite = [d[2][np.isfinite(d[2])].ravel() for d in deltas]
+    finite = [f for f in finite if f.size > 0]
+    if finite:
+        all_delta_mm = np.abs(np.concatenate(finite)) * 1000.0
+        vmax = float(np.percentile(all_delta_mm, percentile))
+        if not np.isfinite(vmax) or vmax <= 0.0:
+            vmax = float(np.max(all_delta_mm))
+    else:
+        vmax = 0.0
+    if not np.isfinite(vmax) or vmax <= 0.0:
+        vmax = 1.0
+
+    cmap = plt.cm.RdBu_r.copy()
+    cmap.set_bad(color="0.8")
+
+    im = None
+    for i, (prev_idx, cur_idx, delta, gx, gy) in enumerate(deltas):
+        ax = axes[i]
+        extent = [gx[0], gx[-1], gy[-1], gy[0]]
+        im = ax.imshow(
+            delta * 1000.0,
+            cmap=cmap,
+            vmin=-vmax,
+            vmax=vmax,
+            extent=extent,
+            origin="upper",
+            aspect="equal",
+        )
+        ax.set_title(f"Frame {prev_idx} → {cur_idx}", fontsize=9)
+        ax.tick_params(labelsize=7)
+
+    # Hide unused axes
+    for i in range(n, len(axes)):
+        axes[i].set_visible(False)
+
+    if im is not None:
+        cbar = fig.colorbar(im, ax=axes[:n].tolist(), shrink=0.8)
+        cbar.set_label("Height Change (mm)")
+
+    fig.suptitle("Frame-to-Frame Height Change", fontsize=14)
+    fig.savefig(output_path, dpi=dpi, pad_inches=0.1)
     plt.close(fig)

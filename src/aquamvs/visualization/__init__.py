@@ -19,6 +19,7 @@ from .scene import (
     render_scene,
 )
 from .summary import (
+    render_delta_gallery,
     render_distance_map,
     render_error_histogram,
     render_evaluation_summary,
@@ -31,6 +32,7 @@ __all__ = [
     "render_all_features",
     "render_all_scenes",
     "render_confidence_map",
+    "render_delta_gallery",
     "render_depth_map",
     "render_distance_map",
     "render_error_histogram",
