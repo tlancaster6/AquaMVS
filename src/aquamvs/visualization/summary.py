@@ -177,11 +177,14 @@ def render_timeseries_gallery(
     height_maps: list[tuple[int, np.ndarray, np.ndarray, np.ndarray]],
     output_path: str | Path,
     n_cols: int = 4,
+    deep_percentile: float = 99.8,
+    shallow_k: float = 3.0,
     dpi: int = 150,
 ) -> None:
     """Create a grid gallery of top-down height-map views across frames.
 
-    Shows surface evolution over time as a grid of colormapped height maps.
+    Shows surface evolution over time as a grid of colormapped height maps,
+    on a shared color scale with a single colorbar. Z is displayed in mm.
 
     Args:
         height_maps: List of (frame_idx, height_map, grid_x, grid_y) tuples.
@@ -189,6 +192,12 @@ def render_timeseries_gallery(
             grid_x, grid_y define the spatial extent.
         output_path: Path to save the PNG gallery.
         n_cols: Number of columns in the grid.
+        deep_percentile: Percentile of Z setting the deep (high-Z) limit.
+            Kept generous: sand pits against the tank wall form a thin but
+            real tail, and clamping it flattens the most interesting features.
+        shallow_k: Shallow (low-Z) limit is median - shallow_k * (p75 - median).
+            Sized from the upper half-spread because that side is free of wall
+            contamination.
         dpi: Output resolution.
     """
     n = len(height_maps)
@@ -199,14 +208,32 @@ def render_timeseries_gallery(
     output_path.parent.mkdir(parents=True, exist_ok=True)
 
     n_rows = (n + n_cols - 1) // n_cols
-    fig, axes = plt.subplots(n_rows, n_cols, figsize=(4 * n_cols, 3 * n_rows))
+    fig, axes = plt.subplots(
+        n_rows,
+        n_cols,
+        figsize=(4 * n_cols, 3 * n_rows),
+        squeeze=False,
+        constrained_layout=True,
+    )
+    axes = axes.ravel()
 
-    # Flatten axes for easy indexing
-    if n_rows == 1 and n_cols == 1:
-        axes = np.array([axes])
-    axes = np.atleast_2d(axes).ravel()
-
-    # Shared color range across all frames
+    # Shared color range across all frames, in mm.
+    #
+    # Raw min/max is unusable: the tank wall reconstructs all the way up to the
+    # water surface, so a third of all cells sit hundreds of mm off the bed and
+    # squeeze the actual relief into a few percent of the colormap. Plain
+    # percentile clipping does not rescue it either -- the wall is a bulk
+    # population, not a thin tail.
+    #
+    # The window is deliberately ASYMMETRIC, because the contamination is:
+    #   shallow (low Z)  the tank wall rises toward the water surface, so this
+    #                    side needs a robust limit. Size it from the upper
+    #                    half-spread (p75 - median), which the wall does not
+    #                    reach, rather than from a low percentile.
+    #   deep (high Z)    sand only -- the wall never reaches here. Sand pits dug
+    #                    against the wall form a thin tail that a symmetric
+    #                    window clips hard, blowing out the very features worth
+    #                    looking at. Use a generous percentile instead.
     all_z = (
         np.concatenate(
             [
@@ -215,23 +242,36 @@ def render_timeseries_gallery(
                 if np.isfinite(hm[1]).any()
             ]
         )
+        * 1000.0
         if height_maps
         else np.array([])
     )
 
     if len(all_z) > 0:
-        vmin, vmax = float(all_z.min()), float(all_z.max())
+        median = float(np.median(all_z))
+        upper_spread = float(np.percentile(all_z, 75.0)) - median
+        vmax = float(np.percentile(all_z, deep_percentile))
+        vmin = median - shallow_k * upper_spread
+        # Degenerate input (flat or near-flat height maps): fall back to a
+        # plain percentile window, then to a unit window.
+        if not np.isfinite(vmin) or vmin >= median:
+            vmin = float(np.percentile(all_z, 1.0))
+        if not np.isfinite(vmax) or vmax <= vmin:
+            vmin, vmax = float(np.min(all_z)), float(np.max(all_z))
+        if not np.isfinite(vmax) or vmax <= vmin:
+            vmin, vmax = median - 1.0, median + 1.0
     else:
         vmin, vmax = 0.0, 1.0
 
     cmap = plt.cm.viridis.copy()
     cmap.set_bad(color="0.8")
 
+    im = None
     for i, (frame_idx, hm, gx, gy) in enumerate(height_maps):
         ax = axes[i]
         extent = [gx[0], gx[-1], gy[-1], gy[0]]
-        ax.imshow(
-            hm,
+        im = ax.imshow(
+            hm * 1000.0,
             cmap=cmap,
             vmin=vmin,
             vmax=vmax,
@@ -246,9 +286,12 @@ def render_timeseries_gallery(
     for i in range(n, len(axes)):
         axes[i].set_visible(False)
 
+    if im is not None:
+        cbar = fig.colorbar(im, ax=axes[:n].tolist(), shrink=0.8, extend="both")
+        cbar.set_label("Z (mm, larger = deeper)")
+
     fig.suptitle("Surface Evolution", fontsize=14)
-    fig.tight_layout()
-    fig.savefig(output_path, dpi=dpi, bbox_inches="tight", pad_inches=0.1)
+    fig.savefig(output_path, dpi=dpi, pad_inches=0.1)
     plt.close(fig)
 
 
@@ -256,7 +299,7 @@ def render_delta_gallery(
     height_maps: list[tuple[int, np.ndarray, np.ndarray, np.ndarray]],
     output_path: str | Path,
     n_cols: int = 4,
-    percentile: float = 99.0,
+    percentile: float = 90.0,
     dpi: int = 150,
 ) -> None:
     """Create a grid gallery of frame-to-frame height changes.
@@ -278,7 +321,9 @@ def render_delta_gallery(
         output_path: Path to save the PNG gallery.
         n_cols: Number of columns in the grid.
         percentile: Percentile of |delta| used for the symmetric color limit.
-            Clips outliers so a single bad cell does not flatten the scale.
+            Clips outliers so the noisy tank rim does not flatten the scale.
+            Values beyond the limit saturate (the colorbar is marked extended),
+            which is intended: the quiet pairs carry the detail worth seeing.
         dpi: Output resolution.
     """
     if len(height_maps) < 2:
@@ -355,8 +400,8 @@ def render_delta_gallery(
         axes[i].set_visible(False)
 
     if im is not None:
-        cbar = fig.colorbar(im, ax=axes[:n].tolist(), shrink=0.8)
-        cbar.set_label("Height Change (mm)")
+        cbar = fig.colorbar(im, ax=axes[:n].tolist(), shrink=0.8, extend="both")
+        cbar.set_label("Δz (mm, + = deeper)")
 
     fig.suptitle("Frame-to-Frame Height Change", fontsize=14)
     fig.savefig(output_path, dpi=dpi, pad_inches=0.1)
